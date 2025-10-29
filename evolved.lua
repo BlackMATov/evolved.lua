@@ -5464,7 +5464,6 @@ function __evolved_execute(query)
 
     local query_excludes = __sorted_excludes[query]
     local query_exclude_set = query_excludes and query_excludes.__item_set
-    local query_exclude_list = query_excludes and query_excludes.__item_list
     local query_exclude_count = query_excludes and query_excludes.__item_count or 0
 
     if query_include_count > 0 then
@@ -5483,7 +5482,7 @@ function __evolved_execute(query)
         for _, root_chunk in __lua_next, __root_chunks do
             local is_root_chunk_matched =
                 not root_chunk.__has_explicit_fragments and
-                not __chunk_has_any_fragment_list(root_chunk, query_exclude_list, query_exclude_count)
+                not query_exclude_set[root_chunk.__fragment]
 
             if is_root_chunk_matched then
                 chunk_stack_size = chunk_stack_size + 1
