@@ -48,6 +48,7 @@
     - [Fragment Hooks](#fragment-hooks)
     - [Unique Fragments](#unique-fragments)
     - [Explicit Fragments](#explicit-fragments)
+    - [Internal Fragments](#internal-fragments)
     - [Shared Components](#shared-components)
     - [Fragment Requirements](#fragment-requirements)
     - [Destruction Policies](#destruction-policies)
@@ -963,6 +964,10 @@ local all_enemies_including_disabled = evolved.builder()
     :include(evolved.DISABLED)
     :build()
 ```
+
+#### Internal Fragments
+
+All predefined fragments provided by the library are marked as internal with the [`evolved.INTERNAL`](#evolvedinternal) trait. Because [`evolved.INTERNAL`](#evolvedinternal) is itself marked as [`evolved.EXPLICIT`](#evolvedexplicit), these fragments are hidden from queries by default. This prevents accidental use of internal fragments in user code and helps distinguish them from user-defined fragments.
 
 #### Shared Components
 
