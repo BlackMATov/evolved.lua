@@ -52,7 +52,7 @@ local evolved = {
 ---  entity: evolved.entity,
 ---  fragment: evolved.fragment,
 ---  new_component: evolved.component,
----  old_component?: evolved.component)
+---  old_component: evolved.component)
 
 ---@alias evolved.assign_hook fun(
 ---  entity: evolved.entity,
@@ -68,7 +68,7 @@ local evolved = {
 ---@alias evolved.remove_hook fun(
 ---  entity: evolved.entity,
 ---  fragment: evolved.fragment,
----  component: evolved.component)
+---  old_component: evolved.component)
 
 ---@class (exact) evolved.each_state
 ---@field package [1] integer structural_changes
@@ -6183,7 +6183,7 @@ function __builder_mt:internal()
     return self:set(__INTERNAL)
 end
 
----@param default evolved.component
+---@param default evolved.default
 ---@return evolved.builder builder
 function __builder_mt:default(default)
     return self:set(__DEFAULT, default)
