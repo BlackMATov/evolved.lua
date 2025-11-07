@@ -60,6 +60,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
+  - [vX.X.X](#vxxx)
   - [v1.4.0](#v140)
   - [v1.3.0](#v130)
   - [v1.2.0](#v120)
@@ -1305,6 +1306,10 @@ builder_mt:destruction_policy :: id -> builder
 
 ## Changelog
 
+### vX.X.X
+
+- Added basic [Teal](https://github.com/teal-language) type definitions, thanks to [@p0sel0k](https://github.com/p0sel0k)
+
 ### v1.4.0
 
 - Improved query execution performance by caching some internal calculations
@@ -1944,7 +1949,7 @@ function evolved.builder_mt:internal() end
 #### `evolved.builder_mt:default`
 
 ```lua
----@param default evolved.component
+---@param default evolved.default
 ---@return evolved.builder builder
 function evolved.builder_mt:default(default) end
 ```
