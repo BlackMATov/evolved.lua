@@ -28,6 +28,21 @@ basics.describe_bench(string.format('Clone Benchmarks: Simple Clone | %d entitie
         evo.batch_destroy(Q1)
     end)
 
+basics.describe_bench(string.format('Clone Benchmarks: Simple Defer Clone | %d entities with 1 component', N),
+    function()
+        local clone = evo.clone
+
+        local prefab = evo.spawn { [F1] = true }
+
+        evo.defer()
+        for _ = 1, N do
+            clone(prefab)
+        end
+        evo.commit()
+
+        evo.batch_destroy(Q1)
+    end)
+
 basics.describe_bench(string.format('Clone Benchmarks: Simple Clone | %d entities with 3 components', N),
     function()
         local clone = evo.clone
@@ -41,6 +56,21 @@ basics.describe_bench(string.format('Clone Benchmarks: Simple Clone | %d entitie
         evo.batch_destroy(Q1)
     end)
 
+basics.describe_bench(string.format('Clone Benchmarks: Simple Defer Clone | %d entities with 3 components', N),
+    function()
+        local clone = evo.clone
+
+        local prefab = evo.spawn { [F1] = true, [F2] = true, [F3] = true }
+
+        evo.defer()
+        for _ = 1, N do
+            clone(prefab)
+        end
+        evo.commit()
+
+        evo.batch_destroy(Q1)
+    end)
+
 basics.describe_bench(string.format('Clone Benchmarks: Simple Clone | %d entities with 5 components', N),
     function()
         local clone = evo.clone
@@ -50,6 +80,21 @@ basics.describe_bench(string.format('Clone Benchmarks: Simple Clone | %d entitie
         for _ = 1, N do
             clone(prefab)
         end
+
+        evo.batch_destroy(Q1)
+    end)
+
+basics.describe_bench(string.format('Clone Benchmarks: Simple Defer Clone | %d entities with 5 components', N),
+    function()
+        local clone = evo.clone
+
+        local prefab = evo.spawn { [F1] = true, [F2] = true, [F3] = true, [F4] = true, [F5] = true }
+
+        evo.defer()
+        for _ = 1, N do
+            clone(prefab)
+        end
+        evo.commit()
 
         evo.batch_destroy(Q1)
     end)
@@ -69,6 +114,21 @@ basics.describe_bench(string.format('Clone Benchmarks: Simple Clone | %d entitie
         evo.batch_destroy(Q1)
     end)
 
+basics.describe_bench(string.format('Clone Benchmarks: Simple Defer Clone | %d entities with 1 required component', N),
+    function()
+        local clone = evo.clone
+
+        local prefab = evo.spawn { [R1] = true }
+
+        evo.defer()
+        for _ = 1, N do
+            clone(prefab)
+        end
+        evo.commit()
+
+        evo.batch_destroy(Q1)
+    end)
+
 basics.describe_bench(string.format('Clone Benchmarks: Simple Clone | %d entities with 3 required components', N),
     function()
         local clone = evo.clone
@@ -78,6 +138,21 @@ basics.describe_bench(string.format('Clone Benchmarks: Simple Clone | %d entitie
         for _ = 1, N do
             clone(prefab)
         end
+
+        evo.batch_destroy(Q1)
+    end)
+
+basics.describe_bench(string.format('Clone Benchmarks: Simple Defer Clone | %d entities with 3 required components', N),
+    function()
+        local clone = evo.clone
+
+        local prefab = evo.spawn { [R3] = true }
+
+        evo.defer()
+        for _ = 1, N do
+            clone(prefab)
+        end
+        evo.commit()
 
         evo.batch_destroy(Q1)
     end)
@@ -95,6 +170,21 @@ basics.describe_bench(string.format('Clone Benchmarks: Simple Clone | %d entitie
         evo.batch_destroy(Q1)
     end)
 
+basics.describe_bench(string.format('Clone Benchmarks: Simple Defer Clone | %d entities with 5 required components', N),
+    function()
+        local clone = evo.clone
+
+        local prefab = evo.spawn { [R5] = true }
+
+        evo.defer()
+        for _ = 1, N do
+            clone(prefab)
+        end
+        evo.commit()
+
+        evo.batch_destroy(Q1)
+    end)
+
 print '----------------------------------------'
 
 basics.describe_bench(string.format('Clone Benchmarks: Multi Clone | %d entities with 1 component', N),
@@ -104,6 +194,19 @@ basics.describe_bench(string.format('Clone Benchmarks: Multi Clone | %d entities
         local prefab = evo.spawn { [F1] = true }
 
         multi_clone(N, prefab)
+
+        evo.batch_destroy(Q1)
+    end)
+
+basics.describe_bench(string.format('Clone Benchmarks: Multi Defer Clone | %d entities with 1 component', N),
+    function()
+        local multi_clone = evo.multi_clone
+
+        local prefab = evo.spawn { [F1] = true }
+
+        evo.defer()
+        multi_clone(N, prefab)
+        evo.commit()
 
         evo.batch_destroy(Q1)
     end)
@@ -119,6 +222,19 @@ basics.describe_bench(string.format('Clone Benchmarks: Multi Clone | %d entities
         evo.batch_destroy(Q1)
     end)
 
+basics.describe_bench(string.format('Clone Benchmarks: Multi Defer Clone | %d entities with 3 components', N),
+    function()
+        local multi_clone = evo.multi_clone
+
+        local prefab = evo.spawn { [F1] = true, [F2] = true, [F3] = true }
+
+        evo.defer()
+        multi_clone(N, prefab)
+        evo.commit()
+
+        evo.batch_destroy(Q1)
+    end)
+
 basics.describe_bench(string.format('Clone Benchmarks: Multi Clone | %d entities with 5 components', N),
     function()
         local multi_clone = evo.multi_clone
@@ -126,6 +242,19 @@ basics.describe_bench(string.format('Clone Benchmarks: Multi Clone | %d entities
         local prefab = evo.spawn { [F1] = true, [F2] = true, [F3] = true, [F4] = true, [F5] = true }
 
         multi_clone(N, prefab)
+
+        evo.batch_destroy(Q1)
+    end)
+
+basics.describe_bench(string.format('Clone Benchmarks: Multi Defer Clone | %d entities with 5 components', N),
+    function()
+        local multi_clone = evo.multi_clone
+
+        local prefab = evo.spawn { [F1] = true, [F2] = true, [F3] = true, [F4] = true, [F5] = true }
+
+        evo.defer()
+        multi_clone(N, prefab)
+        evo.commit()
 
         evo.batch_destroy(Q1)
     end)
@@ -143,6 +272,19 @@ basics.describe_bench(string.format('Clone Benchmarks: Multi Clone | %d entities
         evo.batch_destroy(Q1)
     end)
 
+basics.describe_bench(string.format('Clone Benchmarks: Multi Defer Clone | %d entities with 1 required component', N),
+    function()
+        local multi_clone = evo.multi_clone
+
+        local prefab = evo.spawn { [R1] = true }
+
+        evo.defer()
+        multi_clone(N, prefab)
+        evo.commit()
+
+        evo.batch_destroy(Q1)
+    end)
+
 basics.describe_bench(string.format('Clone Benchmarks: Multi Clone | %d entities with 3 required components', N),
     function()
         local multi_clone = evo.multi_clone
@@ -154,6 +296,19 @@ basics.describe_bench(string.format('Clone Benchmarks: Multi Clone | %d entities
         evo.batch_destroy(Q1)
     end)
 
+basics.describe_bench(string.format('Clone Benchmarks: Multi Defer Clone | %d entities with 3 required components', N),
+    function()
+        local multi_clone = evo.multi_clone
+
+        local prefab = evo.spawn { [R3] = true }
+
+        evo.defer()
+        multi_clone(N, prefab)
+        evo.commit()
+
+        evo.batch_destroy(Q1)
+    end)
+
 basics.describe_bench(string.format('Clone Benchmarks: Multi Clone | %d entities with 5 required components', N),
     function()
         local multi_clone = evo.multi_clone
@@ -161,6 +316,19 @@ basics.describe_bench(string.format('Clone Benchmarks: Multi Clone | %d entities
         local prefab = evo.spawn { [R5] = true }
 
         multi_clone(N, prefab)
+
+        evo.batch_destroy(Q1)
+    end)
+
+basics.describe_bench(string.format('Clone Benchmarks: Multi Defer Clone | %d entities with 5 required components', N),
+    function()
+        local multi_clone = evo.multi_clone
+
+        local prefab = evo.spawn { [R5] = true }
+
+        evo.defer()
+        multi_clone(N, prefab)
+        evo.commit()
 
         evo.batch_destroy(Q1)
     end)
