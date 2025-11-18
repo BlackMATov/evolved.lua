@@ -2009,9 +2009,6 @@ function __spawn_entity(chunk, entity, components)
     local req_fragment_list
     local req_fragment_count = 0
 
-    local ini_chunk = chunk
-    local ini_fragment_set = ini_chunk.__fragment_set
-
     if chunk.__has_required_fragments then
         ---@type table<evolved.fragment, integer>
         req_fragment_set = __acquire_table(__table_pool_tag.fragment_set)
@@ -2019,7 +2016,7 @@ function __spawn_entity(chunk, entity, components)
         ---@type evolved.fragment[]
         req_fragment_list = __acquire_table(__table_pool_tag.fragment_list)
 
-        req_fragment_count = __chunk_required_fragments(ini_chunk,
+        req_fragment_count = __chunk_required_fragments(chunk,
             req_fragment_set, req_fragment_list, req_fragment_count)
 
         for req_fragment_index = 1, req_fragment_count do
@@ -2031,8 +2028,10 @@ function __spawn_entity(chunk, entity, components)
     local chunk_entity_list = chunk.__entity_list
     local chunk_entity_count = chunk.__entity_count
 
+    local chunk_component_count = chunk.__component_count
     local chunk_component_indices = chunk.__component_indices
     local chunk_component_storages = chunk.__component_storages
+    local chunk_component_fragments = chunk.__component_fragments
 
     local place = chunk_entity_count + 1
 
@@ -2048,87 +2047,42 @@ function __spawn_entity(chunk, entity, components)
     end
 
     if chunk.__has_setup_hooks then
-        for fragment, component in __lua_next, components do
-            local component_index = chunk_component_indices[fragment]
+        for component_index = 1, chunk_component_count do
+            local component_storage = chunk_component_storages[component_index]
+            local component_fragment = chunk_component_fragments[component_index]
 
-            if component_index then
-                local component_storage = chunk_component_storages[component_index]
+            ---@type evolved.default?, evolved.duplicate?
+            local fragment_default, fragment_duplicate =
+                __evolved_get(component_fragment, __DEFAULT, __DUPLICATE)
 
-                ---@type evolved.duplicate?
-                local fragment_duplicate =
-                    __evolved_get(fragment, __DUPLICATE)
+            local new_component = components[component_fragment]
 
-                local new_component = component
-
-                if new_component ~= nil and fragment_duplicate then
-                    new_component = fragment_duplicate(new_component)
-                end
-
-                if new_component == nil then
-                    new_component = true
-                end
-
-                component_storage[place] = new_component
+            if new_component == nil then
+                new_component = fragment_default
             end
-        end
 
-        for req_fragment_index = 1, req_fragment_count do
-            local req_fragment = req_fragment_list[req_fragment_index]
-
-            if ini_fragment_set[req_fragment] then
-                -- this fragment has already been initialized
-            else
-                local req_component_index = chunk_component_indices[req_fragment]
-
-                if req_component_index then
-                    local req_component_storage = chunk_component_storages[req_component_index]
-
-                    ---@type evolved.default?, evolved.duplicate?
-                    local req_fragment_default, req_fragment_duplicate =
-                        __evolved_get(req_fragment, __DEFAULT, __DUPLICATE)
-
-                    local req_component = req_fragment_default
-
-                    if req_component ~= nil and req_fragment_duplicate then
-                        req_component = req_fragment_duplicate(req_component)
-                    end
-
-                    if req_component == nil then
-                        req_component = true
-                    end
-
-                    req_component_storage[place] = req_component
-                end
+            if new_component ~= nil and fragment_duplicate then
+                new_component = fragment_duplicate(new_component)
             end
+
+            if new_component == nil then
+                new_component = true
+            end
+
+            component_storage[place] = new_component
         end
     else
-        for fragment, component in __lua_next, components do
-            local component_index = chunk_component_indices[fragment]
+        for component_index = 1, chunk_component_count do
+            local component_storage = chunk_component_storages[component_index]
+            local component_fragment = chunk_component_fragments[component_index]
 
-            if component_index then
-                local component_storage = chunk_component_storages[component_index]
+            local new_component = components[component_fragment]
 
-                local new_component = component
-                if new_component == nil then new_component = true end
-                component_storage[place] = new_component
+            if new_component == nil then
+                new_component = true
             end
-        end
 
-        for req_fragment_index = 1, req_fragment_count do
-            local req_fragment = req_fragment_list[req_fragment_index]
-
-            if ini_fragment_set[req_fragment] then
-                -- this fragment has already been initialized
-            else
-                local req_component_index = chunk_component_indices[req_fragment]
-
-                if req_component_index then
-                    local req_component_storage = chunk_component_storages[req_component_index]
-
-                    local req_component = true
-                    req_component_storage[place] = req_component
-                end
-            end
+            component_storage[place] = new_component
         end
     end
 
@@ -2199,9 +2153,6 @@ function __multi_spawn_entity(chunk, entity_list, entity_count, components)
     local req_fragment_list
     local req_fragment_count = 0
 
-    local ini_chunk = chunk
-    local ini_fragment_set = ini_chunk.__fragment_set
-
     if chunk.__has_required_fragments then
         ---@type table<evolved.fragment, integer>
         req_fragment_set = __acquire_table(__table_pool_tag.fragment_set)
@@ -2209,7 +2160,7 @@ function __multi_spawn_entity(chunk, entity_list, entity_count, components)
         ---@type evolved.fragment[]
         req_fragment_list = __acquire_table(__table_pool_tag.fragment_list)
 
-        req_fragment_count = __chunk_required_fragments(ini_chunk,
+        req_fragment_count = __chunk_required_fragments(chunk,
             req_fragment_set, req_fragment_list, req_fragment_count)
 
         for req_fragment_index = 1, req_fragment_count do
@@ -2221,8 +2172,10 @@ function __multi_spawn_entity(chunk, entity_list, entity_count, components)
     local chunk_entity_list = chunk.__entity_list
     local chunk_entity_count = chunk.__entity_count
 
+    local chunk_component_count = chunk.__component_count
     local chunk_component_indices = chunk.__component_indices
     local chunk_component_storages = chunk.__component_storages
+    local chunk_component_fragments = chunk.__component_fragments
 
     local b_place = chunk_entity_count + 1
     local e_place = chunk_entity_count + entity_count
@@ -2245,96 +2198,40 @@ function __multi_spawn_entity(chunk, entity_list, entity_count, components)
     end
 
     if chunk.__has_setup_hooks then
-        for fragment, component in __lua_next, components do
-            local component_index = chunk_component_indices[fragment]
+        for component_index = 1, chunk_component_count do
+            local component_storage = chunk_component_storages[component_index]
+            local component_fragment = chunk_component_fragments[component_index]
 
-            if component_index then
-                local component_storage = chunk_component_storages[component_index]
+            ---@type evolved.default?, evolved.duplicate?
+            local fragment_default, fragment_duplicate =
+                __evolved_get(component_fragment, __DEFAULT, __DUPLICATE)
 
-                ---@type evolved.duplicate?
-                local fragment_duplicate =
-                    __evolved_get(fragment, __DUPLICATE)
-
-                if fragment_duplicate then
-                    for place = b_place, e_place do
-                        local new_component = component
-                        if new_component ~= nil then new_component = fragment_duplicate(new_component) end
-                        if new_component == nil then new_component = true end
-                        component_storage[place] = new_component
-                    end
-                else
-                    local new_component = component
+            if fragment_duplicate then
+                for place = b_place, e_place do
+                    local new_component = components[component_fragment]
+                    if new_component == nil then new_component = fragment_default end
+                    if new_component ~= nil then new_component = fragment_duplicate(new_component) end
                     if new_component == nil then new_component = true end
-                    for place = b_place, e_place do
-                        component_storage[place] = new_component
-                    end
+                    component_storage[place] = new_component
                 end
-            end
-        end
-
-        for req_fragment_index = 1, req_fragment_count do
-            local req_fragment = req_fragment_list[req_fragment_index]
-
-            if ini_fragment_set[req_fragment] then
-                -- this fragment has already been initialized
             else
-                local req_component_index = chunk_component_indices[req_fragment]
-
-                if req_component_index then
-                    local req_component_storage = chunk_component_storages[req_component_index]
-
-                    ---@type evolved.default?, evolved.duplicate?
-                    local req_fragment_default, req_fragment_duplicate =
-                        __evolved_get(req_fragment, __DEFAULT, __DUPLICATE)
-
-                    if req_fragment_duplicate then
-                        for place = b_place, e_place do
-                            local req_component = req_fragment_default
-                            if req_component ~= nil then req_component = req_fragment_duplicate(req_component) end
-                            if req_component == nil then req_component = true end
-                            req_component_storage[place] = req_component
-                        end
-                    else
-                        local req_component = req_fragment_default
-                        if req_component == nil then req_component = true end
-                        for place = b_place, e_place do
-                            req_component_storage[place] = req_component
-                        end
-                    end
-                end
-            end
-        end
-    else
-        for fragment, component in __lua_next, components do
-            local component_index = chunk_component_indices[fragment]
-
-            if component_index then
-                local component_storage = chunk_component_storages[component_index]
-
-                local new_component = component
+                local new_component = components[component_fragment]
+                if new_component == nil then new_component = fragment_default end
                 if new_component == nil then new_component = true end
                 for place = b_place, e_place do
                     component_storage[place] = new_component
                 end
             end
         end
+    else
+        for component_index = 1, chunk_component_count do
+            local component_storage = chunk_component_storages[component_index]
+            local component_fragment = chunk_component_fragments[component_index]
 
-        for req_fragment_index = 1, req_fragment_count do
-            local req_fragment = req_fragment_list[req_fragment_index]
-
-            if ini_fragment_set[req_fragment] then
-                -- this fragment has already been initialized
-            else
-                local req_component_index = chunk_component_indices[req_fragment]
-
-                if req_component_index then
-                    local req_component_storage = chunk_component_storages[req_component_index]
-
-                    local req_component = true
-                    for place = b_place, e_place do
-                        req_component_storage[place] = req_component
-                    end
-                end
+            local new_component = components[component_fragment]
+            if new_component == nil then new_component = true end
+            for place = b_place, e_place do
+                component_storage[place] = new_component
             end
         end
     end
