@@ -11,6 +11,8 @@
 
 - We can return deferred status from modifying operations and spawn/clone methods.
 - We should have a way to not copy components on deferred spawn/clone.
+- We can cache default/duplicate per chunk to speed up entity creation with setup hooks.
+- We need spawn/clone fuzzy tests!
 
 ## Known Issues
 
