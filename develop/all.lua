@@ -2,11 +2,13 @@ require 'develop.samples.systems'
 
 require 'develop.testing.build_tests'
 require 'develop.testing.cancel_tests'
+require 'develop.testing.clone_tests'
 require 'develop.testing.locate_tests'
 require 'develop.testing.main_tests'
 require 'develop.testing.multi_spawn_tests'
 require 'develop.testing.name_tests'
 require 'develop.testing.requires_fragment_tests'
+require 'develop.testing.spawn_tests'
 require 'develop.testing.system_as_query_tests'
 
 require 'develop.benchmarks.clone_bmarks'
