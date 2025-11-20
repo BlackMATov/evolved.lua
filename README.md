@@ -1308,6 +1308,7 @@ builder_mt:destruction_policy :: id -> builder
 
 ### vX.X.X
 
+- The spawn and clone operations with defaults have been significantly optimized
 - Added basic [Teal](https://github.com/teal-language) type definitions, thanks to [@p0sel0k](https://github.com/p0sel0k)
 
 ### v1.4.0
