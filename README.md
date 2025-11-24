@@ -104,7 +104,7 @@ luarocks install evolved.lua
 
 ## Quick Start
 
-To get started with `evolved.lua`, read the [Overview](#overview) section to understand the basic concepts and how to use the library. After that, check the [Samples](develop/samples), which demonstrate complex usage of the library. Finally, refer to the [Cheat Sheet](#cheat-sheet) for a quick reference of all the functions and classes provided by the library.
+To get started with `evolved.lua`, read the [Overview](#overview) section to understand the basic concepts and how to use the library. After that, check the [Example](example), which demonstrate complex usage of the library. Finally, refer to the [Cheat Sheet](#cheat-sheet) for a quick reference of all the functions and classes provided by the library.
 
 ## Overview
 

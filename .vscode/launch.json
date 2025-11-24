@@ -27,6 +27,17 @@
                 "lua": "luajit",
                 "file": "${workspaceFolder}/develop/all.lua"
             }
+        },
+        {
+            "name": "Launch Evolved Example (LÖVE)",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "command": "love"
+            },
+            "args": [
+                "${workspaceFolder}/example"
+            ]
         }
     ]
 }
