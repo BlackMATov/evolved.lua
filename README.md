@@ -60,7 +60,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
-  - [vX.X.X](#vxxx)
+  - [v1.5.0](#v150)
   - [v1.4.0](#v140)
   - [v1.3.0](#v130)
   - [v1.2.0](#v120)
@@ -1306,10 +1306,11 @@ builder_mt:destruction_policy :: id -> builder
 
 ## Changelog
 
-### vX.X.X
+### v1.5.0
 
-- The spawn and clone operations with defaults have been significantly optimized
-- Added basic [Teal](https://github.com/teal-language) type definitions, thanks to [@p0sel0k](https://github.com/p0sel0k)
+- Added a little [LÖVE](https://love2d.org) example;
+- The spawn and clone operations with defaults have been significantly optimized;
+- Added basic [Teal](https://github.com/teal-language) type definitions, thanks to [@p0sel0k](https://github.com/p0sel0k).
 
 ### v1.4.0
 
