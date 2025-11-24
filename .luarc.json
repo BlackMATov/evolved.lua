@@ -28,6 +28,9 @@
         "ignoreDir": [
             ".vscode",
             "develop/3rdparty"
+        ],
+        "library": [
+            "${3rd}/love2d/library"
         ]
     }
 }

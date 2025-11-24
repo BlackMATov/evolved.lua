@@ -48,6 +48,7 @@
     - [Fragment Hooks](#fragment-hooks)
     - [Unique Fragments](#unique-fragments)
     - [Explicit Fragments](#explicit-fragments)
+    - [Internal Fragments](#internal-fragments)
     - [Shared Components](#shared-components)
     - [Fragment Requirements](#fragment-requirements)
     - [Destruction Policies](#destruction-policies)
@@ -59,6 +60,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
+  - [v1.5.0](#v150)
   - [v1.4.0](#v140)
   - [v1.3.0](#v130)
   - [v1.2.0](#v120)
@@ -102,7 +104,7 @@ luarocks install evolved.lua
 
 ## Quick Start
 
-To get started with `evolved.lua`, read the [Overview](#overview) section to understand the basic concepts and how to use the library. After that, check the [Samples](develop/samples), which demonstrate complex usage of the library. Finally, refer to the [Cheat Sheet](#cheat-sheet) for a quick reference of all the functions and classes provided by the library.
+To get started with `evolved.lua`, read the [Overview](#overview) section to understand the basic concepts and how to use the library. After that, check the [Example](example), which demonstrate complex usage of the library. Finally, refer to the [Cheat Sheet](#cheat-sheet) for a quick reference of all the functions and classes provided by the library.
 
 ## Overview
 
@@ -964,6 +966,10 @@ local all_enemies_including_disabled = evolved.builder()
     :build()
 ```
 
+#### Internal Fragments
+
+All predefined fragments provided by the library are marked as internal with the [`evolved.INTERNAL`](#evolvedinternal) trait. Because [`evolved.INTERNAL`](#evolvedinternal) is itself marked as [`evolved.EXPLICIT`](#evolvedexplicit), these fragments are hidden from queries by default. This prevents accidental use of internal fragments in user code and helps distinguish them from user-defined fragments.
+
 #### Shared Components
 
 Often, we want to store components as tables, and by default, these tables will be shared between entities. This means that if you modify the table in one entity, it will be modified in all entities that share this table. Sometimes this is what we want. For example, when we want to share a configuration or some resource between entities. But in other cases, we want each entity to have its own copy of the table. For example, if we want to store the position of an entity as a table, we don't want to share this table with other entities. Yes, we can copy the table manually, but the library provides a little bit of syntactic sugar for this.
@@ -1299,6 +1305,12 @@ builder_mt:destruction_policy :: id -> builder
 ```
 
 ## Changelog
+
+### v1.5.0
+
+- Added a little [LÖVE](https://love2d.org) example;
+- The spawn and clone operations with defaults have been significantly optimized;
+- Added basic [Teal](https://github.com/teal-language) type definitions, thanks to [@p0sel0k](https://github.com/p0sel0k).
 
 ### v1.4.0
 
@@ -1939,7 +1951,7 @@ function evolved.builder_mt:internal() end
 #### `evolved.builder_mt:default`
 
 ```lua
----@param default evolved.component
+---@param default evolved.default
 ---@return evolved.builder builder
 function evolved.builder_mt:default(default) end
 ```
