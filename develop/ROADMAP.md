@@ -14,5 +14,4 @@
 
 ## Known Issues
 
-- Required fragments are slower than they should be
 - Errors in hooks are cannot be handled properly right now
