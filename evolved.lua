@@ -132,14 +132,14 @@ local __major_queries = {} ---@type table<evolved.fragment, evolved.assoc_list<e
 local __entity_chunks = {} ---@type table<integer, evolved.chunk>
 local __entity_places = {} ---@type table<integer, integer>
 
-local __structural_changes = 0 ---@type integer
-
 local __sorted_includes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
 local __sorted_excludes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
 local __sorted_requires = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.fragment>>
 
 local __subsystem_groups = {} ---@type table<evolved.system, evolved.system>
 local __group_subsystems = {} ---@type table<evolved.system, evolved.assoc_list<evolved.system>>
+
+local __structural_changes = 0 ---@type integer
 
 ---
 ---
@@ -166,6 +166,7 @@ local __group_subsystems = {} ---@type table<evolved.system, evolved.assoc_list<
 ---@field package __component_duplicates evolved.duplicate[]
 ---@field package __with_fragment_edges table<evolved.fragment, evolved.chunk>
 ---@field package __without_fragment_edges table<evolved.fragment, evolved.chunk>
+---@field package __with_required_fragments? evolved.chunk
 ---@field package __without_unique_fragments? evolved.chunk
 ---@field package __unreachable_or_collected boolean
 ---@field package __has_setup_hooks boolean
@@ -901,7 +902,7 @@ local __chunk_has_any_fragment_list
 
 local __chunk_get_all_components
 
-local __chunk_required_fragments
+local __chunk_required_chunk
 local __fragment_required_fragments
 
 local __detach_entity
@@ -1003,6 +1004,7 @@ function __new_chunk(chunk_parent, chunk_fragment)
         __component_duplicates = {},
         __with_fragment_edges = {},
         __without_fragment_edges = {},
+        __with_required_fragments = nil,
         __without_unique_fragments = nil,
         __unreachable_or_collected = false,
         __has_setup_hooks = false,
@@ -1078,6 +1080,10 @@ function __update_chunk_caches(chunk)
     local chunk_parent = chunk.__parent
     local chunk_fragment = chunk.__fragment
 
+    local chunk_fragment_set = chunk.__fragment_set
+    local chunk_fragment_list = chunk.__fragment_list
+    local chunk_fragment_count = chunk.__fragment_count
+
     local has_setup_hooks = chunk_parent ~= nil and chunk_parent.__has_setup_hooks
         or __evolved_has_any(chunk_fragment, __DEFAULT, __DUPLICATE)
 
@@ -1102,8 +1108,28 @@ function __update_chunk_caches(chunk)
     local has_internal_minors = chunk_parent ~= nil and chunk_parent.__has_internal_fragments
     local has_internal_fragments = has_internal_major or has_internal_minors
 
-    local has_required_fragments = chunk_parent ~= nil and chunk_parent.__has_required_fragments
-        or __evolved_has(chunk_fragment, __REQUIRES)
+    local has_required_fragments = false
+
+    for chunk_fragment_index = 1, chunk_fragment_count do
+        local minor = chunk_fragment_list[chunk_fragment_index]
+
+        local minor_requires = __sorted_requires[minor]
+        local minor_require_list = minor_requires and minor_requires.__item_list
+        local minor_require_count = minor_requires and minor_requires.__item_count or 0
+
+        for minor_require_index = 1, minor_require_count do
+            local minor_require = minor_require_list[minor_require_index]
+
+            if not chunk_fragment_set[minor_require] then
+                has_required_fragments = true
+                break
+            end
+        end
+
+        if has_required_fragments then
+            break
+        end
+    end
 
     chunk.__has_setup_hooks = has_setup_hooks
     chunk.__has_assign_hooks = has_assign_hooks
@@ -1123,6 +1149,12 @@ function __update_chunk_caches(chunk)
     chunk.__has_internal_fragments = has_internal_fragments
 
     chunk.__has_required_fragments = has_required_fragments
+
+    if has_required_fragments then
+        chunk.__with_required_fragments = nil
+    else
+        chunk.__with_required_fragments = chunk
+    end
 
     if has_unique_fragments then
         chunk.__without_unique_fragments = nil
@@ -1813,17 +1845,11 @@ function __chunk_get_all_components(chunk, place, ...)
 end
 
 ---@param ini_chunk evolved.chunk
----@param req_fragment_set table<evolved.fragment, integer>
----@param req_fragment_list evolved.fragment[]
----@param req_fragment_count integer
----@return integer
+---@return evolved.chunk required_chunk
 ---@nodiscard
-function __chunk_required_fragments(ini_chunk, req_fragment_set, req_fragment_list, req_fragment_count)
-    ---@type evolved.fragment[]
-    local fragment_stack = __acquire_table(__table_pool_tag.fragment_list)
-    local fragment_stack_size = 0
+function __chunk_required_chunk(ini_chunk)
+    local req_chunk = ini_chunk
 
-    local ini_fragment_set = ini_chunk.__fragment_set
     local ini_fragment_list = ini_chunk.__fragment_list
     local ini_fragment_count = ini_chunk.__fragment_count
 
@@ -1834,54 +1860,13 @@ function __chunk_required_fragments(ini_chunk, req_fragment_set, req_fragment_li
         local ini_fragment_require_list = ini_fragment_requires and ini_fragment_requires.__item_list
         local ini_fragment_require_count = ini_fragment_requires and ini_fragment_requires.__item_count or 0
 
-        for required_fragment_index = 1, ini_fragment_require_count do
-            local required_fragment = ini_fragment_require_list[required_fragment_index]
-
-            if ini_fragment_set[required_fragment] or req_fragment_set[required_fragment] then
-                -- this fragment has already been gathered
-            else
-                req_fragment_count = req_fragment_count + 1
-                req_fragment_set[required_fragment] = req_fragment_count
-                req_fragment_list[req_fragment_count] = required_fragment
-
-                if __sorted_requires[required_fragment] then
-                    fragment_stack_size = fragment_stack_size + 1
-                    fragment_stack[fragment_stack_size] = required_fragment
-                end
-            end
+        for ini_fragment_require_index = 1, ini_fragment_require_count do
+            local ini_fragment_require = ini_fragment_require_list[ini_fragment_require_index]
+            req_chunk = __chunk_with_fragment(req_chunk, ini_fragment_require)
         end
     end
 
-    while fragment_stack_size > 0 do
-        local stack_fragment = fragment_stack[fragment_stack_size]
-
-        fragment_stack[fragment_stack_size] = nil
-        fragment_stack_size = fragment_stack_size - 1
-
-        local fragment_requires = __sorted_requires[stack_fragment]
-        local fragment_require_list = fragment_requires and fragment_requires.__item_list
-        local fragment_require_count = fragment_requires and fragment_requires.__item_count or 0
-
-        for fragment_require_index = 1, fragment_require_count do
-            local required_fragment = fragment_require_list[fragment_require_index]
-
-            if ini_fragment_set[required_fragment] or req_fragment_set[required_fragment] then
-                -- this fragment has already been gathered
-            else
-                req_fragment_count = req_fragment_count + 1
-                req_fragment_set[required_fragment] = req_fragment_count
-                req_fragment_list[req_fragment_count] = required_fragment
-
-                if __sorted_requires[required_fragment] then
-                    fragment_stack_size = fragment_stack_size + 1
-                    fragment_stack[fragment_stack_size] = required_fragment
-                end
-            end
-        end
-    end
-
-    __release_table(__table_pool_tag.fragment_list, fragment_stack, true)
-    return req_fragment_count
+    return req_chunk
 end
 
 ---@param ini_chunk evolved.chunk
@@ -2018,28 +2003,19 @@ function __spawn_entity(chunk, entity, components)
         chunk = __chunk_components(components)
     end
 
-    if not chunk then
-        return
+    while chunk and chunk.__has_required_fragments do
+        local required_chunk = chunk.__with_required_fragments
+
+        if required_chunk and not required_chunk.__unreachable_or_collected then
+            chunk = required_chunk
+        else
+            required_chunk = __chunk_required_chunk(chunk)
+            chunk.__with_required_fragments, chunk = required_chunk, required_chunk
+        end
     end
 
-    local req_fragment_set
-    local req_fragment_list
-    local req_fragment_count = 0
-
-    if chunk.__has_required_fragments then
-        ---@type table<evolved.fragment, integer>
-        req_fragment_set = __acquire_table(__table_pool_tag.fragment_set)
-
-        ---@type evolved.fragment[]
-        req_fragment_list = __acquire_table(__table_pool_tag.fragment_list)
-
-        req_fragment_count = __chunk_required_fragments(chunk,
-            req_fragment_set, req_fragment_list, req_fragment_count)
-
-        for req_fragment_index = 1, req_fragment_count do
-            local req_fragment = req_fragment_list[req_fragment_index]
-            chunk = __chunk_with_fragment(chunk, req_fragment)
-        end
+    if not chunk then
+        return
     end
 
     local chunk_entity_list = chunk.__entity_list
@@ -2130,14 +2106,6 @@ function __spawn_entity(chunk, entity, components)
                 end
             end
         end
-    end
-
-    if req_fragment_set then
-        __release_table(__table_pool_tag.fragment_set, req_fragment_set)
-    end
-
-    if req_fragment_list then
-        __release_table(__table_pool_tag.fragment_list, req_fragment_list)
     end
 end
 
@@ -2154,28 +2122,19 @@ function __multi_spawn_entity(chunk, entity_list, entity_count, components)
         chunk = __chunk_components(components)
     end
 
-    if not chunk then
-        return
+    while chunk and chunk.__has_required_fragments do
+        local required_chunk = chunk.__with_required_fragments
+
+        if required_chunk and not required_chunk.__unreachable_or_collected then
+            chunk = required_chunk
+        else
+            required_chunk = __chunk_required_chunk(chunk)
+            chunk.__with_required_fragments, chunk = required_chunk, required_chunk
+        end
     end
 
-    local req_fragment_set
-    local req_fragment_list
-    local req_fragment_count = 0
-
-    if chunk.__has_required_fragments then
-        ---@type table<evolved.fragment, integer>
-        req_fragment_set = __acquire_table(__table_pool_tag.fragment_set)
-
-        ---@type evolved.fragment[]
-        req_fragment_list = __acquire_table(__table_pool_tag.fragment_list)
-
-        req_fragment_count = __chunk_required_fragments(chunk,
-            req_fragment_set, req_fragment_list, req_fragment_count)
-
-        for req_fragment_index = 1, req_fragment_count do
-            local req_fragment = req_fragment_list[req_fragment_index]
-            chunk = __chunk_with_fragment(chunk, req_fragment)
-        end
+    if not chunk then
+        return
     end
 
     local chunk_entity_list = chunk.__entity_list
@@ -2286,14 +2245,6 @@ function __multi_spawn_entity(chunk, entity_list, entity_count, components)
             end
         end
     end
-
-    if req_fragment_set then
-        __release_table(__table_pool_tag.fragment_set, req_fragment_set)
-    end
-
-    if req_fragment_list then
-        __release_table(__table_pool_tag.fragment_list, req_fragment_list)
-    end
 end
 
 ---@param prefab evolved.entity
@@ -2306,8 +2257,12 @@ function __clone_entity(prefab, entity, components)
 
     local prefab_chunk, prefab_place = __evolved_locate(prefab)
 
-    if prefab_chunk and prefab_chunk.__has_unique_fragments and not prefab_chunk.__without_unique_fragments then
-        prefab_chunk.__without_unique_fragments = __chunk_without_unique_fragments(prefab_chunk)
+    if prefab_chunk and prefab_chunk.__has_unique_fragments then
+        local without_unique_fragments = prefab_chunk.__without_unique_fragments
+
+        if not without_unique_fragments or without_unique_fragments.__unreachable_or_collected then
+            prefab_chunk.__without_unique_fragments = __chunk_without_unique_fragments(prefab_chunk)
+        end
     end
 
     if not prefab_chunk or not prefab_chunk.__without_unique_fragments then
@@ -2318,28 +2273,19 @@ function __clone_entity(prefab, entity, components)
         prefab_chunk.__without_unique_fragments,
         components)
 
-    if not chunk then
-        return
+    while chunk and chunk.__has_required_fragments do
+        local required_chunk = chunk.__with_required_fragments
+
+        if required_chunk and not required_chunk.__unreachable_or_collected then
+            chunk = required_chunk
+        else
+            required_chunk = __chunk_required_chunk(chunk)
+            chunk.__with_required_fragments, chunk = required_chunk, required_chunk
+        end
     end
 
-    local req_fragment_set
-    local req_fragment_list
-    local req_fragment_count = 0
-
-    if chunk.__has_required_fragments then
-        ---@type table<evolved.fragment, integer>
-        req_fragment_set = __acquire_table(__table_pool_tag.fragment_set)
-
-        ---@type evolved.fragment[]
-        req_fragment_list = __acquire_table(__table_pool_tag.fragment_list)
-
-        req_fragment_count = __chunk_required_fragments(chunk,
-            req_fragment_set, req_fragment_list, req_fragment_count)
-
-        for req_fragment_index = 1, req_fragment_count do
-            local req_fragment = req_fragment_list[req_fragment_index]
-            chunk = __chunk_with_fragment(chunk, req_fragment)
-        end
+    if not chunk then
+        return
     end
 
     local chunk_entity_list = chunk.__entity_list
@@ -2444,14 +2390,6 @@ function __clone_entity(prefab, entity, components)
             end
         end
     end
-
-    if req_fragment_set then
-        __release_table(__table_pool_tag.fragment_set, req_fragment_set)
-    end
-
-    if req_fragment_list then
-        __release_table(__table_pool_tag.fragment_list, req_fragment_list)
-    end
 end
 
 ---@param prefab evolved.entity
@@ -2465,8 +2403,12 @@ function __multi_clone_entity(prefab, entity_list, entity_count, components)
 
     local prefab_chunk, prefab_place = __evolved_locate(prefab)
 
-    if prefab_chunk and prefab_chunk.__has_unique_fragments and not prefab_chunk.__without_unique_fragments then
-        prefab_chunk.__without_unique_fragments = __chunk_without_unique_fragments(prefab_chunk)
+    if prefab_chunk and prefab_chunk.__has_unique_fragments then
+        local without_unique_fragments = prefab_chunk.__without_unique_fragments
+
+        if not without_unique_fragments or without_unique_fragments.__unreachable_or_collected then
+            prefab_chunk.__without_unique_fragments = __chunk_without_unique_fragments(prefab_chunk)
+        end
     end
 
     if not prefab_chunk or not prefab_chunk.__without_unique_fragments then
@@ -2477,28 +2419,19 @@ function __multi_clone_entity(prefab, entity_list, entity_count, components)
         prefab_chunk.__without_unique_fragments,
         components)
 
-    if not chunk then
-        return
+    while chunk and chunk.__has_required_fragments do
+        local required_chunk = chunk.__with_required_fragments
+
+        if required_chunk and not required_chunk.__unreachable_or_collected then
+            chunk = required_chunk
+        else
+            required_chunk = __chunk_required_chunk(chunk)
+            chunk.__with_required_fragments, chunk = required_chunk, required_chunk
+        end
     end
 
-    local req_fragment_set
-    local req_fragment_list
-    local req_fragment_count = 0
-
-    if chunk.__has_required_fragments then
-        ---@type table<evolved.fragment, integer>
-        req_fragment_set = __acquire_table(__table_pool_tag.fragment_set)
-
-        ---@type evolved.fragment[]
-        req_fragment_list = __acquire_table(__table_pool_tag.fragment_list)
-
-        req_fragment_count = __chunk_required_fragments(chunk,
-            req_fragment_set, req_fragment_list, req_fragment_count)
-
-        for req_fragment_index = 1, req_fragment_count do
-            local req_fragment = req_fragment_list[req_fragment_index]
-            chunk = __chunk_with_fragment(chunk, req_fragment)
-        end
+    if not chunk then
+        return
     end
 
     local chunk_entity_list = chunk.__entity_list
@@ -2621,14 +2554,6 @@ function __multi_clone_entity(prefab, entity_list, entity_count, components)
                 end
             end
         end
-    end
-
-    if req_fragment_set then
-        __release_table(__table_pool_tag.fragment_set, req_fragment_set)
-    end
-
-    if req_fragment_list then
-        __release_table(__table_pool_tag.fragment_list, req_fragment_list)
     end
 end
 
@@ -6076,9 +6001,6 @@ __evolved_set(__DEFAULT, __ON_REMOVE, __update_major_chunks)
 __evolved_set(__DUPLICATE, __ON_INSERT, __update_major_chunks)
 __evolved_set(__DUPLICATE, __ON_REMOVE, __update_major_chunks)
 
-__evolved_set(__REQUIRES, __ON_INSERT, __update_major_chunks)
-__evolved_set(__REQUIRES, __ON_REMOVE, __update_major_chunks)
-
 ---
 ---
 ---
@@ -6260,6 +6182,7 @@ __evolved_set(__INCLUDES, __ON_SET, function(query, _, include_list)
     end
 
     __insert_query(query)
+    __update_major_chunks(query)
 end)
 
 __evolved_set(__INCLUDES, __ON_REMOVE, function(query)
@@ -6268,6 +6191,7 @@ __evolved_set(__INCLUDES, __ON_REMOVE, function(query)
     __sorted_includes[query] = nil
 
     __insert_query(query)
+    __update_major_chunks(query)
 end)
 
 ---
@@ -6296,6 +6220,7 @@ __evolved_set(__EXCLUDES, __ON_SET, function(query, _, exclude_list)
     end
 
     __insert_query(query)
+    __update_major_chunks(query)
 end)
 
 __evolved_set(__EXCLUDES, __ON_REMOVE, function(query)
@@ -6304,6 +6229,7 @@ __evolved_set(__EXCLUDES, __ON_REMOVE, function(query)
     __sorted_excludes[query] = nil
 
     __insert_query(query)
+    __update_major_chunks(query)
 end)
 
 ---
@@ -6328,10 +6254,13 @@ __evolved_set(__REQUIRES, __ON_SET, function(fragment, _, require_list)
     else
         __sorted_requires[fragment] = nil
     end
+
+    __update_major_chunks(fragment)
 end)
 
 __evolved_set(__REQUIRES, __ON_REMOVE, function(fragment)
     __sorted_requires[fragment] = nil
+    __update_major_chunks(fragment)
 end)
 
 ---
@@ -6377,6 +6306,7 @@ __evolved_set(__GROUP, __ON_SET, function(system, _, group)
     __subsystem_groups[system] = group
 
     __add_subsystem(system)
+    __update_major_chunks(system)
 end)
 
 ---@param system evolved.system
@@ -6386,6 +6316,7 @@ __evolved_set(__GROUP, __ON_REMOVE, function(system)
     __subsystem_groups[system] = nil
 
     __add_subsystem(system)
+    __update_major_chunks(system)
 end)
 
 ---

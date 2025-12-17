@@ -173,6 +173,7 @@ basics.describe_bench(
         local clone = evo.clone
 
         local prefab = evo.spawn { [RF1] = true }
+        evo.remove(prefab, F1)
 
         for _ = 1, N do
             clone(prefab)
@@ -217,6 +218,7 @@ basics.describe_bench(
         local clone = evo.clone
 
         local prefab = evo.spawn { [RF123] = true }
+        evo.remove(prefab, F1, F2, F3)
 
         for _ = 1, N do
             clone(prefab)
@@ -261,6 +263,7 @@ basics.describe_bench(
         local clone = evo.clone
 
         local prefab = evo.spawn { [RF12345] = true }
+        evo.remove(prefab, F1, F2, F3, F4, F5)
 
         for _ = 1, N do
             clone(prefab)
