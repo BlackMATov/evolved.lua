@@ -209,45 +209,33 @@ local __lua_table_sort = table.sort
 local __lua_tostring = tostring
 local __lua_xpcall = xpcall
 
----@type fun(narray: integer, nhash: integer): table
+---@type fun(nseq?: integer): table
 local __lua_table_new = (function()
     -- https://luajit.org/extensions.html
+    -- https://www.lua.org/manual/5.5/manual.html#pdf-table.create
     -- https://create.roblox.com/docs/reference/engine/libraries/table#create
     -- https://forum.defold.com/t/solved-is-luajit-table-new-function-available-in-defold/78623
 
     do
         ---@diagnostic disable-next-line: deprecated, undefined-field
         local table_new = table and table.new
-        if table_new then
-            ---@cast table_new fun(narray: integer, nhash: integer): table
-            return table_new
-        end
+        if table_new then return function(nseq) return table_new(nseq or 0, 0) end end
     end
 
     do
         ---@diagnostic disable-next-line: deprecated, undefined-field
         local table_create = table and table.create
-        if table_create then
-            ---@cast table_create fun(count: integer, value: any): table
-            return function(narray)
-                return table_create(narray)
-            end
-        end
+        if table_create then return function(nseq) return table_create(nseq or 0) end end
     end
 
     do
         local table_new_loader = package and package.preload and package.preload['table.new']
         local table_new = table_new_loader and table_new_loader()
-        if table_new then
-            ---@cast table_new fun(narray: integer, nhash: integer): table
-            return table_new
-        end
+        if table_new then return function(nseq) return table_new(nseq or 0, 0) end end
     end
 
     ---@return table
-    return function()
-        return {}
-    end
+    return function() return {} end
 end)()
 
 ---@type fun(tab: table)
@@ -259,19 +247,13 @@ local __lua_table_clear = (function()
     do
         ---@diagnostic disable-next-line: deprecated, undefined-field
         local table_clear = table and table.clear
-        if table_clear then
-            ---@cast table_clear fun(tab: table)
-            return table_clear
-        end
+        if table_clear then return table_clear end
     end
 
     do
         local table_clear_loader = package and package.preload and package.preload['table.clear']
         local table_clear = table_clear_loader and table_clear_loader()
-        if table_clear then
-            ---@cast table_clear fun(tab: table)
-            return table_clear
-        end
+        if table_clear then return table_clear end
     end
 
     ---@param tab table
@@ -284,16 +266,21 @@ end)()
 ---@type fun(a1: table, f: integer, e: integer, t: integer, a2?: table): table
 local __lua_table_move = (function()
     -- https://luajit.org/extensions.html
-    -- https://github.com/LuaJIT/LuaJIT/blob/v2.1/src/lib_table.c#L132
+    -- https://www.lua.org/manual/5.3/manual.html#pdf-table.move
     -- https://create.roblox.com/docs/reference/engine/libraries/table#move
+    -- https://forum.defold.com/t/solved-is-luajit-table-new-function-available-in-defold/78623
+    -- https://github.com/LuaJIT/LuaJIT/blob/v2.1/src/lib_table.c#L132
 
     do
         ---@diagnostic disable-next-line: deprecated, undefined-field
         local table_move = table and table.move
-        if table_move then
-            ---@cast table_move fun(a1: table, f: integer, e: integer, t: integer, a2?: table): table
-            return table_move
-        end
+        if table_move then return table_move end
+    end
+
+    do
+        local table_move_loader = package and package.preload and package.preload['table.move']
+        local table_move = table_move_loader and table_move_loader()
+        if table_move then return table_move end
     end
 
     ---@type fun(a1: table, f: integer, e: integer, t: integer, a2?: table): table
@@ -342,12 +329,10 @@ local __lua_debug_traceback = (function()
     do
         ---@diagnostic disable-next-line: deprecated, undefined-field
         local debug_traceback = debug and debug.traceback
-        if debug_traceback then
-            return debug_traceback
-        end
+        if debug_traceback then return debug_traceback end
     end
 
-    ---@type fun(message?: any, level?: integer): string
+    ---@type fun(message?: any): string
     return function(message)
         return __lua_tostring(message)
     end
@@ -465,12 +450,12 @@ local __table_pool_tag = {
 
 ---@type table<evolved.table_pool_tag, evolved.table_pool>
 local __tagged_table_pools = (function()
-    local table_pools = __lua_table_new(__table_pool_tag.__count, 0)
+    local table_pools = __lua_table_new(__table_pool_tag.__count)
     local table_pool_reserve = 16
 
     for tag = 1, __table_pool_tag.__count do
         ---@type evolved.table_pool
-        local table_pool = __lua_table_new(table_pool_reserve, 1)
+        local table_pool = __lua_table_new(table_pool_reserve)
         for i = 1, table_pool_reserve do table_pool[i] = {} end
         table_pool.__size = table_pool_reserve
         table_pools[tag] = table_pool
@@ -529,7 +514,7 @@ local __list_dup
 ---@return any[]
 ---@nodiscard
 function __list_new(reserve)
-    return __lua_table_new(reserve or 0, 0)
+    return __lua_table_new(reserve)
 end
 
 ---@generic V
@@ -580,8 +565,8 @@ local __assoc_list_remove_ex
 function __assoc_list_new(reserve)
     ---@type evolved.assoc_list
     return {
-        __item_set = __lua_table_new(0, reserve or 0),
-        __item_list = __lua_table_new(reserve or 0, 0),
+        __item_set = __lua_table_new(),
+        __item_list = __lua_table_new(reserve),
         __item_count = 0,
     }
 end
@@ -1231,7 +1216,7 @@ function __update_chunk_storages(chunk)
             component_count = component_count + 1
             chunk.__component_count = component_count
 
-            local component_storage = __lua_table_new(entity_count, 0)
+            local component_storage = __lua_table_new(entity_count)
             local component_storage_index = component_count
 
             component_indices[fragment] = component_storage_index
@@ -5200,7 +5185,7 @@ function __evolved_collect_garbage()
 
     do
         ---@type integer[]
-        local new_defer_points = __lua_table_new(__defer_depth, 0)
+        local new_defer_points = __lua_table_new(__defer_depth)
 
         __lua_table_move(
             __defer_points, 1, __defer_depth,
@@ -5211,7 +5196,7 @@ function __evolved_collect_garbage()
 
     do
         ---@type any[]
-        local new_defer_bytecode = __lua_table_new(__defer_length, 0)
+        local new_defer_bytecode = __lua_table_new(__defer_length)
 
         __lua_table_move(
             __defer_bytecode, 1, __defer_length,
