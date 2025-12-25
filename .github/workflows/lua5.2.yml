@@ -1,4 +1,4 @@
-name: lua5.4
+name: lua5.2
 
 on: [push, pull_request]
 
@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lua_version: ["5.4"]
+        lua_version: ["5.2"]
         operating_system: ["ubuntu-latest", "macos-latest", "windows-latest"]
     name: ${{matrix.operating_system}}-${{matrix.lua_version}}
     steps:
