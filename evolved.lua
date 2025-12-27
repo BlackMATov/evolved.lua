@@ -944,7 +944,7 @@ function __new_chunk(chunk_parent, chunk_fragment)
     local chunk_fragment_primary = chunk_fragment % 2 ^ 20
 
     if __freelist_ids[chunk_fragment_primary] ~= chunk_fragment then
-        __error_fmt('the id (%s) is not alive and cannot be used for a new chunk',
+        __error_fmt('the fragment (%s) is not alive and cannot be used for a new chunk',
             __id_name(chunk_fragment))
     end
 
@@ -3900,9 +3900,7 @@ end
 ---@param components? table<evolved.fragment, evolved.component>
 ---@return evolved.entity entity
 function __evolved_spawn(components)
-    if not components then
-        components = __safe_tbls.__EMPTY_COMPONENT_MAP
-    end
+    components = components or __safe_tbls.__EMPTY_COMPONENT_MAP
 
     if __debug_mode then
         for fragment in __lua_next, components do
@@ -3937,9 +3935,7 @@ function __evolved_multi_spawn(entity_count, components)
         return {}, 0
     end
 
-    if not components then
-        components = __safe_tbls.__EMPTY_COMPONENT_MAP
-    end
+    components = components or __safe_tbls.__EMPTY_COMPONENT_MAP
 
     if __debug_mode then
         for fragment in __lua_next, components do
@@ -3973,9 +3969,7 @@ end
 ---@param components? table<evolved.fragment, evolved.component>
 ---@return evolved.entity entity
 function __evolved_clone(prefab, components)
-    if not components then
-        components = __safe_tbls.__EMPTY_COMPONENT_MAP
-    end
+    components = components or __safe_tbls.__EMPTY_COMPONENT_MAP
 
     if __debug_mode then
         if not __evolved_alive(prefab) then
@@ -4016,9 +4010,7 @@ function __evolved_multi_clone(entity_count, prefab, components)
         return {}, 0
     end
 
-    if not components then
-        components = __safe_tbls.__EMPTY_COMPONENT_MAP
-    end
+    components = components or __safe_tbls.__EMPTY_COMPONENT_MAP
 
     if __debug_mode then
         if not __evolved_alive(prefab) then
@@ -4115,10 +4107,18 @@ function __evolved_empty(entity)
     local entity_primary = entity % 2 ^ 20
 
     if __freelist_ids[entity_primary] ~= entity then
+        -- non-alive entities are empty
         return true
     end
 
-    return not __entity_chunks[entity_primary]
+    local entity_chunk = __entity_chunks[entity_primary]
+
+    if not entity_chunk then
+        -- entities without chunks are empty
+        return true
+    end
+
+    return false
 end
 
 ---@param ... evolved.entity entities
@@ -4171,12 +4171,14 @@ function __evolved_has(entity, fragment)
     local entity_primary = entity % 2 ^ 20
 
     if __freelist_ids[entity_primary] ~= entity then
+        -- non-alive entities have no fragments
         return false
     end
 
     local entity_chunk = __entity_chunks[entity_primary]
 
     if not entity_chunk then
+        -- empty entities have no fragments
         return false
     end
 
@@ -4197,12 +4199,14 @@ function __evolved_has_all(entity, ...)
     local entity_primary = entity % 2 ^ 20
 
     if __freelist_ids[entity_primary] ~= entity then
+        -- non-alive entities have no fragments
         return false
     end
 
     local entity_chunk = __entity_chunks[entity_primary]
 
     if not entity_chunk then
+        -- empty entities have no fragments
         return false
     end
 
@@ -4223,12 +4227,14 @@ function __evolved_has_any(entity, ...)
     local entity_primary = entity % 2 ^ 20
 
     if __freelist_ids[entity_primary] ~= entity then
+        -- non-alive entities have no fragments
         return false
     end
 
     local entity_chunk = __entity_chunks[entity_primary]
 
     if not entity_chunk then
+        -- empty entities have no fragments
         return false
     end
 
@@ -4243,12 +4249,14 @@ function __evolved_get(entity, ...)
     local entity_primary = entity % 2 ^ 20
 
     if __freelist_ids[entity_primary] ~= entity then
+        -- non-alive entities have no fragments
         return
     end
 
     local entity_chunk = __entity_chunks[entity_primary]
 
     if not entity_chunk then
+        -- empty entities have no fragments
         return
     end
 
@@ -4263,15 +4271,15 @@ function __evolved_set(entity, fragment, component)
     local entity_primary = entity % 2 ^ 20
 
     if __freelist_ids[entity_primary] ~= entity then
-        __error_fmt('the id (%s) is not alive and cannot be changed',
+        __error_fmt('the entity (%s) is not alive and cannot be changed',
             __id_name(entity))
     end
 
-    local fragment_primary = fragment % 2 ^ 20
-
     if __debug_mode then
+        local fragment_primary = fragment % 2 ^ 20
+
         if __freelist_ids[fragment_primary] ~= fragment then
-            __error_fmt('the id (%s) is not alive and cannot be set',
+            __error_fmt('the fragment (%s) is not alive and cannot be set',
                 __id_name(fragment))
         end
     end
@@ -4497,7 +4505,7 @@ function __evolved_remove(entity, ...)
     local entity_primary = entity % 2 ^ 20
 
     if __freelist_ids[entity_primary] ~= entity then
-        -- the id is not alive, nothing to remove
+        -- nothing to remove from non-alive entities
         return
     end
 
@@ -4515,6 +4523,7 @@ function __evolved_remove(entity, ...)
     local new_chunk = __chunk_without_fragments(old_chunk, ...)
 
     if old_chunk == new_chunk then
+        -- nothing to remove
         return
     end
 
@@ -4614,7 +4623,7 @@ function __evolved_clear(...)
             local entity_primary = entity % 2 ^ 20
 
             if __freelist_ids[entity_primary] ~= entity then
-                -- the id is not alive, nothing to clear
+                -- nothing to clear from non-alive entities
             else
                 local chunk = entity_chunks[entity_primary]
                 local place = entity_places[entity_primary]
@@ -4692,7 +4701,7 @@ function __evolved_destroy(...)
             local entity_primary = entity % 2 ^ 20
 
             if __freelist_ids[entity_primary] ~= entity then
-                -- the id is not alive, nothing to destroy
+                -- nothing to destroy from non-alive entities
             else
                 local is_fragment = minor_chunks[entity]
 
@@ -4731,7 +4740,7 @@ function __evolved_batch_set(query, fragment, component)
     local query_primary = query % 2 ^ 20
 
     if __freelist_ids[query_primary] ~= query then
-        __error_fmt('the id (%s) is not alive and cannot be queried',
+        __error_fmt('the query (%s) is not alive and cannot be executed',
             __id_name(query))
     end
 
@@ -4739,7 +4748,7 @@ function __evolved_batch_set(query, fragment, component)
         local fragment_primary = fragment % 2 ^ 20
 
         if __freelist_ids[fragment_primary] ~= fragment then
-            __error_fmt('the id (%s) is not alive and cannot be set',
+            __error_fmt('the fragment (%s) is not alive and cannot be set',
                 __id_name(fragment))
         end
     end
@@ -4784,7 +4793,7 @@ function __evolved_batch_remove(query, ...)
     local query_primary = query % 2 ^ 20
 
     if __freelist_ids[query_primary] ~= query then
-        __error_fmt('the id (%s) is not alive and cannot be queried',
+        __error_fmt('the query (%s) is not alive and cannot be executed',
             __id_name(query))
     end
 
@@ -4842,7 +4851,7 @@ function __evolved_batch_clear(...)
             local query_primary = query % 2 ^ 20
 
             if __freelist_ids[query_primary] ~= query then
-                __warning_fmt('the id (%s) is not alive and cannot be queried',
+                __warning_fmt('the query (%s) is not alive and cannot be executed',
                     __id_name(query))
             else
                 for chunk in __evolved_execute(query) do
@@ -4899,7 +4908,7 @@ function __evolved_batch_destroy(...)
             local query_primary = query % 2 ^ 20
 
             if __freelist_ids[query_primary] ~= query then
-                __warning_fmt('the id (%s) is not alive and cannot be queried',
+                __warning_fmt('the query (%s) is not alive and cannot be executed',
                     __id_name(query))
             else
                 for chunk, entity_list, entity_count in __evolved_execute(query) do
@@ -4956,7 +4965,7 @@ function __evolved_each(entity)
     local entity_primary = entity % 2 ^ 20
 
     if __freelist_ids[entity_primary] ~= entity then
-        __error_fmt('the id (%s) is not alive and cannot be iterated',
+        __error_fmt('the entity (%s) is not alive and cannot be iterated',
             __id_name(entity))
     end
 
@@ -4985,7 +4994,7 @@ function __evolved_execute(query)
     local query_primary = query % 2 ^ 20
 
     if __freelist_ids[query_primary] ~= query then
-        __error_fmt('the id (%s) is not alive and cannot be executed',
+        __error_fmt('the query (%s) is not alive and cannot be executed',
             __id_name(query))
     end
 
@@ -5054,12 +5063,14 @@ function __evolved_locate(entity)
     local entity_primary = entity % 2 ^ 20
 
     if __freelist_ids[entity_primary] ~= entity then
+        -- non-alive entities have no chunks
         return nil, 0
     end
 
     local entity_chunk = __entity_chunks[entity_primary]
 
     if not entity_chunk then
+        -- empty entities have no chunks
         return nil, 0
     end
 
@@ -5080,7 +5091,7 @@ function __evolved_process(...)
         local system_primary = system % 2 ^ 20
 
         if __freelist_ids[system_primary] ~= system then
-            __warning_fmt('the id (%s) is not alive and cannot be processed',
+            __warning_fmt('the system (%s) is not alive and cannot be processed',
                 __id_name(system))
         elseif __evolved_has(system, __DISABLED) then
             -- the system is disabled, nothing to process
@@ -5632,7 +5643,7 @@ function __builder_mt:set(fragment, component)
 
     if __debug_mode then
         if __freelist_ids[fragment_primary] ~= fragment then
-            __error_fmt('the id (%s) is not alive and cannot be set',
+            __error_fmt('the fragment (%s) is not alive and cannot be set',
                 __id_name(fragment))
         end
     end
