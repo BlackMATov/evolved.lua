@@ -243,3 +243,143 @@ do
         end
     end
 end
+
+do
+    local f1, f2, f3, f4 = evo.id(4)
+    evo.set(f1, evo.REQUIRES, { f2 })
+    evo.set(f2, evo.REQUIRES, { f3 })
+    evo.set(f3, evo.REQUIRES, { f4 })
+
+    do
+        local e1 = evo.builder():set(f1):spawn()
+        assert(evo.has(e1, f1) and evo.get(e1, f1) == true)
+        assert(evo.has(e1, f2) and evo.get(e1, f2) == true)
+        assert(evo.has(e1, f3) and evo.get(e1, f3) == true)
+        assert(evo.has(e1, f4) and evo.get(e1, f4) == true)
+
+        local e2 = evo.builder():set(f2):spawn()
+        assert(not evo.has(e2, f1) and evo.get(e2, f1) == nil)
+        assert(evo.has(e2, f2) and evo.get(e2, f2) == true)
+        assert(evo.has(e2, f3) and evo.get(e2, f3) == true)
+        assert(evo.has(e2, f4) and evo.get(e2, f4) == true)
+
+        local e3 = evo.builder():set(f3):spawn()
+        assert(not evo.has(e3, f1) and evo.get(e3, f1) == nil)
+        assert(not evo.has(e3, f2) and evo.get(e3, f2) == nil)
+        assert(evo.has(e3, f3) and evo.get(e3, f3) == true)
+        assert(evo.has(e3, f4) and evo.get(e3, f4) == true)
+    end
+
+    do
+        local e1 = evo.id()
+        evo.set(e1, f1)
+        assert(evo.has(e1, f1) and evo.get(e1, f1) == true)
+        assert(evo.has(e1, f2) and evo.get(e1, f2) == true)
+        assert(evo.has(e1, f3) and evo.get(e1, f3) == true)
+        assert(evo.has(e1, f4) and evo.get(e1, f4) == true)
+
+        local e2 = evo.id()
+        evo.set(e2, f2)
+        assert(not evo.has(e2, f1) and evo.get(e2, f1) == nil)
+        assert(evo.has(e2, f2) and evo.get(e2, f2) == true)
+        assert(evo.has(e2, f3) and evo.get(e2, f3) == true)
+        assert(evo.has(e2, f4) and evo.get(e2, f4) == true)
+
+        local e3 = evo.id()
+        evo.set(e3, f3)
+        assert(not evo.has(e3, f1) and evo.get(e3, f1) == nil)
+        assert(not evo.has(e3, f2) and evo.get(e3, f2) == nil)
+        assert(evo.has(e3, f3) and evo.get(e3, f3) == true)
+        assert(evo.has(e3, f4) and evo.get(e3, f4) == true)
+    end
+
+    evo.remove(f2, evo.REQUIRES)
+
+    do
+        local e1 = evo.builder():set(f1):spawn()
+        assert(evo.has(e1, f1) and evo.get(e1, f1) == true)
+        assert(evo.has(e1, f2) and evo.get(e1, f2) == true)
+        assert(not evo.has(e1, f3) and evo.get(e1, f3) == nil)
+        assert(not evo.has(e1, f4) and evo.get(e1, f4) == nil)
+
+        local e2 = evo.builder():set(f2):spawn()
+        assert(not evo.has(e2, f1) and evo.get(e2, f1) == nil)
+        assert(evo.has(e2, f2) and evo.get(e2, f2) == true)
+        assert(not evo.has(e2, f3) and evo.get(e2, f3) == nil)
+        assert(not evo.has(e2, f4) and evo.get(e2, f4) == nil)
+
+        local e3 = evo.builder():set(f3):spawn()
+        assert(not evo.has(e3, f1) and evo.get(e3, f1) == nil)
+        assert(not evo.has(e3, f2) and evo.get(e3, f2) == nil)
+        assert(evo.has(e3, f3) and evo.get(e3, f3) == true)
+        assert(evo.has(e3, f4) and evo.get(e3, f4) == true)
+    end
+
+    do
+        local e1 = evo.id()
+        evo.set(e1, f1)
+        assert(evo.has(e1, f1) and evo.get(e1, f1) == true)
+        assert(evo.has(e1, f2) and evo.get(e1, f2) == true)
+        assert(not evo.has(e1, f3) and evo.get(e1, f3) == nil)
+        assert(not evo.has(e1, f4) and evo.get(e1, f4) == nil)
+
+        local e2 = evo.id()
+        evo.set(e2, f2)
+        assert(not evo.has(e2, f1) and evo.get(e2, f1) == nil)
+        assert(evo.has(e2, f2) and evo.get(e2, f2) == true)
+        assert(not evo.has(e2, f3) and evo.get(e2, f3) == nil)
+        assert(not evo.has(e2, f4) and evo.get(e2, f4) == nil)
+
+        local e3 = evo.id()
+        evo.set(e3, f3)
+        assert(not evo.has(e3, f1) and evo.get(e3, f1) == nil)
+        assert(not evo.has(e3, f2) and evo.get(e3, f2) == nil)
+        assert(evo.has(e3, f3) and evo.get(e3, f3) == true)
+        assert(evo.has(e3, f4) and evo.get(e3, f4) == true)
+    end
+
+    evo.set(f2, evo.REQUIRES, { f4 })
+
+    do
+        local e1 = evo.builder():set(f1):spawn()
+        assert(evo.has(e1, f1) and evo.get(e1, f1) == true)
+        assert(evo.has(e1, f2) and evo.get(e1, f2) == true)
+        assert(not evo.has(e1, f3) and evo.get(e1, f3) == nil)
+        assert(evo.has(e1, f4) and evo.get(e1, f4) == true)
+
+        local e2 = evo.builder():set(f2):spawn()
+        assert(not evo.has(e2, f1) and evo.get(e2, f1) == nil)
+        assert(evo.has(e2, f2) and evo.get(e2, f2) == true)
+        assert(not evo.has(e2, f3) and evo.get(e2, f3) == nil)
+        assert(evo.has(e2, f4) and evo.get(e2, f4) == true)
+
+        local e3 = evo.builder():set(f3):spawn()
+        assert(not evo.has(e3, f1) and evo.get(e3, f1) == nil)
+        assert(not evo.has(e3, f2) and evo.get(e3, f2) == nil)
+        assert(evo.has(e3, f3) and evo.get(e3, f3) == true)
+        assert(evo.has(e3, f4) and evo.get(e3, f4) == true)
+    end
+
+    do
+        local e1 = evo.id()
+        evo.set(e1, f1)
+        assert(evo.has(e1, f1) and evo.get(e1, f1) == true)
+        assert(evo.has(e1, f2) and evo.get(e1, f2) == true)
+        assert(not evo.has(e1, f3) and evo.get(e1, f3) == nil)
+        assert(evo.has(e1, f4) and evo.get(e1, f4) == true)
+
+        local e2 = evo.id()
+        evo.set(e2, f2)
+        assert(not evo.has(e2, f1) and evo.get(e2, f1) == nil)
+        assert(evo.has(e2, f2) and evo.get(e2, f2) == true)
+        assert(not evo.has(e2, f3) and evo.get(e2, f3) == nil)
+        assert(evo.has(e2, f4) and evo.get(e2, f4) == true)
+
+        local e3 = evo.id()
+        evo.set(e3, f3)
+        assert(not evo.has(e3, f1) and evo.get(e3, f1) == nil)
+        assert(not evo.has(e3, f2) and evo.get(e3, f2) == nil)
+        assert(evo.has(e3, f3) and evo.get(e3, f3) == true)
+        assert(evo.has(e3, f4) and evo.get(e3, f4) == true)
+    end
+end

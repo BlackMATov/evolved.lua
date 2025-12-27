@@ -127,6 +127,7 @@
     unpack: function(id: Id): integer, integer
 
     defer: function(): boolean
+    depth: function(): integer
     commit: function(): boolean
     cancel: function(): boolean
 
