@@ -60,7 +60,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
-  - [vX.X.X](#vxxx)
+  - [v1.6.0](#v160)
   - [v1.5.0](#v150)
   - [v1.4.0](#v140)
   - [v1.3.0](#v130)
@@ -1312,7 +1312,7 @@ builder_mt:destruction_policy :: id -> builder
 
 ## Changelog
 
-### vX.X.X
+### v1.6.0
 
 - Significant performance improvements of the [`evolved.REQUIRES`](#evolvedrequires) fragment trait
 - Added the new [`evolved.depth`](#evolveddepth) function that returns the current depth of deferred scopes
