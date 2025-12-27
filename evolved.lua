@@ -800,6 +800,7 @@ local __evolved_pack
 local __evolved_unpack
 
 local __evolved_defer
+local __evolved_depth
 local __evolved_commit
 local __evolved_cancel
 
@@ -2750,10 +2751,6 @@ function __chunk_set(old_chunk, fragment, component)
 
     local new_chunk = __chunk_with_fragment(old_chunk, fragment)
 
-    if not new_chunk then
-        return
-    end
-
     if old_chunk == new_chunk then
         local old_chunk_has_setup_hooks = old_chunk.__has_setup_hooks
         local old_chunk_has_assign_hooks = old_chunk.__has_assign_hooks
@@ -3854,6 +3851,12 @@ function __evolved_defer()
     return __defer_depth == 1
 end
 
+---@return integer depth
+---@nodiscard
+function __evolved_depth()
+    return __defer_depth
+end
+
 ---@return boolean committed
 function __evolved_commit()
     if __defer_depth <= 0 then
@@ -4296,10 +4299,6 @@ function __evolved_set(entity, fragment, component)
     local old_place = entity_places[entity_primary]
 
     local new_chunk = __chunk_with_fragment(old_chunk, fragment)
-
-    if not new_chunk then
-        return
-    end
 
     __evolved_defer()
 
@@ -6298,6 +6297,7 @@ evolved.pack = __evolved_pack
 evolved.unpack = __evolved_unpack
 
 evolved.defer = __evolved_defer
+evolved.depth = __evolved_depth
 evolved.commit = __evolved_commit
 evolved.cancel = __evolved_cancel
 

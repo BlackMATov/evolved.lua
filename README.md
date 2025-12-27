@@ -644,6 +644,10 @@ Now we know that structural changes are not allowed during iteration, but what i
 ---@return boolean started
 function evolved.defer() end
 
+---@return integer depth
+---@nodiscard
+function evolved.depth() end
+
 ---@return boolean committed
 function evolved.commit() end
 
@@ -651,7 +655,7 @@ function evolved.commit() end
 function evolved.cancel() end
 ```
 
-The [`evolved.defer`](#evolveddefer) function starts a deferred scope. This means that all changes made inside the scope will be queued and applied after leaving the scope. The [`evolved.commit`](#evolvedcommit) function closes the last deferred scope and applies all queued changes. These functions can be nested, so you can start a new deferred scope inside an existing one. The [`evolved.commit`](#evolvedcommit) function will apply all queued changes only when the last deferred scope is closed.
+The [`evolved.defer`](#evolveddefer) function starts a deferred scope. This means that all changes made inside the scope will be queued and applied after leaving the scope. The [`evolved.commit`](#evolvedcommit) function closes the last deferred scope and applies all queued changes. These functions can be nested, so you can start a new deferred scope inside an existing one. The [`evolved.commit`](#evolvedcommit) function will apply all queued changes only when the last deferred scope is closed. The [`evolved.depth`](#evolveddepth) function returns the current depth of deferred scopes. If there are no deferred scopes, it returns `0`.
 
 ```lua
 local evolved = require 'evolved'
@@ -1185,6 +1189,7 @@ pack :: integer, integer -> id
 unpack :: id -> integer, integer
 
 defer :: boolean
+depth :: integer
 commit :: boolean
 cancel :: boolean
 
@@ -1310,6 +1315,7 @@ builder_mt:destruction_policy :: id -> builder
 ### vX.X.X
 
 - Significant performance improvements of the [`evolved.REQUIRES`](#evolvedrequires) fragment trait
+- Added the new [`evolved.depth`](#evolveddepth) function that returns the current depth of deferred scopes
 
 ### v1.5.0
 
@@ -1449,6 +1455,14 @@ function evolved.unpack(id) end
 ```lua
 ---@return boolean started
 function evolved.defer() end
+```
+
+### `evolved.depth`
+
+```lua
+---@return integer depth
+---@nodiscard
+function evolved.depth() end
 ```
 
 ### `evolved.commit`

@@ -1,6 +1,7 @@
 require 'develop.testing.build_tests'
 require 'develop.testing.cancel_tests'
 require 'develop.testing.clone_tests'
+require 'develop.testing.depth_tests'
 require 'develop.testing.destroy_tests'
 require 'develop.testing.locate_tests'
 require 'develop.testing.main_tests'
