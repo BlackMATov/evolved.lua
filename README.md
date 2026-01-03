@@ -43,6 +43,7 @@
     - [Deferred Operations](#deferred-operations)
     - [Batch Operations](#batch-operations)
   - [Systems](#systems)
+    - [Processing Payloads](#processing-payloads)
   - [Predefined Traits](#predefined-traits)
     - [Fragment Tags](#fragment-tags)
     - [Fragment Hooks](#fragment-hooks)
@@ -60,6 +61,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
+  - [vX.Y.Z](#vxyz)
   - [v1.6.0](#v160)
   - [v1.5.0](#v150)
   - [v1.4.0](#v140)
@@ -880,6 +882,43 @@ The prologue and epilogue fragments do not require an explicit query. They will 
 > [!NOTE]
 > And one more thing about systems. Execution callbacks are called in the [deferred scope](#deferred-operations), which means that all modifying operations inside the callback will be queued and applied after the system has processed all chunks. But prologue and epilogue callbacks are not called in the deferred scope, so all modifying operations inside them will be applied immediately. This is done to avoid confusion and to make it clear that prologue and epilogue callbacks are not part of the chunk processing.
 
+#### Processing Payloads
+
+Additionally, systems can have a payload that will be passed to the execution, prologue, and epilogue callbacks. This is useful for passing additional data to the system without using global variables or closures.
+
+```lua
+---@param system evolved.system
+---@param ... any processing payload
+function evolved.process_with(system, ...) end
+```
+
+The [`evolved.process_with`](#evolvedprocess_with) function is similar to the [`evolved.process`](#evolvedprocess) function, but it takes a processing payload as additional arguments. These arguments will be passed to the system's callbacks.
+
+```lua
+local evolved = require 'evolved'
+
+local position_x, position_y = evolved.id(2)
+local velocity_x, velocity_y = evolved.id(2)
+
+local physics_system = evolved.builder()
+    :include(position_x, position_y)
+    :include(velocity_x, velocity_y)
+    :execute(function(chunk, entity_list, entity_count, delta_time)
+        local px, py = chunk:components(position_x, position_y)
+        local vx, vy = chunk:components(velocity_x, velocity_y)
+
+        for i = 1, entity_count do
+            px[i] = px[i] + vx[i] * delta_time
+            py[i] = py[i] + vy[i] * delta_time
+        end
+    end):build()
+
+local delta_time = 0.016
+evolved.process_with(physics_system, delta_time)
+```
+
+`delta_time` in this example is passed as a processing payload to the system's execution callback. Payloads can be of any type and can be multiple values. Also, payloads are passed to prologue and epilogue callbacks if they are defined. Every subsystem in a group will receive the same payload when the group is processed with [`evolved.process_with`](#evolvedprocess_with).
+
 ### Predefined Traits
 
 #### Fragment Tags
@@ -1125,9 +1164,9 @@ storage :: component[]
 default :: component
 duplicate :: {component -> component}
 
-execute :: {chunk, entity[], integer}
-prologue :: {}
-epilogue :: {}
+execute :: {chunk, entity[], integer, any...}
+prologue :: {any...}
+epilogue :: {any...}
 
 set_hook :: {entity, fragment, component, component}
 assign_hook :: {entity, fragment, component, component}
@@ -1229,6 +1268,7 @@ execute :: query -> {execute_state? -> chunk?, entity[]?, integer?}, execute_sta
 locate :: entity -> chunk?, integer
 
 process :: system... -> ()
+process_with :: system, ... -> ()
 
 debug_mode :: boolean -> ()
 collect_garbage :: ()
@@ -1302,15 +1342,19 @@ builder_mt:on_remove :: {entity, fragment} -> builder
 builder_mt:group :: system -> builder
 
 builder_mt:query :: query -> builder
-builder_mt:execute :: {chunk, entity[], integer} -> builder
+builder_mt:execute :: {chunk, entity[], integer, any...} -> builder
 
-builder_mt:prologue :: {} -> builder
-builder_mt:epilogue :: {} -> builder
+builder_mt:prologue :: {any...} -> builder
+builder_mt:epilogue :: {any...} -> builder
 
 builder_mt:destruction_policy :: id -> builder
 ```
 
 ## Changelog
+
+### vX.Y.Z
+
+- Added the new [`evolved.process_with`](#evolvedprocess_with) function that allows passing payloads to processing systems
 
 ### v1.6.0
 
@@ -1708,6 +1752,14 @@ function evolved.locate(entity) end
 ```lua
 ---@param ... evolved.system systems
 function evolved.process(...) end
+```
+
+### `evolved.process_with`
+
+```lua
+---@param system evolved.system
+---@param ... any processing payload
+function evolved.process_with(system, ...) end
 ```
 
 ### `evolved.debug_mode`
