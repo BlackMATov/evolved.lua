@@ -79,10 +79,10 @@
         group: function(self: Builder, group: System): Builder
 
         query: function(self: Builder, query: Query): Builder
-        execute: function(self: Builder, execute: function(Chunk, {Entity}, integer)): Builder
+        execute: function(self: Builder, execute: function(Chunk, {Entity}, integer, ...: any)): Builder
 
-        prologue: function(self: Builder, prologue: function()): Builder
-        epilogue: function(self: Builder, epilogue: function()): Builder
+        prologue: function(self: Builder, prologue: function(...: any)): Builder
+        epilogue: function(self: Builder, epilogue: function(...: any)): Builder
 
         destruction_policy: function(self: Builder, destruction_policy: Id): Builder
     end
@@ -171,6 +171,7 @@
     locate: function(entity: Entity): Chunk | nil, integer
 
     process: function(...: System)
+    process_with: function(system: System, ...: any)
 
     debug_mode: function(yesno: boolean)
     collect_garbage: function()

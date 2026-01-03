@@ -12,10 +12,6 @@ local STAGES = {
         :build(),
 }
 
-local UNIFORMS = {
-    DELTA_TIME = 1.0 / 60.0,
-}
-
 local FRAGMENTS = {
     POSITION_X = evolved.builder()
         :name('FRAGMENTS.POSITION_X')
@@ -82,8 +78,7 @@ evolved.builder()
     :group(STAGES.ON_UPDATE)
     :include(FRAGMENTS.POSITION_X, FRAGMENTS.POSITION_Y)
     :include(FRAGMENTS.VELOCITY_X, FRAGMENTS.VELOCITY_Y)
-    :execute(function(chunk, _, entity_count)
-        local delta_time = UNIFORMS.DELTA_TIME
+    :execute(function(chunk, _, entity_count, delta_time)
         local screen_width, screen_height = love.graphics.getDimensions()
 
         ---@type number[], number[]
@@ -156,8 +151,7 @@ end
 
 ---@type love.update
 function love.update(dt)
-    UNIFORMS.DELTA_TIME = dt
-    evolved.process(STAGES.ON_UPDATE)
+    evolved.process_with(STAGES.ON_UPDATE, dt)
 end
 
 ---@type love.draw

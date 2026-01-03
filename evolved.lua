@@ -43,10 +43,11 @@ local evolved = {
 ---@alias evolved.execute fun(
 ---  chunk: evolved.chunk,
 ---  entity_list: evolved.entity[],
----  entity_count: integer)
+---  entity_count: integer,
+---  ...: any)
 
----@alias evolved.prologue fun()
----@alias evolved.epilogue fun()
+---@alias evolved.prologue fun(...: any)
+---@alias evolved.epilogue fun(...: any)
 
 ---@alias evolved.set_hook fun(
 ---  entity: evolved.entity,
@@ -207,7 +208,6 @@ local __lua_string_format = string.format
 local __lua_table_concat = table.concat
 local __lua_table_sort = table.sort
 local __lua_tostring = tostring
-local __lua_xpcall = xpcall
 
 ---@type fun(nseq?: integer): table
 local __lua_table_new = (function()
@@ -335,6 +335,210 @@ local __lua_debug_traceback = (function()
     ---@type fun(message?: any): string
     return function(message)
         return __lua_tostring(message)
+    end
+end)()
+
+---@type fun(f: function, e: function, ...): boolean, ...
+local __lua_xpcall = (function()
+    -- https://github.com/BlackMATov/xpcall.lua
+
+    local builtin_xpcall = xpcall
+
+    ---@diagnostic disable-next-line: redundant-parameter
+    if __lua_select(2, builtin_xpcall(function(a) return a end, function() end, 42)) == 42 then
+        -- use the built-in xpcall if it works with extra arguments as expected
+        return builtin_xpcall
+    end
+
+    local xpcall_function
+
+    local xpcall_argument_1, xpcall_argument_2
+    local xpcall_argument_3, xpcall_argument_4
+    local xpcall_argument_5, xpcall_argument_6
+    local xpcall_argument_7, xpcall_argument_8
+
+    local xpcall_argument_tail_list = {}
+    local xpcall_argument_tail_count = 0
+
+    local function call_xpcall_function_1()
+        return xpcall_function(
+            xpcall_argument_1)
+    end
+
+    local function call_xpcall_function_2()
+        return xpcall_function(
+            xpcall_argument_1, xpcall_argument_2)
+    end
+
+    local function call_xpcall_function_3()
+        return xpcall_function(
+            xpcall_argument_1, xpcall_argument_2,
+            xpcall_argument_3)
+    end
+
+    local function call_xpcall_function_4()
+        return xpcall_function(
+            xpcall_argument_1, xpcall_argument_2,
+            xpcall_argument_3, xpcall_argument_4)
+    end
+
+    local function call_xpcall_function_5()
+        return xpcall_function(
+            xpcall_argument_1, xpcall_argument_2,
+            xpcall_argument_3, xpcall_argument_4,
+            xpcall_argument_5)
+    end
+
+    local function call_xpcall_function_6()
+        return xpcall_function(
+            xpcall_argument_1, xpcall_argument_2,
+            xpcall_argument_3, xpcall_argument_4,
+            xpcall_argument_5, xpcall_argument_6)
+    end
+
+    local function call_xpcall_function_7()
+        return xpcall_function(
+            xpcall_argument_1, xpcall_argument_2,
+            xpcall_argument_3, xpcall_argument_4,
+            xpcall_argument_5, xpcall_argument_6,
+            xpcall_argument_7)
+    end
+
+    local function call_xpcall_function_8()
+        return xpcall_function(
+            xpcall_argument_1, xpcall_argument_2,
+            xpcall_argument_3, xpcall_argument_4,
+            xpcall_argument_5, xpcall_argument_6,
+            xpcall_argument_7, xpcall_argument_8)
+    end
+
+    local function call_xpcall_function_N()
+        return xpcall_function(
+            xpcall_argument_1, xpcall_argument_2,
+            xpcall_argument_3, xpcall_argument_4,
+            xpcall_argument_5, xpcall_argument_6,
+            xpcall_argument_7, xpcall_argument_8,
+            __lua_table_unpack(xpcall_argument_tail_list, 1, xpcall_argument_tail_count))
+    end
+
+    ---@type fun(f: function, e: function, ...): boolean, ...
+    return function(f, e, ...)
+        local argument_count = __lua_select('#', ...)
+
+        if argument_count == 0 then
+            -- use the built-in xpcall without extra arguments
+            return builtin_xpcall(f, e)
+        end
+
+        xpcall_function = f
+
+        if argument_count <= 8 then
+            if argument_count <= 4 then
+                if argument_count <= 2 then
+                    if argument_count <= 1 then
+                        xpcall_argument_1 = ...
+                        return builtin_xpcall(call_xpcall_function_1, e)
+                    else
+                        xpcall_argument_1, xpcall_argument_2 = ...
+                        return builtin_xpcall(call_xpcall_function_2, e)
+                    end
+                else
+                    if argument_count <= 3 then
+                        xpcall_argument_1, xpcall_argument_2,
+                        xpcall_argument_3 = ...
+                        return builtin_xpcall(call_xpcall_function_3, e)
+                    else
+                        xpcall_argument_1, xpcall_argument_2,
+                        xpcall_argument_3, xpcall_argument_4 = ...
+                        return builtin_xpcall(call_xpcall_function_4, e)
+                    end
+                end
+            else
+                if argument_count <= 6 then
+                    if argument_count <= 5 then
+                        xpcall_argument_1, xpcall_argument_2,
+                        xpcall_argument_3, xpcall_argument_4,
+                        xpcall_argument_5 = ...
+                        return builtin_xpcall(call_xpcall_function_5, e)
+                    else
+                        xpcall_argument_1, xpcall_argument_2,
+                        xpcall_argument_3, xpcall_argument_4,
+                        xpcall_argument_5, xpcall_argument_6 = ...
+                        return builtin_xpcall(call_xpcall_function_6, e)
+                    end
+                else
+                    if argument_count <= 7 then
+                        xpcall_argument_1, xpcall_argument_2,
+                        xpcall_argument_3, xpcall_argument_4,
+                        xpcall_argument_5, xpcall_argument_6,
+                        xpcall_argument_7 = ...
+                        return builtin_xpcall(call_xpcall_function_7, e)
+                    else
+                        xpcall_argument_1, xpcall_argument_2,
+                        xpcall_argument_3, xpcall_argument_4,
+                        xpcall_argument_5, xpcall_argument_6,
+                        xpcall_argument_7, xpcall_argument_8 = ...
+                        return builtin_xpcall(call_xpcall_function_8, e)
+                    end
+                end
+            end
+        else
+            xpcall_argument_1, xpcall_argument_2,
+            xpcall_argument_3, xpcall_argument_4,
+            xpcall_argument_5, xpcall_argument_6,
+            xpcall_argument_7, xpcall_argument_8 = ...
+        end
+
+        xpcall_argument_tail_count = argument_count - 8
+        local argument_tail_list = xpcall_argument_tail_list
+
+        for i = 1, argument_count - 8, 8 do
+            local argument_remaining = argument_count - 8 - i + 1
+
+            if argument_remaining <= 4 then
+                if argument_remaining <= 2 then
+                    if argument_remaining <= 1 then
+                        argument_tail_list[i] = __lua_select(i + 8, ...)
+                    else
+                        argument_tail_list[i], argument_tail_list[i + 1] = __lua_select(i + 8, ...)
+                    end
+                else
+                    if argument_remaining <= 3 then
+                        argument_tail_list[i], argument_tail_list[i + 1],
+                        argument_tail_list[i + 2] = __lua_select(i + 8, ...)
+                    else
+                        argument_tail_list[i], argument_tail_list[i + 1],
+                        argument_tail_list[i + 2], argument_tail_list[i + 3] = __lua_select(i + 8, ...)
+                    end
+                end
+            else
+                if argument_remaining <= 6 then
+                    if argument_remaining <= 5 then
+                        argument_tail_list[i], argument_tail_list[i + 1],
+                        argument_tail_list[i + 2], argument_tail_list[i + 3],
+                        argument_tail_list[i + 4] = __lua_select(i + 8, ...)
+                    else
+                        argument_tail_list[i], argument_tail_list[i + 1],
+                        argument_tail_list[i + 2], argument_tail_list[i + 3],
+                        argument_tail_list[i + 4], argument_tail_list[i + 5] = __lua_select(i + 8, ...)
+                    end
+                else
+                    if argument_remaining <= 7 then
+                        argument_tail_list[i], argument_tail_list[i + 1],
+                        argument_tail_list[i + 2], argument_tail_list[i + 3],
+                        argument_tail_list[i + 4], argument_tail_list[i + 5],
+                        argument_tail_list[i + 6] = __lua_select(i + 8, ...)
+                    else
+                        argument_tail_list[i], argument_tail_list[i + 1],
+                        argument_tail_list[i + 2], argument_tail_list[i + 3],
+                        argument_tail_list[i + 4], argument_tail_list[i + 5],
+                        argument_tail_list[i + 6], argument_tail_list[i + 7] = __lua_select(i + 8, ...)
+                    end
+                end
+            end
+        end
+
+        return builtin_xpcall(call_xpcall_function_N, e)
     end
 end)()
 
@@ -840,6 +1044,7 @@ local __evolved_execute
 local __evolved_locate
 
 local __evolved_process
+local __evolved_process_with
 
 local __evolved_debug_mode
 local __evolved_collect_garbage
@@ -3665,32 +3870,24 @@ function __iterator_fns.__execute_iterator(execute_state)
     __release_table(__table_pool_tag.execute_state, execute_state, true)
 end
 
----@type { [1]: evolved.query, [2]: evolved.execute }
-local __query_execute_external_arguments = {}
-
----@param query? evolved.query
----@param execute? evolved.execute
-local function __query_execute(query, execute)
-    -- we use the external arguments here to support lua 5.1 xpcall (which does not support argument passing)
-    -- also, we can not use upvalues directly, because the function may be called recursively in that case
-    -- storing the arguments in local variables makes them invulnerable to changes during recursive calls
-
-    query = query or __query_execute_external_arguments[1]
-    execute = execute or __query_execute_external_arguments[2]
-
+---@param query evolved.query
+---@param execute evolved.execute
+---@param ... any processing payload
+local function __query_execute(query, execute, ...)
     for chunk, entity_list, entity_count in __evolved_execute(query) do
-        execute(chunk, entity_list, entity_count)
+        execute(chunk, entity_list, entity_count, ...)
     end
 end
 
 ---@param system evolved.system
-local function __system_process(system)
+---@param ... any processing payload
+local function __system_process(system, ...)
     ---@type evolved.query?, evolved.execute?, evolved.prologue?, evolved.epilogue?
     local query, execute, prologue, epilogue = __evolved_get(system,
         __QUERY, __EXECUTE, __PROLOGUE, __EPILOGUE)
 
     if prologue then
-        local success, result = __lua_xpcall(prologue, __lua_debug_traceback)
+        local success, result = __lua_xpcall(prologue, __lua_debug_traceback, ...)
 
         if not success then
             __error_fmt('system prologue failed: %s', result)
@@ -3700,8 +3897,7 @@ local function __system_process(system)
     if execute then
         __evolved_defer()
         do
-            __query_execute_external_arguments[1], __query_execute_external_arguments[2] = query or system, execute
-            local success, result = __lua_xpcall(__query_execute, __lua_debug_traceback, query or system, execute)
+            local success, result = __lua_xpcall(__query_execute, __lua_debug_traceback, query or system, execute, ...)
 
             if not success then
                 __evolved_cancel()
@@ -3727,7 +3923,7 @@ local function __system_process(system)
             for subsystem_index = 1, group_subsystem_count do
                 local subsystem = subsystem_list[subsystem_index]
                 if not __evolved_has(subsystem, __DISABLED) then
-                    __system_process(subsystem)
+                    __system_process(subsystem, ...)
                 end
             end
 
@@ -3736,7 +3932,7 @@ local function __system_process(system)
     end
 
     if epilogue then
-        local success, result = __lua_xpcall(epilogue, __lua_debug_traceback)
+        local success, result = __lua_xpcall(epilogue, __lua_debug_traceback, ...)
 
         if not success then
             __error_fmt('system epilogue failed: %s', result)
@@ -5092,12 +5288,23 @@ function __evolved_process(...)
         if __freelist_ids[system_primary] ~= system then
             __warning_fmt('the system (%s) is not alive and cannot be processed',
                 __id_name(system))
-        elseif __evolved_has(system, __DISABLED) then
-            -- the system is disabled, nothing to process
         else
             __system_process(system)
         end
     end
+end
+
+---@param system evolved.system
+---@param ... any processing payload
+function __evolved_process_with(system, ...)
+    local system_primary = system % 2 ^ 20
+
+    if __freelist_ids[system_primary] ~= system then
+        __error_fmt('the system (%s) is not alive and cannot be processed',
+            __id_name(system))
+    end
+
+    __system_process(system, ...)
 end
 
 ---@param yesno boolean
@@ -6337,6 +6544,7 @@ evolved.execute = __evolved_execute
 evolved.locate = __evolved_locate
 
 evolved.process = __evolved_process
+evolved.process_with = __evolved_process_with
 
 evolved.debug_mode = __evolved_debug_mode
 evolved.collect_garbage = __evolved_collect_garbage
