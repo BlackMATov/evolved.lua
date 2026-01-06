@@ -133,6 +133,7 @@ local __major_queries = {} ---@type table<evolved.fragment, evolved.assoc_list<e
 local __entity_chunks = {} ---@type table<integer, evolved.chunk>
 local __entity_places = {} ---@type table<integer, integer>
 
+local __sorted_eithers = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
 local __sorted_includes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
 local __sorted_excludes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
 local __sorted_requires = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.fragment>>
@@ -971,6 +972,7 @@ local __DUPLICATE = __acquire_id()
 local __PREFAB = __acquire_id()
 local __DISABLED = __acquire_id()
 
+local __EITHERS = __acquire_id()
 local __INCLUDES = __acquire_id()
 local __EXCLUDES = __acquire_id()
 local __REQUIRES = __acquire_id()
@@ -5992,6 +5994,31 @@ end
 
 ---@param ... evolved.fragment fragments
 ---@return evolved.builder builder
+function __builder_mt:either(...)
+    local argument_count = __lua_select('#', ...)
+
+    if argument_count == 0 then
+        return self
+    end
+
+    local either_list = self:get(__EITHERS)
+    local either_count = either_list and #either_list or 0
+
+    if either_count == 0 then
+        either_list = __list_new(argument_count)
+    end
+
+    for argument_index = 1, argument_count do
+        ---@type evolved.fragment
+        local fragment = __lua_select(argument_index, ...)
+        either_list[either_count + argument_index] = fragment
+    end
+
+    return self:set(__EITHERS, either_list)
+end
+
+---@param ... evolved.fragment fragments
+---@return evolved.builder builder
 function __builder_mt:include(...)
     local argument_count = __lua_select('#', ...)
 
@@ -6186,6 +6213,7 @@ __evolved_set(__DUPLICATE, __NAME, 'DUPLICATE')
 __evolved_set(__PREFAB, __NAME, 'PREFAB')
 __evolved_set(__DISABLED, __NAME, 'DISABLED')
 
+__evolved_set(__EITHERS, __NAME, 'EITHERS')
 __evolved_set(__INCLUDES, __NAME, 'INCLUDES')
 __evolved_set(__EXCLUDES, __NAME, 'EXCLUDES')
 __evolved_set(__REQUIRES, __NAME, 'REQUIRES')
@@ -6226,6 +6254,7 @@ __evolved_set(__DUPLICATE, __INTERNAL)
 __evolved_set(__PREFAB, __INTERNAL)
 __evolved_set(__DISABLED, __INTERNAL)
 
+__evolved_set(__EITHERS, __INTERNAL)
 __evolved_set(__INCLUDES, __INTERNAL)
 __evolved_set(__EXCLUDES, __INTERNAL)
 __evolved_set(__REQUIRES, __INTERNAL)
@@ -6270,6 +6299,9 @@ __evolved_set(__PREFAB, __EXPLICIT)
 __evolved_set(__DISABLED, __TAG)
 __evolved_set(__DISABLED, __UNIQUE)
 __evolved_set(__DISABLED, __EXPLICIT)
+
+__evolved_set(__EITHERS, __DEFAULT, __list_new())
+__evolved_set(__EITHERS, __DUPLICATE, __list_dup)
 
 __evolved_set(__INCLUDES, __DEFAULT, __list_new())
 __evolved_set(__INCLUDES, __DUPLICATE, __list_dup)
@@ -6327,6 +6359,50 @@ local function __remove_query(query)
 
     __reset_query_chunks(query)
 end
+
+---
+---
+---
+---
+---
+
+---@param query evolved.query
+---@param either_list evolved.fragment[]
+__evolved_set(__EITHERS, __ON_SET, function(query, _, either_list)
+    __remove_query(query)
+
+    local either_count = #either_list
+
+    if either_count > 0 then
+        ---@type evolved.assoc_list<evolved.fragment>
+        local sorted_eithers = __assoc_list_new(either_count)
+
+        __assoc_list_move(either_list, 1, either_count, sorted_eithers)
+        __assoc_list_sort(sorted_eithers)
+
+        __sorted_eithers[query] = sorted_eithers
+    else
+        __sorted_eithers[query] = nil
+    end
+
+    __insert_query(query)
+    __update_major_chunks(query)
+end)
+
+__evolved_set(__EITHERS, __ON_REMOVE, function(query)
+    __remove_query(query)
+
+    __sorted_eithers[query] = nil
+
+    __insert_query(query)
+    __update_major_chunks(query)
+end)
+
+---
+---
+---
+---
+---
 
 ---@param query evolved.query
 ---@param include_list evolved.fragment[]
@@ -6504,6 +6580,7 @@ evolved.DUPLICATE = __DUPLICATE
 evolved.PREFAB = __PREFAB
 evolved.DISABLED = __DISABLED
 
+evolved.EITHERS = __EITHERS
 evolved.INCLUDES = __INCLUDES
 evolved.EXCLUDES = __EXCLUDES
 evolved.REQUIRES = __REQUIRES
