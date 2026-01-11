@@ -69,6 +69,7 @@
 
         include: function(self: Builder, ...: Fragment): Builder
         exclude: function(self: Builder, ...: Fragment): Builder
+        variant: function(self: Builder, ...: Fragment): Builder
         require: function(self: Builder, ...: Fragment): Builder
 
         on_set: function<Component>(self: Builder, on_set: function(Entity, Fragment, ? Component, ? Component)): Builder
@@ -79,10 +80,10 @@
         group: function(self: Builder, group: System): Builder
 
         query: function(self: Builder, query: Query): Builder
-        execute: function(self: Builder, execute: function(Chunk, {Entity}, integer)): Builder
+        execute: function(self: Builder, execute: function(Chunk, {Entity}, integer, ...: any)): Builder
 
-        prologue: function(self: Builder, prologue: function()): Builder
-        epilogue: function(self: Builder, epilogue: function()): Builder
+        prologue: function(self: Builder, prologue: function(...: any)): Builder
+        epilogue: function(self: Builder, epilogue: function(...: any)): Builder
 
         destruction_policy: function(self: Builder, destruction_policy: Id): Builder
     end
@@ -102,6 +103,7 @@
 
     INCLUDES: Fragment
     EXCLUDES: Fragment
+    VARIANTS: Fragment
     REQUIRES: Fragment
 
     ON_SET: Fragment
@@ -171,6 +173,7 @@
     locate: function(entity: Entity): Chunk | nil, integer
 
     process: function(...: System)
+    process_with: function(system: System, ...: any)
 
     debug_mode: function(yesno: boolean)
     collect_garbage: function()

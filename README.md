@@ -43,6 +43,7 @@
     - [Deferred Operations](#deferred-operations)
     - [Batch Operations](#batch-operations)
   - [Systems](#systems)
+    - [Processing Payloads](#processing-payloads)
   - [Predefined Traits](#predefined-traits)
     - [Fragment Tags](#fragment-tags)
     - [Fragment Hooks](#fragment-hooks)
@@ -60,6 +61,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
+  - [v1.7.0](#v170)
   - [v1.6.0](#v160)
   - [v1.5.0](#v150)
   - [v1.4.0](#v140)
@@ -586,16 +588,22 @@ evolved.set(entity, fragment, 42)
 
 One of the most important features of any ECS library is the ability to process entities by filters or queries. `evolved.lua` provides a simple and efficient way to do this.
 
-First, you need to create a query that describes which entities you want to process. You can specify fragments you want to include, and fragments you want to exclude. Queries are just identifiers with a special predefined fragments: [`evolved.INCLUDES`](#evolvedincludes) and [`evolved.EXCLUDES`](#evolvedexcludes). These fragments expect a list of fragments as their components.
+First, you need to create a query that describes which entities you want to process. You can specify fragments you want to include, and fragments you want to exclude. Queries are just identifiers with a special predefined fragments: [`evolved.INCLUDES`](#evolvedincludes), [`evolved.EXCLUDES`](#evolvedexcludes), and [`evolved.VARIANTS`](#evolvedvariants). These fragments expect a list of fragments as their components.
+
+- [`evolved.INCLUDES`](#evolvedincludes) is used to specify fragments that must be present in the entity;
+- [`evolved.EXCLUDES`](#evolvedexcludes) is used to specify fragments that must not be present in the entity;
+- [`evolved.VARIANTS`](#evolvedvariants) is used to specify fragments where at least one must be present in the entity.
 
 ```lua
 local evolved = require 'evolved'
 
 local health, poisoned, resistant = evolved.id(3)
+local alive, undead = evolved.id(2)
 
 local query = evolved.id()
 evolved.set(query, evolved.INCLUDES, { health, poisoned })
 evolved.set(query, evolved.EXCLUDES, { resistant })
+evolved.set(query, evolved.VARIANTS, { alive, undead })
 ```
 
 The builder interface can be used to create queries too. It is more convenient to use, because the builder has special methods for including and excluding fragments. Here is a simple example of this:
@@ -604,10 +612,11 @@ The builder interface can be used to create queries too. It is more convenient t
 local query = evolved.builder()
     :include(health, poisoned)
     :exclude(resistant)
+    :variant(alive, undead)
     :build()
 ```
 
-We don't have to set both [`evolved.INCLUDES`](#evolvedincludes) and [`evolved.EXCLUDES`](#evolvedexcludes) fragments, we can even do it without filters at all, then the query will match all chunks in the world.
+We don't have to set all of [`evolved.INCLUDES`](#evolvedincludes), [`evolved.EXCLUDES`](#evolvedexcludes), and [`evolved.VARIANTS`](#evolvedvariants) fragments, we can even do it without filters at all, then the query will match all chunks in the world.
 
 After the query is created, we are ready to process our filtered by this query entities. You can do this by using the [`evolved.execute`](#evolvedexecute) function. This function takes a query as an argument and returns an iterator that can be used to iterate over all matching with the query chunks.
 
@@ -786,7 +795,7 @@ The [`evolved.process`](#evolvedprocess) function is used to process systems. It
 function evolved.process(...) end
 ```
 
-If you don't specify a query for the system, the system itself will be treated as a query. This means the system can contain `evolved.INCLUDES` and `evolved.EXCLUDES` fragments, and it will be processed according to them. This is useful for creating systems with unique queries that don't need to be reused in other systems.
+If you don't specify a query for the system, the system itself will be treated as a query. This means the system can contain `evolved.INCLUDES`, `evolved.EXCLUDES`, and `evolved.VARIANTS` fragments, and it will be processed according to them. This is useful for creating systems with unique queries that don't need to be reused in other systems.
 
 ```lua
 local evolved = require 'evolved'
@@ -879,6 +888,43 @@ The prologue and epilogue fragments do not require an explicit query. They will 
 
 > [!NOTE]
 > And one more thing about systems. Execution callbacks are called in the [deferred scope](#deferred-operations), which means that all modifying operations inside the callback will be queued and applied after the system has processed all chunks. But prologue and epilogue callbacks are not called in the deferred scope, so all modifying operations inside them will be applied immediately. This is done to avoid confusion and to make it clear that prologue and epilogue callbacks are not part of the chunk processing.
+
+#### Processing Payloads
+
+Additionally, systems can have a payload that will be passed to the execution, prologue, and epilogue callbacks. This is useful for passing additional data to the system without using global variables or closures.
+
+```lua
+---@param system evolved.system
+---@param ... any processing payload
+function evolved.process_with(system, ...) end
+```
+
+The [`evolved.process_with`](#evolvedprocess_with) function is similar to the [`evolved.process`](#evolvedprocess) function, but it takes a processing payload as additional arguments. These arguments will be passed to the system's callbacks.
+
+```lua
+local evolved = require 'evolved'
+
+local position_x, position_y = evolved.id(2)
+local velocity_x, velocity_y = evolved.id(2)
+
+local physics_system = evolved.builder()
+    :include(position_x, position_y)
+    :include(velocity_x, velocity_y)
+    :execute(function(chunk, entity_list, entity_count, delta_time)
+        local px, py = chunk:components(position_x, position_y)
+        local vx, vy = chunk:components(velocity_x, velocity_y)
+
+        for i = 1, entity_count do
+            px[i] = px[i] + vx[i] * delta_time
+            py[i] = py[i] + vy[i] * delta_time
+        end
+    end):build()
+
+local delta_time = 0.016
+evolved.process_with(physics_system, delta_time)
+```
+
+`delta_time` in this example is passed as a processing payload to the system's execution callback. Payloads can be of any type and can be multiple values. Also, payloads are passed to prologue and epilogue callbacks if they are defined. Every subsystem in a group will receive the same payload when the group is processed with [`evolved.process_with`](#evolvedprocess_with).
 
 ### Predefined Traits
 
@@ -1125,9 +1171,9 @@ storage :: component[]
 default :: component
 duplicate :: {component -> component}
 
-execute :: {chunk, entity[], integer}
-prologue :: {}
-epilogue :: {}
+execute :: {chunk, entity[], integer, any...}
+prologue :: {any...}
+epilogue :: {any...}
 
 set_hook :: {entity, fragment, component, component}
 assign_hook :: {entity, fragment, component, component}
@@ -1159,6 +1205,7 @@ DISABLED :: fragment
 
 INCLUDES :: fragment
 EXCLUDES :: fragment
+VARIANTS :: fragment
 REQUIRES :: fragment
 
 ON_SET :: fragment
@@ -1229,6 +1276,7 @@ execute :: query -> {execute_state? -> chunk?, entity[]?, integer?}, execute_sta
 locate :: entity -> chunk?, integer
 
 process :: system... -> ()
+process_with :: system, ... -> ()
 
 debug_mode :: boolean -> ()
 collect_garbage :: ()
@@ -1292,6 +1340,7 @@ builder_mt:disabled :: builder
 
 builder_mt:include :: fragment... -> builder
 builder_mt:exclude :: fragment... -> builder
+builder_mt:variant :: fragment... -> builder
 builder_mt:require :: fragment... -> builder
 
 builder_mt:on_set :: {entity, fragment, component, component} -> builder
@@ -1302,15 +1351,20 @@ builder_mt:on_remove :: {entity, fragment} -> builder
 builder_mt:group :: system -> builder
 
 builder_mt:query :: query -> builder
-builder_mt:execute :: {chunk, entity[], integer} -> builder
+builder_mt:execute :: {chunk, entity[], integer, any...} -> builder
 
-builder_mt:prologue :: {} -> builder
-builder_mt:epilogue :: {} -> builder
+builder_mt:prologue :: {any...} -> builder
+builder_mt:epilogue :: {any...} -> builder
 
 builder_mt:destruction_policy :: id -> builder
 ```
 
 ## Changelog
+
+### v1.7.0
+
+- Added the new [`evolved.VARIANTS`](#evolvedvariants) query fragment that allows specifying any of multiple fragments in queries
+- Added the new [`evolved.process_with`](#evolvedprocess_with) function that allows passing payloads to processing systems
 
 ### v1.6.0
 
@@ -1383,6 +1437,8 @@ builder_mt:destruction_policy :: id -> builder
 ### `evolved.INCLUDES`
 
 ### `evolved.EXCLUDES`
+
+### `evolved.VARIANTS`
 
 ### `evolved.REQUIRES`
 
@@ -1710,6 +1766,14 @@ function evolved.locate(entity) end
 function evolved.process(...) end
 ```
 
+### `evolved.process_with`
+
+```lua
+---@param system evolved.system
+---@param ... any processing payload
+function evolved.process_with(system, ...) end
+```
+
 ### `evolved.debug_mode`
 
 ```lua
@@ -2011,6 +2075,14 @@ function evolved.builder_mt:include(...) end
 ---@param ... evolved.fragment fragments
 ---@return evolved.builder builder
 function evolved.builder_mt:exclude(...) end
+```
+
+#### `evolved.builder_mt:variant`
+
+```lua
+---@param ... evolved.fragment fragments
+---@return evolved.builder builder
+function evolved.builder_mt:variant(...) end
 ```
 
 ### `evolved.builder_mt:require`
