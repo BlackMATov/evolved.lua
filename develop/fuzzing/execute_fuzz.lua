@@ -56,12 +56,30 @@ local function generate_query(query)
         end
     end
 
+    local variant_set = {}
+    local variant_list = {}
+    local variant_count = 0
+
+    for _ = 1, math.random(0, #all_fragment_list) do
+        local variant = all_fragment_list[math.random(1, #all_fragment_list)]
+
+        if not variant_set[variant] then
+            variant_count = variant_count + 1
+            variant_set[variant] = variant_count
+            variant_list[variant_count] = variant
+        end
+    end
+
     if include_count > 0 then
         evo.set(query, evo.INCLUDES, include_list)
     end
 
     if exclude_count > 0 then
         evo.set(query, evo.EXCLUDES, exclude_list)
+    end
+
+    if variant_count > 0 then
+        evo.set(query, evo.VARIANTS, variant_list)
     end
 end
 
@@ -173,10 +191,20 @@ local function execute_query(query)
 
     local query_include_list = evo.get(query, evo.INCLUDES) or {}
     local query_exclude_list = evo.get(query, evo.EXCLUDES) or {}
+    local query_variant_list = evo.get(query, evo.VARIANTS) or {}
+
+    local query_include_count = #query_include_list
+    local query_exclude_count = #query_exclude_list
+    local query_variant_count = #query_variant_list
 
     local query_include_set = {}
     for _, include in ipairs(query_include_list) do
         query_include_set[include] = true
+    end
+
+    local query_variant_set = {}
+    for _, variant in ipairs(query_variant_list) do
+        query_variant_set[variant] = true
     end
 
     for chunk, entity_list, entity_count in evo.execute(query) do
@@ -189,19 +217,29 @@ local function execute_query(query)
             query_entity_set[entity] = true
         end
 
-        assert(chunk:has_all(__table_unpack(query_include_list)))
-        assert(not chunk:has_any(__table_unpack(query_exclude_list)))
+        if query_include_count > 0 then
+            assert(chunk:has_all(__table_unpack(query_include_list)))
+        end
+
+        if query_exclude_count > 0 then
+            assert(not chunk:has_any(__table_unpack(query_exclude_list)))
+        end
+
+        if query_variant_count > 0 then
+            assert(chunk:has_any(__table_unpack(query_variant_list)))
+        end
     end
 
     for i = 1, all_entity_count do
         local entity = all_entity_list[i]
 
         local is_entity_matched =
-            evo.has_all(entity, __table_unpack(query_include_list))
-            and not evo.has_any(entity, __table_unpack(query_exclude_list))
+            (query_variant_count == 0 or evo.has_any(entity, __table_unpack(query_variant_list))) and
+            (query_include_count == 0 or evo.has_all(entity, __table_unpack(query_include_list))) and
+            (query_exclude_count == 0 or not evo.has_any(entity, __table_unpack(query_exclude_list)))
 
         for fragment in evo.each(entity) do
-            if evo.has(fragment, evo.EXPLICIT) and not query_include_set[fragment] then
+            if evo.has(fragment, evo.EXPLICIT) and not query_variant_set[fragment] and not query_include_set[fragment] then
                 is_entity_matched = false
             end
         end
@@ -236,10 +274,13 @@ for _ = 1, math.random(1, 5) do
     if math.random(1, 2) == 1 then
         generate_query(query)
     else
-        if math.random(1, 2) == 1 then
+        local r = math.random(1, 3)
+        if r == 1 then
             evo.remove(query, evo.INCLUDES)
-        else
+        elseif r == 2 then
             evo.remove(query, evo.EXCLUDES)
+        else
+            evo.remove(query, evo.VARIANTS)
         end
     end
 end
