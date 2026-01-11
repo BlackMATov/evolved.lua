@@ -588,16 +588,22 @@ evolved.set(entity, fragment, 42)
 
 One of the most important features of any ECS library is the ability to process entities by filters or queries. `evolved.lua` provides a simple and efficient way to do this.
 
-First, you need to create a query that describes which entities you want to process. You can specify fragments you want to include, and fragments you want to exclude. Queries are just identifiers with a special predefined fragments: [`evolved.INCLUDES`](#evolvedincludes) and [`evolved.EXCLUDES`](#evolvedexcludes). These fragments expect a list of fragments as their components.
+First, you need to create a query that describes which entities you want to process. You can specify fragments you want to include, and fragments you want to exclude. Queries are just identifiers with a special predefined fragments: [`evolved.INCLUDES`](#evolvedincludes), [`evolved.EXCLUDES`](#evolvedexcludes), and [`evolved.VARIANTS`](#evolvedvariants). These fragments expect a list of fragments as their components.
+
+- [`evolved.INCLUDES`](#evolvedincludes) is used to specify fragments that must be present in the entity;
+- [`evolved.EXCLUDES`](#evolvedexcludes) is used to specify fragments that must not be present in the entity;
+- [`evolved.VARIANTS`](#evolvedvariants) is used to specify fragments where at least one must be present in the entity.
 
 ```lua
 local evolved = require 'evolved'
 
 local health, poisoned, resistant = evolved.id(3)
+local alive, undead = evolved.id(2)
 
 local query = evolved.id()
 evolved.set(query, evolved.INCLUDES, { health, poisoned })
 evolved.set(query, evolved.EXCLUDES, { resistant })
+evolved.set(query, evolved.VARIANTS, { alive, undead })
 ```
 
 The builder interface can be used to create queries too. It is more convenient to use, because the builder has special methods for including and excluding fragments. Here is a simple example of this:
@@ -606,10 +612,11 @@ The builder interface can be used to create queries too. It is more convenient t
 local query = evolved.builder()
     :include(health, poisoned)
     :exclude(resistant)
+    :variant(alive, undead)
     :build()
 ```
 
-We don't have to set both [`evolved.INCLUDES`](#evolvedincludes) and [`evolved.EXCLUDES`](#evolvedexcludes) fragments, we can even do it without filters at all, then the query will match all chunks in the world.
+We don't have to set all of [`evolved.INCLUDES`](#evolvedincludes), [`evolved.EXCLUDES`](#evolvedexcludes), and [`evolved.VARIANTS`](#evolvedvariants) fragments, we can even do it without filters at all, then the query will match all chunks in the world.
 
 After the query is created, we are ready to process our filtered by this query entities. You can do this by using the [`evolved.execute`](#evolvedexecute) function. This function takes a query as an argument and returns an iterator that can be used to iterate over all matching with the query chunks.
 
@@ -788,7 +795,7 @@ The [`evolved.process`](#evolvedprocess) function is used to process systems. It
 function evolved.process(...) end
 ```
 
-If you don't specify a query for the system, the system itself will be treated as a query. This means the system can contain `evolved.INCLUDES` and `evolved.EXCLUDES` fragments, and it will be processed according to them. This is useful for creating systems with unique queries that don't need to be reused in other systems.
+If you don't specify a query for the system, the system itself will be treated as a query. This means the system can contain `evolved.INCLUDES`, `evolved.EXCLUDES`, and `evolved.VARIANTS` fragments, and it will be processed according to them. This is useful for creating systems with unique queries that don't need to be reused in other systems.
 
 ```lua
 local evolved = require 'evolved'
@@ -1198,6 +1205,7 @@ DISABLED :: fragment
 
 INCLUDES :: fragment
 EXCLUDES :: fragment
+VARIANTS :: fragment
 REQUIRES :: fragment
 
 ON_SET :: fragment
@@ -1332,6 +1340,7 @@ builder_mt:disabled :: builder
 
 builder_mt:include :: fragment... -> builder
 builder_mt:exclude :: fragment... -> builder
+builder_mt:variant :: fragment... -> builder
 builder_mt:require :: fragment... -> builder
 
 builder_mt:on_set :: {entity, fragment, component, component} -> builder
@@ -1354,6 +1363,7 @@ builder_mt:destruction_policy :: id -> builder
 
 ### vX.Y.Z
 
+- Added the new [`evolved.VARIANTS`](#evolvedvariants) query fragment that allows specifying any of multiple fragments in queries
 - Added the new [`evolved.process_with`](#evolvedprocess_with) function that allows passing payloads to processing systems
 
 ### v1.6.0
@@ -1427,6 +1437,8 @@ builder_mt:destruction_policy :: id -> builder
 ### `evolved.INCLUDES`
 
 ### `evolved.EXCLUDES`
+
+### `evolved.VARIANTS`
 
 ### `evolved.REQUIRES`
 
@@ -2063,6 +2075,14 @@ function evolved.builder_mt:include(...) end
 ---@param ... evolved.fragment fragments
 ---@return evolved.builder builder
 function evolved.builder_mt:exclude(...) end
+```
+
+#### `evolved.builder_mt:variant`
+
+```lua
+---@param ... evolved.fragment fragments
+---@return evolved.builder builder
+function evolved.builder_mt:variant(...) end
 ```
 
 ### `evolved.builder_mt:require`

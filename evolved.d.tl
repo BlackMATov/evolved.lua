@@ -69,6 +69,7 @@
 
         include: function(self: Builder, ...: Fragment): Builder
         exclude: function(self: Builder, ...: Fragment): Builder
+        variant: function(self: Builder, ...: Fragment): Builder
         require: function(self: Builder, ...: Fragment): Builder
 
         on_set: function<Component>(self: Builder, on_set: function(Entity, Fragment, ? Component, ? Component)): Builder
@@ -102,6 +103,7 @@
 
     INCLUDES: Fragment
     EXCLUDES: Fragment
+    VARIANTS: Fragment
     REQUIRES: Fragment
 
     ON_SET: Fragment
