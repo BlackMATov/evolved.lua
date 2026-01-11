@@ -61,7 +61,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
-  - [vX.Y.Z](#vxyz)
+  - [v1.7.0](#v170)
   - [v1.6.0](#v160)
   - [v1.5.0](#v150)
   - [v1.4.0](#v140)
@@ -1361,7 +1361,7 @@ builder_mt:destruction_policy :: id -> builder
 
 ## Changelog
 
-### vX.Y.Z
+### v1.7.0
 
 - Added the new [`evolved.VARIANTS`](#evolvedvariants) query fragment that allows specifying any of multiple fragments in queries
 - Added the new [`evolved.process_with`](#evolvedprocess_with) function that allows passing payloads to processing systems
