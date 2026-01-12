@@ -161,6 +161,7 @@ local __structural_changes = 0 ---@type integer
 ---@field package __child_count integer
 ---@field package __entity_list evolved.entity[]
 ---@field package __entity_count integer
+---@field package __entity_capacity integer
 ---@field package __fragment evolved.fragment
 ---@field package __fragment_set table<evolved.fragment, integer>
 ---@field package __fragment_list evolved.fragment[]
@@ -1152,6 +1153,8 @@ local __clone_entity
 local __multi_clone_entity
 
 local __purge_chunk
+local __expand_chunk
+local __shrink_chunk
 local __clear_chunk_list
 local __destroy_entity_list
 local __destroy_fragment_list
@@ -1229,6 +1232,7 @@ function __new_chunk(chunk_parent, chunk_fragment)
         __child_count = 0,
         __entity_list = {},
         __entity_count = 0,
+        __entity_capacity = 0,
         __fragment = chunk_fragment,
         __fragment_set = chunk_fragment_set,
         __fragment_list = chunk_fragment_list,
@@ -1425,6 +1429,7 @@ end
 ---@param chunk evolved.chunk
 function __update_chunk_storages(chunk)
     local entity_count = chunk.__entity_count
+    local entity_capacity = chunk.__entity_capacity
 
     local fragment_list = chunk.__fragment_list
     local fragment_count = chunk.__fragment_count
@@ -2254,6 +2259,7 @@ function __spawn_entity(chunk, entity, components)
 
     local chunk_entity_list = chunk.__entity_list
     local chunk_entity_count = chunk.__entity_count
+    local chunk_entity_capacity = chunk.__entity_capacity
 
     local chunk_component_count = chunk.__component_count
     local chunk_component_indices = chunk.__component_indices
@@ -2265,6 +2271,10 @@ function __spawn_entity(chunk, entity, components)
     local chunk_component_compmoves = chunk.__component_compmoves
 
     local place = chunk_entity_count + 1
+
+    if place > chunk_entity_capacity then
+        __expand_chunk(chunk, place)
+    end
 
     do
         chunk.__entity_count = place
@@ -2375,6 +2385,7 @@ function __multi_spawn_entity(chunk, entity_list, entity_count, components)
 
     local chunk_entity_list = chunk.__entity_list
     local chunk_entity_count = chunk.__entity_count
+    local chunk_entity_capacity = chunk.__entity_capacity
 
     local chunk_component_count = chunk.__component_count
     local chunk_component_indices = chunk.__component_indices
@@ -2387,6 +2398,10 @@ function __multi_spawn_entity(chunk, entity_list, entity_count, components)
 
     local b_place = chunk_entity_count + 1
     local e_place = chunk_entity_count + entity_count
+
+    if e_place > chunk_entity_capacity then
+        __expand_chunk(chunk, e_place)
+    end
 
     do
         chunk.__entity_count = e_place
@@ -2528,6 +2543,7 @@ function __clone_entity(prefab, entity, components)
 
     local chunk_entity_list = chunk.__entity_list
     local chunk_entity_count = chunk.__entity_count
+    local chunk_entity_capacity = chunk.__entity_capacity
 
     local chunk_component_count = chunk.__component_count
     local chunk_component_indices = chunk.__component_indices
@@ -2542,6 +2558,10 @@ function __clone_entity(prefab, entity, components)
     local prefab_component_storages = prefab_chunk.__component_storages
 
     local place = chunk_entity_count + 1
+
+    if place > chunk_entity_capacity then
+        __expand_chunk(chunk, place)
+    end
 
     do
         chunk.__entity_count = place
@@ -2676,6 +2696,7 @@ function __multi_clone_entity(prefab, entity_list, entity_count, components)
 
     local chunk_entity_list = chunk.__entity_list
     local chunk_entity_count = chunk.__entity_count
+    local chunk_entity_capacity = chunk.__entity_capacity
 
     local chunk_component_count = chunk.__component_count
     local chunk_component_indices = chunk.__component_indices
@@ -2691,6 +2712,10 @@ function __multi_clone_entity(prefab, entity_list, entity_count, components)
 
     local b_place = chunk_entity_count + 1
     local e_place = chunk_entity_count + entity_count
+
+    if e_place > chunk_entity_capacity then
+        __expand_chunk(chunk, e_place)
+    end
 
     do
         chunk.__entity_count = e_place
@@ -2861,6 +2886,15 @@ function __purge_chunk(chunk)
     end
 
     chunk.__unreachable_or_collected = true
+end
+
+---@param chunk evolved.chunk
+---@param min_capacity integer
+function __expand_chunk(chunk, min_capacity)
+end
+
+---@param chunk evolved.chunk
+function __shrink_chunk(chunk)
 end
 
 ---@param chunk_list evolved.chunk[]
@@ -3184,6 +3218,7 @@ function __chunk_set(old_chunk, fragment, component)
 
         local new_entity_list = new_chunk.__entity_list
         local new_entity_count = new_chunk.__entity_count
+        local new_entity_capacity = new_chunk.__entity_capacity
 
         local new_component_indices = new_chunk.__component_indices
         local new_component_storages = new_chunk.__component_storages
@@ -3200,6 +3235,10 @@ function __chunk_set(old_chunk, fragment, component)
         end
 
         local sum_entity_count = old_entity_count + new_entity_count
+
+        if sum_entity_count > new_entity_capacity then
+            __expand_chunk(new_chunk, sum_entity_count)
+        end
 
         if new_entity_count == 0 then
             old_chunk.__entity_list, new_chunk.__entity_list =
@@ -3507,12 +3546,17 @@ function __chunk_remove(old_chunk, ...)
     if new_chunk then
         local new_entity_list = new_chunk.__entity_list
         local new_entity_count = new_chunk.__entity_count
+        local new_entity_capacity = new_chunk.__entity_capacity
 
         local new_component_count = new_chunk.__component_count
         local new_component_storages = new_chunk.__component_storages
         local new_component_fragments = new_chunk.__component_fragments
 
         local sum_entity_count = old_entity_count + new_entity_count
+
+        if sum_entity_count > new_entity_capacity then
+            __expand_chunk(new_chunk, sum_entity_count)
+        end
 
         if new_entity_count == 0 then
             old_chunk.__entity_list, new_chunk.__entity_list =
@@ -4681,6 +4725,7 @@ function __evolved_set(entity, fragment, component)
 
         local new_entity_list = new_chunk.__entity_list
         local new_entity_count = new_chunk.__entity_count
+        local new_entity_capacity = new_chunk.__entity_capacity
 
         local new_component_indices = new_chunk.__component_indices
         local new_component_storages = new_chunk.__component_storages
@@ -4697,9 +4742,13 @@ function __evolved_set(entity, fragment, component)
         end
 
         local new_place = new_entity_count + 1
-        new_chunk.__entity_count = new_place
+
+        if new_place > new_entity_capacity then
+            __expand_chunk(new_chunk, new_place)
+        end
 
         new_entity_list[new_place] = entity
+        new_chunk.__entity_count = new_place
 
         if old_chunk then
             local old_component_count = old_chunk.__component_count
@@ -4887,15 +4936,20 @@ function __evolved_remove(entity, ...)
         if new_chunk then
             local new_entity_list = new_chunk.__entity_list
             local new_entity_count = new_chunk.__entity_count
+            local new_entity_capacity = new_chunk.__entity_capacity
 
             local new_component_count = new_chunk.__component_count
             local new_component_storages = new_chunk.__component_storages
             local new_component_fragments = new_chunk.__component_fragments
 
             local new_place = new_entity_count + 1
-            new_chunk.__entity_count = new_place
+
+            if new_place > new_entity_capacity then
+                __expand_chunk(new_chunk, new_place)
+            end
 
             new_entity_list[new_place] = entity
+            new_chunk.__entity_count = new_place
 
             for new_ci = 1, new_component_count do
                 local new_f = new_component_fragments[new_ci]
@@ -5499,6 +5553,8 @@ function __evolved_collect_garbage()
 
             if should_be_purged then
                 __purge_chunk(postorder_chunk)
+            else
+                __shrink_chunk(postorder_chunk)
             end
         end
 
