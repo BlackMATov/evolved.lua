@@ -61,6 +61,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
+  - [vX.Y.Z](#vxyz)
   - [v1.7.0](#v170)
   - [v1.6.0](#v160)
   - [v1.5.0](#v150)
@@ -1171,6 +1172,9 @@ storage :: component[]
 default :: component
 duplicate :: {component -> component}
 
+realloc :: {storage?, integer, integer -> storage}
+compmove :: {storage, integer, integer, integer, storage}
+
 execute :: {chunk, entity[], integer, any...}
 prologue :: {any...}
 epilogue :: {any...}
@@ -1199,6 +1203,9 @@ INTERNAL :: fragment
 
 DEFAULT :: fragment
 DUPLICATE :: fragment
+
+REALLOC :: fragment
+COMPMOVE :: fragment
 
 PREFAB :: fragment
 DISABLED :: fragment
@@ -1335,6 +1342,9 @@ builder_mt:internal :: builder
 builder_mt:default :: component -> builder
 builder_mt:duplicate :: {component -> component} -> builder
 
+builder_mt:realloc :: {storage?, integer, integer -> storage} -> builder
+builder_mt:compmove :: {storage, integer, integer, integer, storage} -> builder
+
 builder_mt:prefab :: builder
 builder_mt:disabled :: builder
 
@@ -1360,6 +1370,10 @@ builder_mt:destruction_policy :: id -> builder
 ```
 
 ## Changelog
+
+### vX.Y.Z
+
+- Added the new [`evolved.REALLOC`](#evolvedrealloc) and [`evolved.COMPMOVE`](#evolvedcompmove) fragment traits that allow customizing component storages
 
 ### v1.7.0
 
@@ -1429,6 +1443,10 @@ builder_mt:destruction_policy :: id -> builder
 ### `evolved.DEFAULT`
 
 ### `evolved.DUPLICATE`
+
+### `evolved.REALLOC`
+
+### `evolved.COMPMOVE`
 
 ### `evolved.PREFAB`
 
@@ -2045,6 +2063,22 @@ function evolved.builder_mt:default(default) end
 ---@param duplicate evolved.duplicate
 ---@return evolved.builder builder
 function evolved.builder_mt:duplicate(duplicate) end
+```
+
+#### `evolved.builder_mt:realloc`
+
+```lua
+---@param realloc evolved.realloc
+---@return evolved.builder builder
+function evolved.builder_mt:realloc(realloc) end
+```
+
+#### `evolved.builder_mt:compmove`
+
+```lua
+---@param compmove evolved.compmove
+---@return evolved.builder builder
+function evolved.builder_mt:compmove(compmove) end
 ```
 
 #### `evolved.builder_mt:prefab`
