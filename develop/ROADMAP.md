@@ -9,6 +9,7 @@
 
 ## Thoughts
 
+- We can create component storages on-demand rather than in advance
 - We should have a way to not copy components on deferred spawn/clone
 
 ## Known Issues
