@@ -40,6 +40,9 @@ local evolved = {
 ---@alias evolved.default evolved.component
 ---@alias evolved.duplicate fun(component: evolved.component): evolved.component
 
+---@alias evolved.realloc fun(storage?: evolved.storage, old_size: integer, new_size: integer): evolved.storage
+---@alias evolved.compmove fun(destination: evolved.storage, source: evolved.storage, count: integer)
+
 ---@alias evolved.execute fun(
 ---  chunk: evolved.chunk,
 ---  entity_list: evolved.entity[],
@@ -168,6 +171,8 @@ local __structural_changes = 0 ---@type integer
 ---@field package __component_fragments evolved.fragment[]
 ---@field package __component_defaults evolved.default[]
 ---@field package __component_duplicates evolved.duplicate[]
+---@field package __component_reallocs evolved.realloc[]
+---@field package __component_compmoves evolved.compmove[]
 ---@field package __with_fragment_edges table<evolved.fragment, evolved.chunk>
 ---@field package __without_fragment_edges table<evolved.fragment, evolved.chunk>
 ---@field package __with_required_fragments? evolved.chunk
@@ -971,6 +976,9 @@ local __INTERNAL = __acquire_id()
 local __DEFAULT = __acquire_id()
 local __DUPLICATE = __acquire_id()
 
+local __REALLOC = __acquire_id()
+local __COMPMOVE = __acquire_id()
+
 local __PREFAB = __acquire_id()
 local __DISABLED = __acquire_id()
 
@@ -1231,6 +1239,8 @@ function __new_chunk(chunk_parent, chunk_fragment)
         __component_fragments = {},
         __component_defaults = {},
         __component_duplicates = {},
+        __component_reallocs = {},
+        __component_compmoves = {},
         __with_fragment_edges = {},
         __without_fragment_edges = {},
         __with_required_fragments = nil,
@@ -1425,14 +1435,16 @@ function __update_chunk_storages(chunk)
     local component_fragments = chunk.__component_fragments
     local component_defaults = chunk.__component_defaults
     local component_duplicates = chunk.__component_duplicates
+    local component_reallocs = chunk.__component_reallocs
+    local component_compmoves = chunk.__component_compmoves
 
     for fragment_index = 1, fragment_count do
         local fragment = fragment_list[fragment_index]
         local component_index = component_indices[fragment]
 
-        ---@type evolved.default?, evolved.duplicate?
-        local fragment_default, fragment_duplicate =
-            __evolved_get(fragment, __DEFAULT, __DUPLICATE)
+        ---@type evolved.default?, evolved.duplicate?, evolved.realloc?, evolved.compmove?
+        local fragment_default, fragment_duplicate, fragment_realloc, fragment_compmove =
+            __evolved_get(fragment, __DEFAULT, __DUPLICATE, __REALLOC, __COMPMOVE)
 
         local is_fragment_tag = __evolved_has(fragment, __TAG)
 
@@ -1442,12 +1454,16 @@ function __update_chunk_storages(chunk)
                 local last_component_fragment = component_fragments[component_count]
                 local last_component_default = component_defaults[component_count]
                 local last_component_duplicate = component_duplicates[component_count]
+                local last_component_realloc = component_reallocs[component_count]
+                local last_component_compmove = component_compmoves[component_count]
 
                 component_indices[last_component_fragment] = component_index
                 component_storages[component_index] = last_component_storage
                 component_fragments[component_index] = last_component_fragment
                 component_defaults[component_index] = last_component_default
                 component_duplicates[component_index] = last_component_duplicate
+                component_reallocs[component_index] = last_component_realloc
+                component_compmoves[component_index] = last_component_compmove
             end
 
             component_indices[fragment] = nil
@@ -1455,6 +1471,8 @@ function __update_chunk_storages(chunk)
             component_fragments[component_count] = nil
             component_defaults[component_count] = nil
             component_duplicates[component_count] = nil
+            component_reallocs[component_count] = nil
+            component_compmoves[component_count] = nil
 
             component_count = component_count - 1
             chunk.__component_count = component_count
@@ -1470,6 +1488,8 @@ function __update_chunk_storages(chunk)
             component_fragments[component_storage_index] = fragment
             component_defaults[component_storage_index] = fragment_default
             component_duplicates[component_storage_index] = fragment_duplicate
+            component_reallocs[component_storage_index] = fragment_realloc
+            component_compmoves[component_storage_index] = fragment_compmove
 
             if fragment_duplicate then
                 for place = 1, entity_count do
@@ -1488,6 +1508,8 @@ function __update_chunk_storages(chunk)
         elseif component_index then
             component_defaults[component_index] = fragment_default
             component_duplicates[component_index] = fragment_duplicate
+            component_reallocs[component_index] = fragment_realloc
+            component_compmoves[component_index] = fragment_compmove
         end
     end
 end
@@ -2239,6 +2261,8 @@ function __spawn_entity(chunk, entity, components)
     local chunk_component_fragments = chunk.__component_fragments
     local chunk_component_defaults = chunk.__component_defaults
     local chunk_component_duplicates = chunk.__component_duplicates
+    local chunk_component_reallocs = chunk.__component_reallocs
+    local chunk_component_compmoves = chunk.__component_compmoves
 
     local place = chunk_entity_count + 1
 
@@ -2358,6 +2382,8 @@ function __multi_spawn_entity(chunk, entity_list, entity_count, components)
     local chunk_component_fragments = chunk.__component_fragments
     local chunk_component_defaults = chunk.__component_defaults
     local chunk_component_duplicates = chunk.__component_duplicates
+    local chunk_component_reallocs = chunk.__component_reallocs
+    local chunk_component_compmoves = chunk.__component_compmoves
 
     local b_place = chunk_entity_count + 1
     local e_place = chunk_entity_count + entity_count
@@ -2509,6 +2535,8 @@ function __clone_entity(prefab, entity, components)
     local chunk_component_fragments = chunk.__component_fragments
     local chunk_component_defaults = chunk.__component_defaults
     local chunk_component_duplicates = chunk.__component_duplicates
+    local chunk_component_reallocs = chunk.__component_reallocs
+    local chunk_component_compmoves = chunk.__component_compmoves
 
     local prefab_component_indices = prefab_chunk.__component_indices
     local prefab_component_storages = prefab_chunk.__component_storages
@@ -2655,6 +2683,8 @@ function __multi_clone_entity(prefab, entity_list, entity_count, components)
     local chunk_component_fragments = chunk.__component_fragments
     local chunk_component_defaults = chunk.__component_defaults
     local chunk_component_duplicates = chunk.__component_duplicates
+    local chunk_component_reallocs = chunk.__component_reallocs
+    local chunk_component_compmoves = chunk.__component_compmoves
 
     local prefab_component_indices = prefab_chunk.__component_indices
     local prefab_component_storages = prefab_chunk.__component_storages
@@ -6051,6 +6081,18 @@ function __builder_mt:duplicate(duplicate)
     return self:set(__DUPLICATE, duplicate)
 end
 
+---@param realloc evolved.realloc
+---@return evolved.builder builder
+function __builder_mt:realloc(realloc)
+    return self:set(__REALLOC, realloc)
+end
+
+---@param compmove evolved.compmove
+---@return evolved.builder builder
+function __builder_mt:compmove(compmove)
+    return self:set(__COMPMOVE, compmove)
+end
+
 ---@return evolved.builder builder
 function __builder_mt:prefab()
     return self:set(__PREFAB)
@@ -6263,6 +6305,12 @@ __evolved_set(__DEFAULT, __ON_REMOVE, __update_major_chunks)
 __evolved_set(__DUPLICATE, __ON_INSERT, __update_major_chunks)
 __evolved_set(__DUPLICATE, __ON_REMOVE, __update_major_chunks)
 
+__evolved_set(__REALLOC, __ON_INSERT, __update_major_chunks)
+__evolved_set(__REALLOC, __ON_REMOVE, __update_major_chunks)
+
+__evolved_set(__COMPMOVE, __ON_INSERT, __update_major_chunks)
+__evolved_set(__COMPMOVE, __ON_REMOVE, __update_major_chunks)
+
 ---
 ---
 ---
@@ -6278,6 +6326,9 @@ __evolved_set(__INTERNAL, __NAME, 'INTERNAL')
 
 __evolved_set(__DEFAULT, __NAME, 'DEFAULT')
 __evolved_set(__DUPLICATE, __NAME, 'DUPLICATE')
+
+__evolved_set(__REALLOC, __NAME, 'REALLOC')
+__evolved_set(__COMPMOVE, __NAME, 'COMPMOVE')
 
 __evolved_set(__PREFAB, __NAME, 'PREFAB')
 __evolved_set(__DISABLED, __NAME, 'DISABLED')
@@ -6319,6 +6370,9 @@ __evolved_set(__INTERNAL, __INTERNAL)
 
 __evolved_set(__DEFAULT, __INTERNAL)
 __evolved_set(__DUPLICATE, __INTERNAL)
+
+__evolved_set(__REALLOC, __INTERNAL)
+__evolved_set(__COMPMOVE, __INTERNAL)
 
 __evolved_set(__PREFAB, __INTERNAL)
 __evolved_set(__DISABLED, __INTERNAL)
@@ -6682,6 +6736,9 @@ evolved.INTERNAL = __INTERNAL
 
 evolved.DEFAULT = __DEFAULT
 evolved.DUPLICATE = __DUPLICATE
+
+evolved.REALLOC = __REALLOC
+evolved.COMPMOVE = __COMPMOVE
 
 evolved.PREFAB = __PREFAB
 evolved.DISABLED = __DISABLED
