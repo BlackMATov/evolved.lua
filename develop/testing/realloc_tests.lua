@@ -19,9 +19,17 @@ local DOUBLE_TYPEOF = ffi.typeof('double')
 local DOUBLE_SIZEOF = ffi.sizeof(DOUBLE_TYPEOF)
 local DOUBLE_STORAGE_TYPEOF = ffi.typeof('$[?]', DOUBLE_TYPEOF)
 
+local STORAGE_SIZES = {}
+
 ---@type evolved.realloc
 local function float_realloc(old_storage, old_size, new_size)
+    if old_storage then
+        assert(STORAGE_SIZES[old_storage] == old_size)
+    end
+
     local new_storage = ffi.new(FLOAT_STORAGE_TYPEOF, new_size + 1)
+
+    STORAGE_SIZES[new_storage] = new_size
 
     if old_storage then
         ffi.copy(new_storage + 1, old_storage + 1, math.min(old_size, new_size) * FLOAT_SIZEOF)
@@ -32,7 +40,13 @@ end
 
 ---@type evolved.realloc
 local function double_realloc(old_storage, old_size, new_size)
+    if old_storage then
+        assert(STORAGE_SIZES[old_storage] == old_size)
+    end
+
     local new_storage = ffi.new(DOUBLE_STORAGE_TYPEOF, new_size + 1)
+
+    STORAGE_SIZES[new_storage] = new_size
 
     if old_storage then
         ffi.copy(new_storage + 1, old_storage + 1, math.min(old_size, new_size) * DOUBLE_SIZEOF)
@@ -298,4 +312,90 @@ do
     for i = 1, ec / 2 do
         assert(evo.has(es[i], f1) and evo.get(es[i], f1) == 42)
     end
+end
+
+do
+    evo.collect_garbage()
+
+    local f1 = evo.builder():name('f1'):realloc(double_realloc):compmove(double_compmove):build()
+    local f2 = evo.builder():name('f2'):realloc(double_realloc):compmove(double_compmove):build()
+
+    local q1 = evo.builder():include(f1):build()
+    local q2 = evo.builder():include(f2):build()
+
+    do
+        local es, ec = evo.multi_spawn(40, { [f2] = 2 })
+        for i = 1, ec do
+            assert(not evo.has(es[i], f1))
+            assert(evo.has(es[i], f2) and evo.get(es[i], f2) == 2)
+        end
+        evo.batch_destroy(q2)
+    end
+
+    do
+        local es, ec = evo.multi_spawn(50, { [f1] = 1, [f2] = 2 })
+        for i = 1, ec do
+            assert(evo.has(es[i], f1) and evo.get(es[i], f1) == 1)
+            assert(evo.has(es[i], f2) and evo.get(es[i], f2) == 2)
+        end
+
+        evo.batch_remove(q1, f1)
+        for i = 1, ec do
+            assert(not evo.has(es[i], f1))
+            assert(evo.has(es[i], f2) and evo.get(es[i], f2) == 2)
+        end
+
+        evo.batch_destroy(q1, q2)
+    end
+
+    do
+        evo.spawn({ [f1] = 1 })
+        evo.spawn({ [f2] = 2 })
+        evo.spawn({ [f1] = 1, [f2] = 2 })
+    end
+
+    evo.collect_garbage()
+end
+
+do
+    evo.collect_garbage()
+
+    local f1 = evo.builder():name('f1'):realloc(double_realloc):compmove(double_compmove):build()
+    local f2 = evo.builder():name('f2'):realloc(double_realloc):compmove(double_compmove):build()
+
+    local q1 = evo.builder():include(f1):build()
+    local q2 = evo.builder():include(f2):build()
+
+    do
+        local es, ec = evo.multi_spawn(40, { [f1] = 1, [f2] = 2 })
+        for i = 1, ec do
+            assert(evo.has(es[i], f1) and evo.get(es[i], f1) == 1)
+            assert(evo.has(es[i], f2) and evo.get(es[i], f2) == 2)
+        end
+        evo.batch_destroy(q2)
+    end
+
+    do
+        local es, ec = evo.multi_spawn(50, { [f1] = 1 })
+        for i = 1, ec do
+            assert(evo.has(es[i], f1) and evo.get(es[i], f1) == 1)
+            assert(not evo.has(es[i], f2))
+        end
+
+        evo.batch_set(q1, f2, 2)
+        for i = 1, ec do
+            assert(evo.has(es[i], f1) and evo.get(es[i], f1) == 1)
+            assert(evo.has(es[i], f2) and evo.get(es[i], f2) == 2)
+        end
+
+        evo.batch_destroy(q1, q2)
+    end
+
+    do
+        evo.spawn({ [f1] = 1 })
+        evo.spawn({ [f2] = 2 })
+        evo.spawn({ [f1] = 1, [f2] = 2 })
+    end
+
+    evo.collect_garbage()
 end

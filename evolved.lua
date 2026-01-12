@@ -2900,10 +2900,6 @@ function __expand_chunk(chunk, min_capacity)
         __error_fmt('this operation should be deferred')
     end
 
-    if min_capacity < 4 then
-        min_capacity = 4
-    end
-
     local entity_count = chunk.__entity_count
 
     if min_capacity < entity_count then
@@ -2920,6 +2916,10 @@ function __expand_chunk(chunk, min_capacity)
 
     if new_capacity < min_capacity then
         new_capacity = min_capacity
+    end
+
+    if new_capacity < 4 then
+        new_capacity = 4
     end
 
     if chunk.__has_storage_reallocs then
@@ -2945,12 +2945,11 @@ function __expand_chunk(chunk, min_capacity)
 end
 
 ---@param chunk evolved.chunk
-function __shrink_chunk(chunk)
+---@param min_capacity integer
+function __shrink_chunk(chunk, min_capacity)
     if __defer_depth <= 0 then
         __error_fmt('this operation should be deferred')
     end
-
-    local min_capacity = 4
 
     local entity_count = chunk.__entity_count
 
@@ -3349,10 +3348,28 @@ function __chunk_set(old_chunk, fragment, component)
 
             for old_ci = 1, old_component_count do
                 local old_f = old_component_fragments[old_ci]
-                local new_ci = new_component_indices[old_f]
 
-                old_component_storages[old_ci], new_component_storages[new_ci] =
-                    new_component_storages[new_ci], old_component_storages[old_ci]
+                local new_ci = new_component_indices[old_f]
+                local new_cr = new_component_reallocs[new_ci]
+
+                if new_cr then
+                    local old_cs = old_component_storages[old_ci]
+
+                    local new_cs = new_component_storages[new_ci]
+                    local new_cm = new_component_compmoves[new_ci]
+
+                    if new_cm then
+                        new_cm(old_cs, 1, old_entity_count, new_entity_count + 1, new_cs)
+                    else
+                        for old_place = 1, old_entity_count do
+                            local new_place = new_entity_count + old_place
+                            new_cs[new_place] = old_cs[old_place]
+                        end
+                    end
+                else
+                    old_component_storages[old_ci], new_component_storages[new_ci] =
+                        new_component_storages[new_ci], old_component_storages[old_ci]
+                end
             end
 
             new_chunk.__entity_count = sum_entity_count
@@ -3364,14 +3381,17 @@ function __chunk_set(old_chunk, fragment, component)
                 local new_ci = new_component_indices[old_f]
                 local new_cs = new_component_storages[new_ci]
                 local new_cr = new_component_reallocs[new_ci]
-                local new_cm = new_component_compmoves[new_ci]
 
-                if new_cm then
-                    new_cm(old_cs, 1, old_entity_count, new_entity_count + 1, new_cs)
-                elseif new_cr then
-                    for old_place = 1, old_entity_count do
-                        local new_place = new_entity_count + old_place
-                        new_cs[new_place] = old_cs[old_place]
+                if new_cr then
+                    local new_cm = new_component_compmoves[new_ci]
+
+                    if new_cm then
+                        new_cm(old_cs, 1, old_entity_count, new_entity_count + 1, new_cs)
+                    else
+                        for old_place = 1, old_entity_count do
+                            local new_place = new_entity_count + old_place
+                            new_cs[new_place] = old_cs[old_place]
+                        end
                     end
                 else
                     __lua_table_move(old_cs, 1, old_entity_count, new_entity_count + 1, new_cs)
@@ -3677,10 +3697,28 @@ function __chunk_remove(old_chunk, ...)
 
             for new_ci = 1, new_component_count do
                 local new_f = new_component_fragments[new_ci]
+                local new_cr = new_component_reallocs[new_ci]
+
                 local old_ci = old_component_indices[new_f]
 
-                old_component_storages[old_ci], new_component_storages[new_ci] =
-                    new_component_storages[new_ci], old_component_storages[old_ci]
+                if new_cr then
+                    local new_cs = new_component_storages[new_ci]
+                    local new_cm = new_component_compmoves[new_ci]
+
+                    local old_cs = old_component_storages[old_ci]
+
+                    if new_cm then
+                        new_cm(old_cs, 1, old_entity_count, new_entity_count + 1, new_cs)
+                    else
+                        for old_place = 1, old_entity_count do
+                            local new_place = new_entity_count + old_place
+                            new_cs[new_place] = old_cs[old_place]
+                        end
+                    end
+                else
+                    old_component_storages[old_ci], new_component_storages[new_ci] =
+                        new_component_storages[new_ci], old_component_storages[old_ci]
+                end
             end
 
             new_chunk.__entity_count = sum_entity_count
@@ -3689,17 +3727,20 @@ function __chunk_remove(old_chunk, ...)
                 local new_f = new_component_fragments[new_ci]
                 local new_cs = new_component_storages[new_ci]
                 local new_cr = new_component_reallocs[new_ci]
-                local new_cm = new_component_compmoves[new_ci]
 
                 local old_ci = old_component_indices[new_f]
                 local old_cs = old_component_storages[old_ci]
 
-                if new_cm then
-                    new_cm(old_cs, 1, old_entity_count, new_entity_count + 1, new_cs)
-                elseif new_cr then
-                    for old_place = 1, old_entity_count do
-                        local new_place = new_entity_count + old_place
-                        new_cs[new_place] = old_cs[old_place]
+                if new_cr then
+                    local new_cm = new_component_compmoves[new_ci]
+
+                    if new_cm then
+                        new_cm(old_cs, 1, old_entity_count, new_entity_count + 1, new_cs)
+                    else
+                        for old_place = 1, old_entity_count do
+                            local new_place = new_entity_count + old_place
+                            new_cs[new_place] = old_cs[old_place]
+                        end
                     end
                 else
                     __lua_table_move(old_cs, 1, old_entity_count, new_entity_count + 1, new_cs)
@@ -5669,7 +5710,7 @@ function __evolved_collect_garbage()
             if should_be_purged then
                 __purge_chunk(postorder_chunk)
             else
-                __shrink_chunk(postorder_chunk)
+                __shrink_chunk(postorder_chunk, 0)
             end
         end
 
