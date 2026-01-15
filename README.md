@@ -1172,7 +1172,7 @@ storage :: component[]
 default :: component
 duplicate :: {component -> component}
 
-realloc :: {storage?, integer, integer -> storage}
+realloc :: {storage?, integer, integer -> storage?}
 compmove :: {storage, integer, integer, integer, storage}
 
 execute :: {chunk, entity[], integer, any...}
@@ -1342,7 +1342,7 @@ builder_mt:internal :: builder
 builder_mt:default :: component -> builder
 builder_mt:duplicate :: {component -> component} -> builder
 
-builder_mt:realloc :: {storage?, integer, integer -> storage} -> builder
+builder_mt:realloc :: {storage?, integer, integer -> storage?} -> builder
 builder_mt:compmove :: {storage, integer, integer, integer, storage} -> builder
 
 builder_mt:prefab :: builder

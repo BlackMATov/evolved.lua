@@ -192,8 +192,6 @@ local __structural_changes = 0 ---@type integer
 ---@field package __has_internal_major boolean
 ---@field package __has_internal_minors boolean
 ---@field package __has_internal_fragments boolean
----@field package __has_storage_reallocs boolean
----@field package __has_storage_compmoves boolean
 ---@field package __has_required_fragments boolean
 local __chunk_mt = {}
 __chunk_mt.__index = __chunk_mt
@@ -1267,8 +1265,6 @@ function __new_chunk(chunk_parent, chunk_fragment)
         __has_internal_major = false,
         __has_internal_minors = false,
         __has_internal_fragments = false,
-        __has_storage_reallocs = false,
-        __has_storage_compmoves = false,
         __has_required_fragments = false,
     }, __chunk_mt)
 
@@ -1388,12 +1384,6 @@ function __update_chunk_caches(chunk)
     local has_internal_minors = chunk_parent ~= nil and chunk_parent.__has_internal_fragments
     local has_internal_fragments = has_internal_major or has_internal_minors
 
-    local has_storage_reallocs = chunk_parent ~= nil and chunk_parent.__has_storage_reallocs
-        or __evolved_has(chunk_fragment, __REALLOC)
-
-    local has_storage_compmoves = chunk_parent ~= nil and chunk_parent.__has_storage_compmoves
-        or __evolved_has(chunk_fragment, __COMPMOVE)
-
     local has_required_fragments = false
 
     for chunk_fragment_index = 1, chunk_fragment_count do
@@ -1433,9 +1423,6 @@ function __update_chunk_caches(chunk)
     chunk.__has_internal_major = has_internal_major
     chunk.__has_internal_minors = has_internal_minors
     chunk.__has_internal_fragments = has_internal_fragments
-
-    chunk.__has_storage_reallocs = has_storage_reallocs
-    chunk.__has_storage_compmoves = has_storage_compmoves
 
     chunk.__has_required_fragments = has_required_fragments
 
