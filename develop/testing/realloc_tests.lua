@@ -22,37 +22,59 @@ local DOUBLE_STORAGE_TYPEOF = ffi.typeof('$[?]', DOUBLE_TYPEOF)
 local STORAGE_SIZES = {}
 
 ---@type evolved.realloc
-local function float_realloc(old_storage, old_size, new_size)
-    if old_storage then
-        assert(STORAGE_SIZES[old_storage] == old_size)
+local function float_realloc(src, src_size, dst_size)
+    if dst_size == 0 then
+        assert(src and src_size > 0)
+        local expected_src_size = STORAGE_SIZES[src]
+        assert(expected_src_size == src_size)
+        STORAGE_SIZES[src] = nil
+        return
+    else
+        if src then
+            assert(src_size > 0)
+            local expected_src_size = STORAGE_SIZES[src]
+            assert(expected_src_size == src_size)
+        else
+            assert(src_size == 0)
+        end
+
+        local dst = ffi.new(FLOAT_STORAGE_TYPEOF, dst_size + 1)
+        STORAGE_SIZES[dst] = dst_size
+
+        if src then
+            ffi.copy(dst + 1, src + 1, math.min(src_size, dst_size) * FLOAT_SIZEOF)
+        end
+
+        return dst
     end
-
-    local new_storage = ffi.new(FLOAT_STORAGE_TYPEOF, new_size + 1)
-
-    STORAGE_SIZES[new_storage] = new_size
-
-    if old_storage then
-        ffi.copy(new_storage + 1, old_storage + 1, math.min(old_size, new_size) * FLOAT_SIZEOF)
-    end
-
-    return new_storage
 end
 
 ---@type evolved.realloc
-local function double_realloc(old_storage, old_size, new_size)
-    if old_storage then
-        assert(STORAGE_SIZES[old_storage] == old_size)
+local function double_realloc(src, src_size, dst_size)
+    if dst_size == 0 then
+        assert(src and src_size > 0)
+        local expected_src_size = STORAGE_SIZES[src]
+        assert(expected_src_size == src_size)
+        STORAGE_SIZES[src] = nil
+        return
+    else
+        if src then
+            assert(src_size > 0)
+            local expected_src_size = STORAGE_SIZES[src]
+            assert(expected_src_size == src_size)
+        else
+            assert(src_size == 0)
+        end
+
+        local dst = ffi.new(DOUBLE_STORAGE_TYPEOF, dst_size + 1)
+        STORAGE_SIZES[dst] = dst_size
+
+        if src then
+            ffi.copy(dst + 1, src + 1, math.min(src_size, dst_size) * DOUBLE_SIZEOF)
+        end
+
+        return dst
     end
-
-    local new_storage = ffi.new(DOUBLE_STORAGE_TYPEOF, new_size + 1)
-
-    STORAGE_SIZES[new_storage] = new_size
-
-    if old_storage then
-        ffi.copy(new_storage + 1, old_storage + 1, math.min(old_size, new_size) * DOUBLE_SIZEOF)
-    end
-
-    return new_storage
 end
 
 ---@type evolved.compmove
@@ -398,4 +420,169 @@ do
     end
 
     evo.collect_garbage()
+end
+
+do
+    evo.collect_garbage()
+
+    local alloc_call_count = 0
+    local free_call_count = 0
+    local resize_call_count = 0
+
+    local function ctor_realloc()
+        ---@type evolved.realloc
+        return function(src, src_size, dst_size)
+            if dst_size == 0 then
+                assert(src and src_size > 0)
+                free_call_count = free_call_count + 1
+                return
+            else
+                if src then
+                    assert(src_size > 0)
+                    resize_call_count = resize_call_count + 1
+                else
+                    assert(src_size == 0)
+                    alloc_call_count = alloc_call_count + 1
+                end
+
+                local dst = {}
+
+                if src then
+                    for i = 1, math.min(src_size, dst_size) do
+                        dst[i] = src[i]
+                    end
+                end
+
+                return dst
+            end
+        end
+    end
+
+    do
+        local realloc1 = ctor_realloc()
+        local realloc2 = ctor_realloc()
+
+        local f1 = evo.builder():default(44):realloc(realloc1):build()
+
+        alloc_call_count, free_call_count, resize_call_count = 0, 0, 0
+
+        do
+            local e1 = evo.builder():set(f1, 21):build()
+            assert(evo.has(e1, f1) and evo.get(e1, f1) == 21)
+            assert(alloc_call_count == 1 and free_call_count == 0)
+
+            local e2 = evo.builder():set(f1, 42):build()
+            assert(evo.has(e1, f1) and evo.get(e1, f1) == 21)
+            assert(evo.has(e2, f1) and evo.get(e2, f1) == 42)
+            assert(alloc_call_count == 1 and free_call_count == 0)
+
+            evo.collect_garbage()
+            assert(alloc_call_count == 1 and free_call_count == 0 and resize_call_count == 0)
+
+            evo.destroy(e1)
+            assert(alloc_call_count == 1 and free_call_count == 0 and resize_call_count == 0)
+
+            evo.collect_garbage()
+            assert(alloc_call_count == 1 and free_call_count == 0 and resize_call_count == 0)
+
+            evo.destroy(e2)
+            assert(alloc_call_count == 1 and free_call_count == 0 and resize_call_count == 0)
+
+            evo.collect_garbage()
+            assert(alloc_call_count == 1 and free_call_count == 1 and resize_call_count == 0)
+        end
+
+        alloc_call_count, free_call_count, resize_call_count = 0, 0, 0
+
+        do
+            local es, ec = evo.multi_spawn(10, { [f1] = 84 })
+            assert(alloc_call_count == 1 and free_call_count == 0 and resize_call_count == 0)
+
+            for i = 1, ec / 2 do evo.destroy(es[i]) end
+            assert(alloc_call_count == 1 and free_call_count == 0 and resize_call_count == 0)
+
+            evo.collect_garbage()
+            assert(alloc_call_count == 1 and free_call_count == 0 and resize_call_count == 1)
+
+            evo.set(f1, evo.REALLOC, realloc2)
+            assert(alloc_call_count == 2 and free_call_count == 1 and resize_call_count == 1)
+
+            for i = 1, ec do evo.destroy(es[i]) end
+            evo.collect_garbage()
+            assert(alloc_call_count == 2 and free_call_count == 2 and resize_call_count == 1)
+        end
+
+        alloc_call_count, free_call_count, resize_call_count = 0, 0, 0
+
+        do
+            local e1 = evo.builder():set(f1, 24):build()
+            assert(evo.has(e1, f1) and evo.get(e1, f1) == 24)
+            assert(alloc_call_count == 1 and free_call_count == 0 and resize_call_count == 0)
+
+            evo.set(f1, evo.TAG)
+            assert(evo.has(e1, f1) and evo.get(e1, f1) == nil)
+            assert(alloc_call_count == 1 and free_call_count == 1 and resize_call_count == 0)
+
+            local es, ec = evo.multi_spawn(20, { [f1] = 48 })
+            for i = 1, ec do assert(evo.has(es[i], f1) and evo.get(es[i], f1) == nil) end
+            assert(alloc_call_count == 1 and free_call_count == 1 and resize_call_count == 0)
+
+            evo.remove(f1, evo.TAG)
+            assert(evo.has(e1, f1) and evo.get(e1, f1) == 44)
+            for i = 1, ec do assert(evo.has(es[i], f1) and evo.get(es[i], f1) == 44) end
+            assert(alloc_call_count == 2 and free_call_count == 1 and resize_call_count == 0)
+
+            evo.destroy(e1)
+            for i = 1, ec do evo.destroy(es[i]) end
+            assert(alloc_call_count == 2 and free_call_count == 1 and resize_call_count == 0)
+
+            evo.collect_garbage()
+            assert(alloc_call_count == 2 and free_call_count == 2 and resize_call_count == 0)
+        end
+
+        alloc_call_count, free_call_count, resize_call_count = 0, 0, 0
+
+        do
+            local e1 = evo.builder():set(f1, 100):build()
+            assert(evo.has(e1, f1) and evo.get(e1, f1) == 100)
+            assert(alloc_call_count == 1 and free_call_count == 0 and resize_call_count == 0)
+
+            evo.set(f1, evo.TAG)
+            assert(evo.has(e1, f1) and evo.get(e1, f1) == nil)
+            assert(alloc_call_count == 1 and free_call_count == 1 and resize_call_count == 0)
+
+            local es, ec = evo.multi_spawn(20, { [f1] = 48 })
+            for i = 1, ec do assert(evo.has(es[i], f1) and evo.get(es[i], f1) == nil) end
+            assert(alloc_call_count == 1 and free_call_count == 1 and resize_call_count == 0)
+
+            evo.destroy(e1)
+            for i = 1, ec do evo.destroy(es[i]) end
+            assert(alloc_call_count == 1 and free_call_count == 1 and resize_call_count == 0)
+
+            evo.collect_garbage()
+            assert(alloc_call_count == 1 and free_call_count == 1 and resize_call_count == 0)
+        end
+    end
+
+
+    do
+        local realloc = ctor_realloc()
+
+        local f1 = evo.builder():realloc(realloc):build()
+
+        alloc_call_count, free_call_count, resize_call_count = 0, 0, 0
+
+        do
+            local e1 = evo.builder():set(f1, 42):build()
+            assert(evo.has(e1, f1) and evo.get(e1, f1) == 42)
+            assert(alloc_call_count == 1 and free_call_count == 0 and resize_call_count == 0)
+
+            evo.destroy(e1)
+            assert(not evo.has(e1, f1) and evo.get(e1, f1) == nil)
+            assert(alloc_call_count == 1 and free_call_count == 0 and resize_call_count == 0)
+
+            evo.set(f1, evo.TAG)
+            assert(alloc_call_count == 1 and free_call_count == 1 and resize_call_count == 0)
+        end
+    end
 end
