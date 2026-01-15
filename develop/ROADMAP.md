@@ -18,4 +18,4 @@
 
 ## Known Issues
 
-- Errors in hooks are cannot be handled properly right now
+- Errors in hooks or rellocs/compmoves are cannot be handled properly right now

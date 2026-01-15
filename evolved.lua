@@ -1551,6 +1551,11 @@ function __update_chunk_storages(chunk)
                     new_component_storage = __default_realloc(nil, 0, entity_capacity)
                 end
 
+                if not new_component_storage then
+                    __error_fmt('component storage allocation failed: chunk (%s), fragment (%s)',
+                        __lua_tostring(chunk), __id_name(fragment))
+                end
+
                 if fragment_duplicate then
                     for place = 1, entity_count do
                         local new_component = fragment_default
@@ -1577,6 +1582,11 @@ function __update_chunk_storages(chunk)
                     new_component_storage = fragment_realloc(nil, 0, entity_capacity)
                 else
                     new_component_storage = __default_realloc(nil, 0, entity_capacity)
+                end
+
+                if not new_component_storage then
+                    __error_fmt('component storage allocation failed: chunk (%s), fragment (%s)',
+                        __lua_tostring(chunk), __id_name(fragment))
                 end
 
                 if fragment_duplicate then
@@ -2995,6 +3005,17 @@ function __expand_chunk(chunk, min_capacity)
                     old_component_storage, old_capacity, new_capacity)
             end
 
+            if min_capacity > 0 and not new_component_storage then
+                __error_fmt(
+                    'component storage reallocation failed: chunk (%s), fragment (%s)',
+                    __lua_tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
+            elseif min_capacity == 0 and new_component_storage then
+                __warning_fmt(
+                    'component storage reallocation for zero capacity should return nil: chunk (%s), fragment (%s)',
+                    __lua_tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
+                new_component_storage = nil
+            end
+
             component_storages[component_index] = new_component_storage
         end
     end
@@ -3053,6 +3074,17 @@ function __shrink_chunk(chunk, min_capacity)
             else
                 new_component_storage = __default_realloc(
                     old_component_storage, old_capacity, min_capacity)
+            end
+
+            if min_capacity > 0 and not new_component_storage then
+                __error_fmt(
+                    'component storage reallocation failed: chunk (%s), fragment (%s)',
+                    __lua_tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
+            elseif min_capacity == 0 and new_component_storage then
+                __warning_fmt(
+                    'component storage reallocation for zero capacity should return nil: chunk (%s), fragment (%s)',
+                    __lua_tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
+                new_component_storage = nil
             end
 
             component_storages[component_index] = new_component_storage
