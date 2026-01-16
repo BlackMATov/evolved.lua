@@ -420,17 +420,19 @@ You should try to avoid structural changes, especially in performance-critical c
 #### Spawning Entities
 
 ```lua
----@param components? table<evolved.fragment, evolved.component>
+---@param component_table? table<evolved.fragment, evolved.component>
+---@param component_mapper? fun(chunk: evolved.chunk, place: integer)
 ---@return evolved.entity
-function evolved.spawn(components) end
+function evolved.spawn(component_table, component_mapper) end
 
 ---@param prefab evolved.entity
----@param components? table<evolved.fragment, evolved.component>
+---@param component_table? table<evolved.fragment, evolved.component>
+---@param component_mapper? fun(chunk: evolved.chunk, place: integer)
 ---@return evolved.entity
-function evolved.clone(prefab, components) end
+function evolved.clone(prefab, component_table, component_mapper) end
 ```
 
-The [`evolved.spawn`](#evolvedspawn) function allows you to spawn an entity with all the necessary fragments. It takes a table of components as an argument, where the keys are fragments and the values are components. By the way, you don't need to create this `components` table every time; consider using a predefined table for maximum performance.
+The [`evolved.spawn`](#evolvedspawn) function allows you to spawn an entity with all the necessary fragments. It takes a table of components as an argument, where the keys are fragments and the values are components. By the way, you don't need to create this `component_table` every time; consider using a predefined table for maximum performance.
 
 You can also use the [`evolved.clone`](#evolvedclone) function to clone an existing entity. This is useful for creating entities with the same fragments as an existing entity but with different components.
 
@@ -1268,22 +1270,22 @@ local MOVEMENT_SYSTEM = evolved.builder()
 --
 --
 
-do
-    local entity_list, entity_count = evolved.builder()
-        :set(POSITION_X)
-        :set(POSITION_Y)
-        :set(VELOCITY_X)
-        :set(VELOCITY_Y)
-        :multi_build(10000)
+evolved.builder()
+    :set(POSITION_X)
+    :set(POSITION_Y)
+    :set(VELOCITY_X)
+    :set(VELOCITY_Y)
+    :multi_spawn(10000, function(chunk, b_place, e_place)
+        local position_xs, position_ys = chunk:components(POSITION_X, POSITION_Y)
+        local velocity_xs, velocity_ys = chunk:components(VELOCITY_X, VELOCITY_Y)
 
-    for i = 1, entity_count do
-        local entity = entity_list[i]
-        evolved.set(entity, POSITION_X, math.random(0, 640))
-        evolved.set(entity, POSITION_Y, math.random(0, 480))
-        evolved.set(entity, VELOCITY_X, math.random(-100, 100))
-        evolved.set(entity, VELOCITY_Y, math.random(-100, 100))
-    end
-end
+        for place = b_place, e_place do
+            position_xs[place] = math.random(0, 640)
+            position_ys[place] = math.random(0, 480)
+            velocity_xs[place] = math.random(-100, 100)
+            velocity_ys[place] = math.random(-100, 100)
+        end
+    end)
 
 --
 --
@@ -1308,6 +1310,9 @@ system :: id
 
 component :: any
 storage :: component[]
+
+component_table :: <fragment, component>
+component_mapper :: {chunk, integer, integer}
 
 default :: component
 duplicate :: {component -> component}
@@ -1387,11 +1392,11 @@ depth :: integer
 commit :: boolean
 cancel :: boolean
 
-spawn :: <fragment, component>? -> entity
-multi_spawn :: integer, <fragment, component>? -> entity[], integer
+spawn :: component_table?, component_mapper? -> entity
+multi_spawn :: integer, component_table?, component_mapper? -> entity[], integer
 
-clone :: entity, <fragment, component>? -> entity
-multi_clone :: integer, entity, <fragment, component>? -> entity[], integer
+clone :: entity, component_table?, component_mapper? -> entity
+multi_clone :: integer, entity, component_table?, component_mapper? -> entity[], integer
 
 alive :: entity -> boolean
 alive_all :: entity... -> boolean
@@ -1405,7 +1410,7 @@ has :: entity, fragment -> boolean
 has_all :: entity, fragment... -> boolean
 has_any :: entity, fragment... -> boolean
 
-get :: entity, fragment...  -> component...
+get :: entity, fragment... -> component...
 
 set :: entity, fragment, component -> ()
 remove :: entity, fragment... -> ()
@@ -1453,14 +1458,14 @@ chunk_mt:components :: fragment... -> storage...
 ```
 builder :: builder
 
-builder_mt:build :: entity? -> entity
-builder_mt:multi_build :: integer, entity? -> entity[], integer
+builder_mt:build :: entity?, component_mapper? -> entity
+builder_mt:multi_build :: integer, entity?, component_mapper? -> entity[], integer
 
-builder_mt:spawn :: entity
-builder_mt:multi_spawn :: integer -> entity[], integer
+builder_mt:spawn :: component_mapper? -> entity
+builder_mt:multi_spawn :: integer, component_mapper? -> entity[], integer
 
-builder_mt:clone :: entity -> entity
-builder_mt:multi_clone :: integer, entity -> entity[], integer
+builder_mt:clone :: entity, component_mapper? -> entity
+builder_mt:multi_clone :: integer, entity, component_mapper? -> entity[], integer
 
 builder_mt:has :: fragment -> boolean
 builder_mt:has_all :: fragment... -> boolean
@@ -1696,28 +1701,31 @@ function evolved.cancel() end
 ### `evolved.spawn`
 
 ```lua
----@param components? table<evolved.fragment, evolved.component>
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity entity
-function evolved.spawn(components) end
+function evolved.spawn(component_table, component_mapper) end
 ```
 
 ### `evolved.multi_spawn`
 
 ```lua
 ---@param entity_count integer
----@param components? table<evolved.fragment, evolved.component>
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
-function evolved.multi_spawn(entity_count, components) end
+function evolved.multi_spawn(entity_count, component_table, component_mapper) end
 ```
 
 ### `evolved.clone`
 
 ```lua
 ---@param prefab evolved.entity
----@param components? table<evolved.fragment, evolved.component>
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity entity
-function evolved.clone(prefab, components) end
+function evolved.clone(prefab, component_table, component_mapper) end
 ```
 
 ### `evolved.multi_clone`
@@ -1725,10 +1733,11 @@ function evolved.clone(prefab, components) end
 ```lua
 ---@param entity_count integer
 ---@param prefab evolved.entity
----@param components? table<evolved.fragment, evolved.component>
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
-function evolved.multi_clone(entity_count, prefab, components) end
+function evolved.multi_clone(entity_count, prefab, component_table, component_mapper) end
 ```
 
 ### `evolved.alive`
@@ -2045,8 +2054,9 @@ function evolved.builder() end
 
 ```lua
 ---@param prefab? evolved.entity
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity entity
-function evolved.builder_mt:build(prefab) end
+function evolved.builder_mt:build(prefab, component_mapper) end
 ```
 
 ### `evolved.builder_mt:multi_build`
@@ -2054,33 +2064,37 @@ function evolved.builder_mt:build(prefab) end
 ```lua
 ---@param entity_count integer
 ---@param prefab? evolved.entity
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
-function evolved.builder_mt:multi_build(entity_count, prefab) end
+function evolved.builder_mt:multi_build(entity_count, prefab, component_mapper) end
 ```
 
 #### `evolved.builder_mt:spawn`
 
 ```lua
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity entity
-function evolved.builder_mt:spawn() end
+function evolved.builder_mt:spawn(component_mapper) end
 ```
 
 #### `evolved.builder_mt:multi_spawn`
 
 ```lua
 ---@param entity_count integer
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
-function evolved.builder_mt:multi_spawn(entity_count) end
+function evolved.builder_mt:multi_spawn(entity_count, component_mapper) end
 ```
 
 #### `evolved.builder_mt:clone`
 
 ```lua
 ---@param prefab evolved.entity
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity entity
-function evolved.builder_mt:clone(prefab) end
+function evolved.builder_mt:clone(prefab, component_mapper) end
 ```
 
 #### `evolved.builder_mt:multi_clone`
@@ -2088,9 +2102,10 @@ function evolved.builder_mt:clone(prefab) end
 ```lua
 ---@param entity_count integer
 ---@param prefab evolved.entity
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
-function evolved.builder_mt:multi_clone(entity_count, prefab) end
+function evolved.builder_mt:multi_clone(entity_count, prefab, component_mapper) end
 ```
 
 #### `evolved.builder_mt:has`
