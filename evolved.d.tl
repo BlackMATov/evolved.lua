@@ -64,6 +64,9 @@
         default: function<Component>(self: Builder, default: Component): Builder
         duplicate: function<Component>(self: Builder, duplicate: function(Component): Component): Builder
 
+        realloc: function<Component>(self: Builder, realloc: function({ Component } | nil, integer, integer): { Component } | nil): Builder
+        compmove: function<Component>(self: Builder, compmove: function({ Component }, integer, integer, integer, { Component })): Builder
+
         prefab: function(self: Builder): Builder
         disabled: function(self: Builder): Builder
 
@@ -97,6 +100,9 @@
 
     DEFAULT: Fragment
     DUPLICATE: Fragment
+
+    REALLOC: Fragment
+    COMPMOVE: Fragment
 
     PREFAB: Fragment
     DISABLED: Fragment

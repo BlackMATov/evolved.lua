@@ -53,6 +53,7 @@
     - [Shared Components](#shared-components)
     - [Fragment Requirements](#fragment-requirements)
     - [Destruction Policies](#destruction-policies)
+    - [Custom Component Storages](#custom-component-storages)
 - [Cheat Sheet](#cheat-sheet)
   - [Aliases](#aliases)
   - [Predefs](#predefs)
@@ -61,6 +62,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
+  - [vX.Y.Z](#vxyz)
   - [v1.7.0](#v170)
   - [v1.6.0](#v160)
   - [v1.5.0](#v150)
@@ -1153,6 +1155,145 @@ evolved.destroy(world)
 assert(not evolved.alive(entity))
 ```
 
+#### Custom Component Storages
+
+In some cases, you might want custom storages for fragment components. For example, you might want to store components in a specialized way for performance reasons. The library provides two fragment traits for this purpose: [`evolved.REALLOC`](#evolvedrealloc) and [`evolved.COMPMOVE`](#evolvedcompmove).
+
+The [`evolved.REALLOC`](#evolvedrealloc) trait expects a function that is called when the fragment storage needs to be reallocated. The [`evolved.COMPMOVE`](#evolvedcompmove) trait expects a function that is called when components need to be moved from one storage to another.
+
+A canonical example of using custom storages is implementing a fragment that stores components in an FFI-backed storage for better processing performance in LuaJIT. This is an advanced topic and requires a good understanding of LuaJIT FFI and memory management. So I won't cover it here in detail, but here is a simple example to give you an idea of how it works. More information can be found on the [LuaJIT](https://luajit.org/ext_ffi.html) website.
+
+```lua
+local ffi = require 'ffi'
+local evolved = require 'evolved'
+
+--
+--
+-- Define FFI double storage realloc and compmove functions
+--
+--
+
+local FFI_DOUBLE_TYPEOF = ffi.typeof('double')
+local FFI_DOUBLE_SIZEOF = ffi.sizeof(FFI_DOUBLE_TYPEOF)
+local FFI_DOUBLE_STORAGE_TYPEOF = ffi.typeof('double[?]')
+
+---@param src ffi.cdata*?
+---@param src_size integer
+---@param dst_size integer
+---@return ffi.cdata*?
+local function FFI_DOUBLE_STORAGE_REALLOC(src, src_size, dst_size)
+    if dst_size == 0 then
+        -- freeing the src storage, just let the GC handle it
+        return
+    end
+
+    -- to support 1-based indexing, allocate one extra element
+    local dst = ffi.new(FFI_DOUBLE_STORAGE_TYPEOF, dst_size + 1)
+
+    if src and src_size > 0 then
+        -- handle both expanding and shrinking
+        local min_size = math.min(src_size, dst_size)
+        ffi.copy(dst + 1, src + 1, min_size * FFI_DOUBLE_SIZEOF)
+    end
+
+    return dst
+end
+
+---@param src ffi.cdata*
+---@param f integer
+---@param e integer
+---@param t integer
+---@param dst ffi.cdata*
+local function FFI_DOUBLE_STORAGE_COMPMOVE(src, f, e, t, dst)
+    ffi.copy(dst + t, src + f, (e - f + 1) * FFI_DOUBLE_SIZEOF)
+end
+
+--
+--
+-- Define fragments with our custom FFI storages
+--
+--
+
+local POSITION_X = evolved.builder()
+    :default(0)
+    :realloc(FFI_DOUBLE_STORAGE_REALLOC)
+    :compmove(FFI_DOUBLE_STORAGE_COMPMOVE)
+    :build()
+
+local POSITION_Y = evolved.builder()
+    :default(0)
+    :realloc(FFI_DOUBLE_STORAGE_REALLOC)
+    :compmove(FFI_DOUBLE_STORAGE_COMPMOVE)
+    :build()
+
+local VELOCITY_X = evolved.builder()
+    :default(0)
+    :realloc(FFI_DOUBLE_STORAGE_REALLOC)
+    :compmove(FFI_DOUBLE_STORAGE_COMPMOVE)
+    :build()
+
+local VELOCITY_Y = evolved.builder()
+    :default(0)
+    :realloc(FFI_DOUBLE_STORAGE_REALLOC)
+    :compmove(FFI_DOUBLE_STORAGE_COMPMOVE)
+    :build()
+
+--
+--
+-- Define a movement system that uses these components
+--
+--
+
+local MOVEMENT_SYSTEM = evolved.builder()
+    :include(POSITION_X, POSITION_Y)
+    :include(VELOCITY_X, VELOCITY_Y)
+    :execute(function(chunk, entity_list, entity_count, delta_time)
+        local position_xs, position_ys = chunk:components(POSITION_X, POSITION_Y)
+        local velocity_xs, velocity_ys = chunk:components(VELOCITY_X, VELOCITY_Y)
+
+        for i = 1, entity_count do
+            local px, py = position_xs[i], position_ys[i]
+            local vx, vy = velocity_xs[i], velocity_ys[i]
+
+            px = px + vx * delta_time
+            py = py + vy * delta_time
+
+            position_xs[i], position_ys[i] = px, py
+        end
+    end):build()
+
+--
+--
+-- Spawn some entities with these components
+--
+--
+
+do
+    local entity_list, entity_count = evolved.builder()
+        :set(POSITION_X)
+        :set(POSITION_Y)
+        :set(VELOCITY_X)
+        :set(VELOCITY_Y)
+        :multi_build(10000)
+
+    for i = 1, entity_count do
+        local entity = entity_list[i]
+        evolved.set(entity, POSITION_X, math.random(0, 640))
+        evolved.set(entity, POSITION_Y, math.random(0, 480))
+        evolved.set(entity, VELOCITY_X, math.random(-100, 100))
+        evolved.set(entity, VELOCITY_Y, math.random(-100, 100))
+    end
+end
+
+--
+--
+-- Process the movement system with a delta time payload
+--
+--
+
+evolved.process_with(MOVEMENT_SYSTEM, 0.016)
+```
+
 ## Cheat Sheet
 
 ### Aliases
@@ -1170,6 +1311,9 @@ storage :: component[]
 
 default :: component
 duplicate :: {component -> component}
+
+realloc :: {storage?, integer, integer -> storage?}
+compmove :: {storage, integer, integer, integer, storage}
 
 execute :: {chunk, entity[], integer, any...}
 prologue :: {any...}
@@ -1199,6 +1343,9 @@ INTERNAL :: fragment
 
 DEFAULT :: fragment
 DUPLICATE :: fragment
+
+REALLOC :: fragment
+COMPMOVE :: fragment
 
 PREFAB :: fragment
 DISABLED :: fragment
@@ -1335,6 +1482,9 @@ builder_mt:internal :: builder
 builder_mt:default :: component -> builder
 builder_mt:duplicate :: {component -> component} -> builder
 
+builder_mt:realloc :: {storage?, integer, integer -> storage?} -> builder
+builder_mt:compmove :: {storage, integer, integer, integer, storage} -> builder
+
 builder_mt:prefab :: builder
 builder_mt:disabled :: builder
 
@@ -1360,6 +1510,10 @@ builder_mt:destruction_policy :: id -> builder
 ```
 
 ## Changelog
+
+### vX.Y.Z
+
+- Added the new [`evolved.REALLOC`](#evolvedrealloc) and [`evolved.COMPMOVE`](#evolvedcompmove) fragment traits that allow customizing component storages
 
 ### v1.7.0
 
@@ -1429,6 +1583,10 @@ builder_mt:destruction_policy :: id -> builder
 ### `evolved.DEFAULT`
 
 ### `evolved.DUPLICATE`
+
+### `evolved.REALLOC`
+
+### `evolved.COMPMOVE`
 
 ### `evolved.PREFAB`
 
@@ -2045,6 +2203,22 @@ function evolved.builder_mt:default(default) end
 ---@param duplicate evolved.duplicate
 ---@return evolved.builder builder
 function evolved.builder_mt:duplicate(duplicate) end
+```
+
+#### `evolved.builder_mt:realloc`
+
+```lua
+---@param realloc evolved.realloc
+---@return evolved.builder builder
+function evolved.builder_mt:realloc(realloc) end
+```
+
+#### `evolved.builder_mt:compmove`
+
+```lua
+---@param compmove evolved.compmove
+---@return evolved.builder builder
+function evolved.builder_mt:compmove(compmove) end
 ```
 
 #### `evolved.builder_mt:prefab`
