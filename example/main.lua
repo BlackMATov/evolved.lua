@@ -52,25 +52,28 @@ evolved.builder()
     :name('SYSTEMS.STARTUP')
     :group(STAGES.ON_SETUP)
     :prologue(function()
-        local screen_width, screen_height = love.graphics.getDimensions()
+        evolved.multi_clone(500, PREFABS.CIRCLE, nil, function(chunk, b_place, e_place)
+            local screen_width, screen_height = love.graphics.getDimensions()
 
-        local circle_list, circle_count = evolved.multi_clone(100, PREFABS.CIRCLE)
+            ---@type number[], number[]
+            local position_xs, position_ys = chunk:components(
+                FRAGMENTS.POSITION_X, FRAGMENTS.POSITION_Y)
 
-        for i = 1, circle_count do
-            local circle = circle_list[i]
+            ---@type number[], number[]
+            local velocity_xs, velocity_ys = chunk:components(
+                FRAGMENTS.VELOCITY_X, FRAGMENTS.VELOCITY_Y)
 
-            local px = math.random() * screen_width
-            local py = math.random() * screen_height
+            for i = b_place, e_place do
+                local px = math.random() * screen_width
+                local py = math.random() * screen_height
 
-            local vx = math.random(-100, 100)
-            local vy = math.random(-100, 100)
+                local vx = math.random(-100, 100)
+                local vy = math.random(-100, 100)
 
-            evolved.set(circle, FRAGMENTS.POSITION_X, px)
-            evolved.set(circle, FRAGMENTS.POSITION_Y, py)
-
-            evolved.set(circle, FRAGMENTS.VELOCITY_X, vx)
-            evolved.set(circle, FRAGMENTS.VELOCITY_Y, vy)
-        end
+                position_xs[i], position_ys[i] = px, py
+                velocity_xs[i], velocity_ys[i] = vx, vy
+            end
+        end)
     end):build()
 
 evolved.builder()
@@ -124,7 +127,7 @@ evolved.builder()
 
         for i = 1, entity_count do
             local x, y = position_xs[i], position_ys[i]
-            love.graphics.circle('fill', x, y, 10)
+            love.graphics.circle('fill', x, y, 5)
         end
     end):build()
 
