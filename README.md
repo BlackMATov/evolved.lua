@@ -63,7 +63,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
-  - [vX.Y.Z](#vxyz)
+  - [v1.8.0](#v180)
   - [v1.7.0](#v170)
   - [v1.6.0](#v160)
   - [v1.5.0](#v150)
@@ -1565,7 +1565,7 @@ builder_mt:destruction_policy :: id -> builder
 
 ## Changelog
 
-### vX.Y.Z
+### v1.8.0
 
 - Added the new [`evolved.REALLOC`](#evolvedrealloc) and [`evolved.COMPMOVE`](#evolvedcompmove) fragment traits that allow customizing component storages
 - Added `component_mapper` argument to the spawning and cloning functions that allows filling components in chunks during the operation
