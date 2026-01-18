@@ -31,14 +31,30 @@
     end
 
     interface Builder
-        build: function(self: Builder, prefab?: Entity): Entity
-        multi_build: function(self: Builder, entity_count: integer, prefab?: Entity): { Entity }, integer
+        build: function(self: Builder,
+            prefab?: Entity,
+            component_mapper?: function(Chunk, integer)): Entity
 
-        spawn: function(self: Builder): Entity
-        multi_spawn: function(self: Builder, entity_count: integer): { Entity }, integer
+        multi_build: function(self: Builder,
+            entity_count: integer,
+            prefab?: Entity,
+            component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
 
-        clone: function(self: Builder, prefab: Entity): Entity
-        multi_clone: function(self: Builder, entity_count: integer, prefab: Entity): { Entity }, integer
+        spawn: function(self: Builder,
+            component_mapper?: function(Chunk, integer)): Entity
+
+        multi_spawn: function(self: Builder,
+            entity_count: integer,
+            component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
+
+        clone: function(self: Builder,
+            prefab: Entity,
+            component_mapper?: function(Chunk, integer)): Entity
+
+        multi_clone: function(self: Builder,
+            entity_count: integer,
+            prefab: Entity,
+            component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
 
         has: function(self: Builder, fragment: Fragment): boolean
         has_all: function(self: Builder, ...: Fragment): boolean
@@ -63,6 +79,9 @@
 
         default: function<Component>(self: Builder, default: Component): Builder
         duplicate: function<Component>(self: Builder, duplicate: function(Component): Component): Builder
+
+        realloc: function<Component>(self: Builder, realloc: function({ Component } | nil, integer, integer): { Component } | nil): Builder
+        compmove: function<Component>(self: Builder, compmove: function({ Component }, integer, integer, integer, { Component })): Builder
 
         prefab: function(self: Builder): Builder
         disabled: function(self: Builder): Builder
@@ -97,6 +116,9 @@
 
     DEFAULT: Fragment
     DUPLICATE: Fragment
+
+    REALLOC: Fragment
+    COMPMOVE: Fragment
 
     PREFAB: Fragment
     DISABLED: Fragment
@@ -133,11 +155,25 @@
     commit: function(): boolean
     cancel: function(): boolean
 
-    spawn: function(components?: { Fragment: any }): Entity
-    multi_spawn: function(entity_count: integer, components?: { Fragment: any }): { Entity }, integer
+    spawn: function(
+        component_table?: { Fragment: any },
+        component_mapper?: function(Chunk, integer)): Entity
 
-    clone: function(prefab: Entity, components?: { Fragment: any }): Entity
-    multi_clone: function(entity_count: integer, prefab: Entity, components?: { Fragment: any }): { Entity }, integer
+    multi_spawn: function(
+        entity_count: integer,
+        component_table?: { Fragment: any },
+        component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
+
+    clone: function(
+        prefab: Entity,
+        component_table?: { Fragment: any },
+        component_mapper?: function(Chunk, integer)): Entity
+
+    multi_clone: function(
+        entity_count: integer,
+        prefab: Entity,
+        component_table?: { Fragment: any },
+        component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
 
     alive: function(entity: Entity): boolean
     alive_all: function(...: Entity): boolean

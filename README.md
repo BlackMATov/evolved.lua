@@ -35,6 +35,7 @@
   - [Structural Changes](#structural-changes)
     - [Spawning Entities](#spawning-entities)
     - [Entity Builders](#entity-builders)
+    - [Multi-Entity Spawning](#multi-entity-spawning)
   - [Access Operations](#access-operations)
   - [Iterating Over Fragments](#iterating-over-fragments)
   - [Modifying Operations](#modifying-operations)
@@ -53,6 +54,7 @@
     - [Shared Components](#shared-components)
     - [Fragment Requirements](#fragment-requirements)
     - [Destruction Policies](#destruction-policies)
+    - [Custom Component Storages](#custom-component-storages)
 - [Cheat Sheet](#cheat-sheet)
   - [Aliases](#aliases)
   - [Predefs](#predefs)
@@ -61,6 +63,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
+  - [v1.8.0](#v180)
   - [v1.7.0](#v170)
   - [v1.6.0](#v160)
   - [v1.5.0](#v150)
@@ -418,17 +421,19 @@ You should try to avoid structural changes, especially in performance-critical c
 #### Spawning Entities
 
 ```lua
----@param components? table<evolved.fragment, evolved.component>
+---@param component_table? table<evolved.fragment, evolved.component>
+---@param component_mapper? fun(chunk: evolved.chunk, place: integer)
 ---@return evolved.entity
-function evolved.spawn(components) end
+function evolved.spawn(component_table, component_mapper) end
 
 ---@param prefab evolved.entity
----@param components? table<evolved.fragment, evolved.component>
+---@param component_table? table<evolved.fragment, evolved.component>
+---@param component_mapper? fun(chunk: evolved.chunk, place: integer)
 ---@return evolved.entity
-function evolved.clone(prefab, components) end
+function evolved.clone(prefab, component_table, component_mapper) end
 ```
 
-The [`evolved.spawn`](#evolvedspawn) function allows you to spawn an entity with all the necessary fragments. It takes a table of components as an argument, where the keys are fragments and the values are components. By the way, you don't need to create this `components` table every time; consider using a predefined table for maximum performance.
+The [`evolved.spawn`](#evolvedspawn) function allows you to spawn an entity with all the necessary fragments. It takes a table of components as an argument, where the keys are fragments and the values are components. By the way, you don't need to create this `component_table` every time; consider using a predefined table for maximum performance.
 
 You can also use the [`evolved.clone`](#evolvedclone) function to clone an existing entity. This is useful for creating entities with the same fragments as an existing entity but with different components.
 
@@ -471,6 +476,54 @@ local enemy = evolved.builder()
 ```
 
 Builders can be reused, so you can create a builder with a specific set of fragments and components and then use it to spawn multiple entities with the same fragments and components.
+
+#### Multi-Entity Spawning
+
+When you need to spawn multiple entities with identical fragments, use `multi_spawn` and `multi_clone` to optimize performance and reduce overhead.
+
+```lua
+---@param entity_count integer
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+---@return evolved.entity[] entity_list
+---@return integer entity_count
+function evolved.multi_spawn(entity_count, component_table, component_mapper) end
+
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+---@return evolved.entity[] entity_list
+---@return integer entity_count
+function evolved.multi_clone(entity_count, prefab, component_table, component_mapper) end
+```
+
+These functions behave like their single-entity counterparts, but they allow you to spawn or clone multiple entities in one call. This approach minimizes the overhead of repeated function calls and structural changes, improving performance when handling large numbers of entities.
+
+Typically, when spawning multiple entities, they share the same set of fragments, but their components can differ. You can achieve this by providing a `component_mapper` function, which receives the chunk and the range of places for the newly spawned entities. This avoids many `evolved.set` calls after spawning, which can be costly when creating many entities.
+
+Here is a small example of using `evolved.multi_spawn` with a `component_mapper`:
+
+```lua
+local evolved = require 'evolved'
+
+local position_x, position_y = evolved.id(2)
+
+evolved.multi_spawn(1000, {
+    [position_x] = 0,
+    [position_y] = 0,
+}, function(chunk, b_place, e_place)
+    local x_components = chunk:components(position_x)
+    local y_components = chunk:components(position_y)
+
+    for i = b_place, e_place do
+        x_components[i] = math.random(-100, 100)
+        y_components[i] = math.random(-100, 100)
+    end
+end)
+```
+
+Of course, you can use `evolved.multi_clone` in the same way. Builders can also be used for multi-entity spawning and cloning by calling the corresponding methods on the builder object.
 
 ### Access Operations
 
@@ -1153,6 +1206,145 @@ evolved.destroy(world)
 assert(not evolved.alive(entity))
 ```
 
+#### Custom Component Storages
+
+In some cases, you might want custom storages for fragment components. For example, you might want to store components in a specialized way for performance reasons. The library provides two fragment traits for this purpose: [`evolved.REALLOC`](#evolvedrealloc) and [`evolved.COMPMOVE`](#evolvedcompmove).
+
+The [`evolved.REALLOC`](#evolvedrealloc) trait expects a function that is called when the fragment storage needs to be reallocated. The [`evolved.COMPMOVE`](#evolvedcompmove) trait expects a function that is called when components need to be moved from one storage to another.
+
+A canonical example of using custom storages is implementing a fragment that stores components in an FFI-backed storage for better processing performance in LuaJIT. This is an advanced topic and requires a good understanding of LuaJIT FFI and memory management. So I won't cover it here in detail, but here is a simple example to give you an idea of how it works. More information can be found on the [LuaJIT](https://luajit.org/ext_ffi.html) website.
+
+```lua
+local ffi = require 'ffi'
+local evolved = require 'evolved'
+
+--
+--
+-- Define FFI double storage realloc and compmove functions
+--
+--
+
+local FFI_DOUBLE_TYPEOF = ffi.typeof('double')
+local FFI_DOUBLE_SIZEOF = ffi.sizeof(FFI_DOUBLE_TYPEOF)
+local FFI_DOUBLE_STORAGE_TYPEOF = ffi.typeof('double[?]')
+
+---@param src ffi.cdata*?
+---@param src_size integer
+---@param dst_size integer
+---@return ffi.cdata*?
+local function FFI_DOUBLE_STORAGE_REALLOC(src, src_size, dst_size)
+    if dst_size == 0 then
+        -- freeing the src storage, just let the GC handle it
+        return
+    end
+
+    -- to support 1-based indexing, allocate one extra element
+    local dst = ffi.new(FFI_DOUBLE_STORAGE_TYPEOF, dst_size + 1)
+
+    if src and src_size > 0 then
+        -- handle both expanding and shrinking
+        local min_size = math.min(src_size, dst_size)
+        ffi.copy(dst + 1, src + 1, min_size * FFI_DOUBLE_SIZEOF)
+    end
+
+    return dst
+end
+
+---@param src ffi.cdata*
+---@param f integer
+---@param e integer
+---@param t integer
+---@param dst ffi.cdata*
+local function FFI_DOUBLE_STORAGE_COMPMOVE(src, f, e, t, dst)
+    ffi.copy(dst + t, src + f, (e - f + 1) * FFI_DOUBLE_SIZEOF)
+end
+
+--
+--
+-- Define fragments with our custom FFI storages
+--
+--
+
+local POSITION_X = evolved.builder()
+    :default(0)
+    :realloc(FFI_DOUBLE_STORAGE_REALLOC)
+    :compmove(FFI_DOUBLE_STORAGE_COMPMOVE)
+    :build()
+
+local POSITION_Y = evolved.builder()
+    :default(0)
+    :realloc(FFI_DOUBLE_STORAGE_REALLOC)
+    :compmove(FFI_DOUBLE_STORAGE_COMPMOVE)
+    :build()
+
+local VELOCITY_X = evolved.builder()
+    :default(0)
+    :realloc(FFI_DOUBLE_STORAGE_REALLOC)
+    :compmove(FFI_DOUBLE_STORAGE_COMPMOVE)
+    :build()
+
+local VELOCITY_Y = evolved.builder()
+    :default(0)
+    :realloc(FFI_DOUBLE_STORAGE_REALLOC)
+    :compmove(FFI_DOUBLE_STORAGE_COMPMOVE)
+    :build()
+
+--
+--
+-- Define a movement system that uses these components
+--
+--
+
+local MOVEMENT_SYSTEM = evolved.builder()
+    :include(POSITION_X, POSITION_Y)
+    :include(VELOCITY_X, VELOCITY_Y)
+    :execute(function(chunk, entity_list, entity_count, delta_time)
+        local position_xs, position_ys = chunk:components(POSITION_X, POSITION_Y)
+        local velocity_xs, velocity_ys = chunk:components(VELOCITY_X, VELOCITY_Y)
+
+        for i = 1, entity_count do
+            local px, py = position_xs[i], position_ys[i]
+            local vx, vy = velocity_xs[i], velocity_ys[i]
+
+            px = px + vx * delta_time
+            py = py + vy * delta_time
+
+            position_xs[i], position_ys[i] = px, py
+        end
+    end):build()
+
+--
+--
+-- Spawn some entities with these components
+--
+--
+
+evolved.builder()
+    :set(POSITION_X)
+    :set(POSITION_Y)
+    :set(VELOCITY_X)
+    :set(VELOCITY_Y)
+    :multi_spawn(10000, function(chunk, b_place, e_place)
+        local position_xs, position_ys = chunk:components(POSITION_X, POSITION_Y)
+        local velocity_xs, velocity_ys = chunk:components(VELOCITY_X, VELOCITY_Y)
+
+        for place = b_place, e_place do
+            position_xs[place] = math.random(0, 640)
+            position_ys[place] = math.random(0, 480)
+            velocity_xs[place] = math.random(-100, 100)
+            velocity_ys[place] = math.random(-100, 100)
+        end
+    end)
+
+--
+--
+-- Process the movement system with a delta time payload
+--
+--
+
+evolved.process_with(MOVEMENT_SYSTEM, 0.016)
+```
+
 ## Cheat Sheet
 
 ### Aliases
@@ -1168,8 +1360,14 @@ system :: id
 component :: any
 storage :: component[]
 
+component_table :: <fragment, component>
+component_mapper :: {chunk, integer, integer}
+
 default :: component
 duplicate :: {component -> component}
+
+realloc :: {storage?, integer, integer -> storage?}
+compmove :: {storage, integer, integer, integer, storage}
 
 execute :: {chunk, entity[], integer, any...}
 prologue :: {any...}
@@ -1199,6 +1397,9 @@ INTERNAL :: fragment
 
 DEFAULT :: fragment
 DUPLICATE :: fragment
+
+REALLOC :: fragment
+COMPMOVE :: fragment
 
 PREFAB :: fragment
 DISABLED :: fragment
@@ -1240,11 +1441,11 @@ depth :: integer
 commit :: boolean
 cancel :: boolean
 
-spawn :: <fragment, component>? -> entity
-multi_spawn :: integer, <fragment, component>? -> entity[], integer
+spawn :: component_table?, component_mapper? -> entity
+multi_spawn :: integer, component_table?, component_mapper? -> entity[], integer
 
-clone :: entity, <fragment, component>? -> entity
-multi_clone :: integer, entity, <fragment, component>? -> entity[], integer
+clone :: entity, component_table?, component_mapper? -> entity
+multi_clone :: integer, entity, component_table?, component_mapper? -> entity[], integer
 
 alive :: entity -> boolean
 alive_all :: entity... -> boolean
@@ -1258,7 +1459,7 @@ has :: entity, fragment -> boolean
 has_all :: entity, fragment... -> boolean
 has_any :: entity, fragment... -> boolean
 
-get :: entity, fragment...  -> component...
+get :: entity, fragment... -> component...
 
 set :: entity, fragment, component -> ()
 remove :: entity, fragment... -> ()
@@ -1306,14 +1507,14 @@ chunk_mt:components :: fragment... -> storage...
 ```
 builder :: builder
 
-builder_mt:build :: entity? -> entity
-builder_mt:multi_build :: integer, entity? -> entity[], integer
+builder_mt:build :: entity?, component_mapper? -> entity
+builder_mt:multi_build :: integer, entity?, component_mapper? -> entity[], integer
 
-builder_mt:spawn :: entity
-builder_mt:multi_spawn :: integer -> entity[], integer
+builder_mt:spawn :: component_mapper? -> entity
+builder_mt:multi_spawn :: integer, component_mapper? -> entity[], integer
 
-builder_mt:clone :: entity -> entity
-builder_mt:multi_clone :: integer, entity -> entity[], integer
+builder_mt:clone :: entity, component_mapper? -> entity
+builder_mt:multi_clone :: integer, entity, component_mapper? -> entity[], integer
 
 builder_mt:has :: fragment -> boolean
 builder_mt:has_all :: fragment... -> boolean
@@ -1334,6 +1535,9 @@ builder_mt:internal :: builder
 
 builder_mt:default :: component -> builder
 builder_mt:duplicate :: {component -> component} -> builder
+
+builder_mt:realloc :: {storage?, integer, integer -> storage?} -> builder
+builder_mt:compmove :: {storage, integer, integer, integer, storage} -> builder
 
 builder_mt:prefab :: builder
 builder_mt:disabled :: builder
@@ -1360,6 +1564,11 @@ builder_mt:destruction_policy :: id -> builder
 ```
 
 ## Changelog
+
+### v1.8.0
+
+- Added the new [`evolved.REALLOC`](#evolvedrealloc) and [`evolved.COMPMOVE`](#evolvedcompmove) fragment traits that allow customizing component storages
+- Added `component_mapper` argument to the spawning and cloning functions that allows filling components in chunks during the operation
 
 ### v1.7.0
 
@@ -1429,6 +1638,10 @@ builder_mt:destruction_policy :: id -> builder
 ### `evolved.DEFAULT`
 
 ### `evolved.DUPLICATE`
+
+### `evolved.REALLOC`
+
+### `evolved.COMPMOVE`
 
 ### `evolved.PREFAB`
 
@@ -1538,28 +1751,31 @@ function evolved.cancel() end
 ### `evolved.spawn`
 
 ```lua
----@param components? table<evolved.fragment, evolved.component>
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity entity
-function evolved.spawn(components) end
+function evolved.spawn(component_table, component_mapper) end
 ```
 
 ### `evolved.multi_spawn`
 
 ```lua
 ---@param entity_count integer
----@param components? table<evolved.fragment, evolved.component>
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
-function evolved.multi_spawn(entity_count, components) end
+function evolved.multi_spawn(entity_count, component_table, component_mapper) end
 ```
 
 ### `evolved.clone`
 
 ```lua
 ---@param prefab evolved.entity
----@param components? table<evolved.fragment, evolved.component>
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity entity
-function evolved.clone(prefab, components) end
+function evolved.clone(prefab, component_table, component_mapper) end
 ```
 
 ### `evolved.multi_clone`
@@ -1567,10 +1783,11 @@ function evolved.clone(prefab, components) end
 ```lua
 ---@param entity_count integer
 ---@param prefab evolved.entity
----@param components? table<evolved.fragment, evolved.component>
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
-function evolved.multi_clone(entity_count, prefab, components) end
+function evolved.multi_clone(entity_count, prefab, component_table, component_mapper) end
 ```
 
 ### `evolved.alive`
@@ -1887,8 +2104,9 @@ function evolved.builder() end
 
 ```lua
 ---@param prefab? evolved.entity
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity entity
-function evolved.builder_mt:build(prefab) end
+function evolved.builder_mt:build(prefab, component_mapper) end
 ```
 
 ### `evolved.builder_mt:multi_build`
@@ -1896,33 +2114,37 @@ function evolved.builder_mt:build(prefab) end
 ```lua
 ---@param entity_count integer
 ---@param prefab? evolved.entity
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
-function evolved.builder_mt:multi_build(entity_count, prefab) end
+function evolved.builder_mt:multi_build(entity_count, prefab, component_mapper) end
 ```
 
 #### `evolved.builder_mt:spawn`
 
 ```lua
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity entity
-function evolved.builder_mt:spawn() end
+function evolved.builder_mt:spawn(component_mapper) end
 ```
 
 #### `evolved.builder_mt:multi_spawn`
 
 ```lua
 ---@param entity_count integer
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
-function evolved.builder_mt:multi_spawn(entity_count) end
+function evolved.builder_mt:multi_spawn(entity_count, component_mapper) end
 ```
 
 #### `evolved.builder_mt:clone`
 
 ```lua
 ---@param prefab evolved.entity
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity entity
-function evolved.builder_mt:clone(prefab) end
+function evolved.builder_mt:clone(prefab, component_mapper) end
 ```
 
 #### `evolved.builder_mt:multi_clone`
@@ -1930,9 +2152,10 @@ function evolved.builder_mt:clone(prefab) end
 ```lua
 ---@param entity_count integer
 ---@param prefab evolved.entity
+---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
-function evolved.builder_mt:multi_clone(entity_count, prefab) end
+function evolved.builder_mt:multi_clone(entity_count, prefab, component_mapper) end
 ```
 
 #### `evolved.builder_mt:has`
@@ -2045,6 +2268,22 @@ function evolved.builder_mt:default(default) end
 ---@param duplicate evolved.duplicate
 ---@return evolved.builder builder
 function evolved.builder_mt:duplicate(duplicate) end
+```
+
+#### `evolved.builder_mt:realloc`
+
+```lua
+---@param realloc evolved.realloc
+---@return evolved.builder builder
+function evolved.builder_mt:realloc(realloc) end
+```
+
+#### `evolved.builder_mt:compmove`
+
+```lua
+---@param compmove evolved.compmove
+---@return evolved.builder builder
+function evolved.builder_mt:compmove(compmove) end
 ```
 
 #### `evolved.builder_mt:prefab`
