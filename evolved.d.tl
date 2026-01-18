@@ -31,14 +31,30 @@
     end
 
     interface Builder
-        build: function(self: Builder, prefab?: Entity): Entity
-        multi_build: function(self: Builder, entity_count: integer, prefab?: Entity): { Entity }, integer
+        build: function(self: Builder,
+            prefab?: Entity,
+            component_mapper?: function(Chunk, integer)): Entity
 
-        spawn: function(self: Builder): Entity
-        multi_spawn: function(self: Builder, entity_count: integer): { Entity }, integer
+        multi_build: function(self: Builder,
+            entity_count: integer,
+            prefab?: Entity,
+            component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
 
-        clone: function(self: Builder, prefab: Entity): Entity
-        multi_clone: function(self: Builder, entity_count: integer, prefab: Entity): { Entity }, integer
+        spawn: function(self: Builder,
+            component_mapper?: function(Chunk, integer)): Entity
+
+        multi_spawn: function(self: Builder,
+            entity_count: integer,
+            component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
+
+        clone: function(self: Builder,
+            prefab: Entity,
+            component_mapper?: function(Chunk, integer)): Entity
+
+        multi_clone: function(self: Builder,
+            entity_count: integer,
+            prefab: Entity,
+            component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
 
         has: function(self: Builder, fragment: Fragment): boolean
         has_all: function(self: Builder, ...: Fragment): boolean
@@ -139,11 +155,25 @@
     commit: function(): boolean
     cancel: function(): boolean
 
-    spawn: function(components?: { Fragment: any }): Entity
-    multi_spawn: function(entity_count: integer, components?: { Fragment: any }): { Entity }, integer
+    spawn: function(
+        component_table?: { Fragment: any },
+        component_mapper?: function(Chunk, integer)): Entity
 
-    clone: function(prefab: Entity, components?: { Fragment: any }): Entity
-    multi_clone: function(entity_count: integer, prefab: Entity, components?: { Fragment: any }): { Entity }, integer
+    multi_spawn: function(
+        entity_count: integer,
+        component_table?: { Fragment: any },
+        component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
+
+    clone: function(
+        prefab: Entity,
+        component_table?: { Fragment: any },
+        component_mapper?: function(Chunk, integer)): Entity
+
+    multi_clone: function(
+        entity_count: integer,
+        prefab: Entity,
+        component_table?: { Fragment: any },
+        component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
 
     alive: function(entity: Entity): boolean
     alive_all: function(...: Entity): boolean

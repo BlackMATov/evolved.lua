@@ -35,6 +35,7 @@
   - [Structural Changes](#structural-changes)
     - [Spawning Entities](#spawning-entities)
     - [Entity Builders](#entity-builders)
+    - [Multi-Entity Spawning](#multi-entity-spawning)
   - [Access Operations](#access-operations)
   - [Iterating Over Fragments](#iterating-over-fragments)
   - [Modifying Operations](#modifying-operations)
@@ -475,6 +476,54 @@ local enemy = evolved.builder()
 ```
 
 Builders can be reused, so you can create a builder with a specific set of fragments and components and then use it to spawn multiple entities with the same fragments and components.
+
+#### Multi-Entity Spawning
+
+When you need to spawn multiple entities with identical fragments, use `multi_spawn` and `multi_clone` to optimize performance and reduce overhead.
+
+```lua
+---@param entity_count integer
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+---@return evolved.entity[] entity_list
+---@return integer entity_count
+function evolved.multi_spawn(entity_count, component_table, component_mapper) end
+
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+---@return evolved.entity[] entity_list
+---@return integer entity_count
+function evolved.multi_clone(entity_count, prefab, component_table, component_mapper) end
+```
+
+These functions behave like their single-entity counterparts, but they allow you to spawn or clone multiple entities in one call. This approach minimizes the overhead of repeated function calls and structural changes, improving performance when handling large numbers of entities.
+
+Typically, when spawning multiple entities, they share the same set of fragments, but their components can differ. You can achieve this by providing a `component_mapper` function, which receives the chunk and the range of places for the newly spawned entities. This avoids many `evolved.set` calls after spawning, which can be costly when creating many entities.
+
+Here is a small example of using `evolved.multi_spawn` with a `component_mapper`:
+
+```lua
+local evolved = require 'evolved'
+
+local position_x, position_y = evolved.id(2)
+
+evolved.multi_spawn(1000, {
+    [position_x] = 0,
+    [position_y] = 0,
+}, function(chunk, b_place, e_place)
+    local x_components = chunk:components(position_x)
+    local y_components = chunk:components(position_y)
+
+    for i = b_place, e_place do
+        x_components[i] = math.random(-100, 100)
+        y_components[i] = math.random(-100, 100)
+    end
+end)
+```
+
+Of course, you can use `evolved.multi_clone` in the same way. Builders can also be used for multi-entity spawning and cloning by calling the corresponding methods on the builder object.
 
 ### Access Operations
 
@@ -1519,6 +1568,7 @@ builder_mt:destruction_policy :: id -> builder
 ### vX.Y.Z
 
 - Added the new [`evolved.REALLOC`](#evolvedrealloc) and [`evolved.COMPMOVE`](#evolvedcompmove) fragment traits that allow customizing component storages
+- Added `component_mapper` argument to the spawning and cloning functions that allows filling components in chunks during the operation
 
 ### v1.7.0
 
