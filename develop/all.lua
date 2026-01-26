@@ -16,6 +16,7 @@ require 'develop.testing.system_as_query_tests'
 
 require 'develop.benchmarks.clone_bmarks'
 require 'develop.benchmarks.common_bmarks'
+require 'develop.benchmarks.id_bmarks'
 require 'develop.benchmarks.migration_bmarks'
 require 'develop.benchmarks.process_bmarks'
 require 'develop.benchmarks.spawn_bmarks'
