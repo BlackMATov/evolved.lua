@@ -63,6 +63,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
+  - [vX.Y.Z](#vxyz)
   - [v1.8.0](#v180)
   - [v1.7.0](#v170)
   - [v1.6.0](#v160)
@@ -1564,6 +1565,10 @@ builder_mt:destruction_policy :: id -> builder
 ```
 
 ## Changelog
+
+### vX.Y.Z
+
+- Performance improvements of the [`evolved.destroy`](#evolveddestroy) and [`evolved.batch_destroy`](#evolvedbatch_destroy) functions
 
 ### v1.8.0
 
