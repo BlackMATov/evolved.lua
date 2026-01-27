@@ -2302,27 +2302,66 @@ do
     evo.set(e2, f2, 44)
 
     do
-        local iter, state = evo.execute(q)
-        local chunk = iter(state)
-        assert(chunk and chunk ~= evo.chunk(f1))
+        local e1_count = 0
+        local e2_count = 0
+
+        for _, entity_list, entity_count in evo.execute(q) do
+            for i = 1, entity_count do
+                if entity_list[i] == e1 then
+                    e1_count = e1_count + 1
+                elseif entity_list[i] == e2 then
+                    e2_count = e2_count + 1
+                end
+            end
+        end
+
+        assert(e1_count == 1)
+        assert(e2_count == 1)
     end
 
     evo.set(q, evo.EXCLUDES, { f2 })
 
     do
-        local iter, state = evo.execute(q)
-        local chunk = iter(state)
-        assert(chunk and chunk ~= evo.chunk(f1))
+        local e1_count = 0
+        local e2_count = 0
+
+        for chunk, entity_list, entity_count in evo.execute(q) do
+            assert(not chunk:has(f2))
+
+            for i = 1, entity_count do
+                if entity_list[i] == e1 then
+                    e1_count = e1_count + 1
+                elseif entity_list[i] == e2 then
+                    e2_count = e2_count + 1
+                end
+            end
+        end
+
+        assert(e1_count == 1)
+        assert(e2_count == 0)
     end
 
     evo.set(q, evo.INCLUDES, { f1 })
 
     do
-        local iter, state = evo.execute(q)
-        local chunk, entity_list, entity_count = iter(state)
-        assert(chunk == evo.chunk(f1))
-        assert(entity_list and entity_list[1] == e1)
-        assert(entity_count == 1)
+        local e1_count = 0
+        local e2_count = 0
+
+        for chunk, entity_list, entity_count in evo.execute(q) do
+            assert(chunk:has(f1))
+            assert(not chunk:has(f2))
+
+            for i = 1, entity_count do
+                if entity_list[i] == e1 then
+                    e1_count = e1_count + 1
+                elseif entity_list[i] == e2 then
+                    e2_count = e2_count + 1
+                end
+            end
+        end
+
+        assert(e1_count == 1)
+        assert(e2_count == 0)
     end
 end
 

@@ -131,7 +131,10 @@ local __defer_points = {} ---@type integer[]
 local __defer_length = 0 ---@type integer
 local __defer_bytecode = {} ---@type any[]
 
-local __root_chunks = {} ---@type table<evolved.fragment, evolved.chunk>
+local __root_set = {} ---@type table<evolved.fragment, integer>
+local __root_list = {} ---@type evolved.chunk[]
+local __root_count = 0 ---@type integer
+
 local __major_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
 local __minor_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
 
@@ -1281,11 +1284,17 @@ function __new_chunk(chunk_parent, chunk_fragment)
     end
 
     if not chunk_parent then
-        if __root_chunks[chunk_fragment] ~= nil then
-            __error_fmt('unexpected root chunk %s',
-                __lua_tostring(__root_chunks[chunk_fragment]))
+        local existing_root_index = __root_set[chunk_fragment]
+        local existing_root_chunk = __root_list[existing_root_index]
+
+        if existing_root_chunk ~= nil then
+            __error_fmt('unexpected root chunk (%s)',
+                __lua_tostring(existing_root_chunk))
         end
-        __root_chunks[chunk_fragment] = chunk
+
+        __root_count = __root_count + 1
+        __root_set[chunk_fragment] = __root_count
+        __root_list[__root_count] = chunk
     end
 
     do
@@ -1877,7 +1886,7 @@ end
 ---@nodiscard
 function __chunk_with_fragment(chunk, fragment)
     if not chunk then
-        local root_chunk = __root_chunks[fragment]
+        local root_chunk = __root_list[__root_set[fragment]]
         return root_chunk or __new_chunk(nil, fragment)
     end
 
@@ -2063,7 +2072,7 @@ end
 ---@return evolved.chunk
 ---@nodiscard
 function __chunk_fragments(head_fragment, ...)
-    local chunk = __root_chunks[head_fragment]
+    local chunk = __root_list[__root_set[head_fragment]]
         or __new_chunk(nil, head_fragment)
 
     for tail_fragment_index = 1, __lua_select('#', ...) do
@@ -2086,7 +2095,7 @@ function __chunk_components(components)
         return
     end
 
-    local chunk = __root_chunks[head_fragment]
+    local chunk = __root_list[__root_set[head_fragment]]
         or __new_chunk(nil, head_fragment)
 
     for tail_fragment in __lua_next, components, head_fragment do
@@ -2946,11 +2955,23 @@ function __purge_chunk(chunk)
     local without_fragment_edges = chunk.__without_fragment_edges
 
     if not chunk_parent then
-        if __root_chunks[chunk_fragment] ~= chunk then
-            __error_fmt('unexpected root chunk %s',
-                __lua_tostring(__root_chunks[chunk_fragment]))
+        local existing_root_index = __root_set[chunk_fragment]
+        local existing_root_chunk = __root_list[existing_root_index]
+
+        if existing_root_chunk ~= chunk then
+            __error_fmt('unexpected root chunk (%s)',
+                __lua_tostring(existing_root_chunk))
         end
-        __root_chunks[chunk_fragment] = nil
+
+        for root_index = existing_root_index, __root_count - 1 do
+            local next_root = __root_list[root_index + 1]
+            __root_set[next_root.__fragment] = root_index
+            __root_list[root_index] = next_root
+        end
+
+        __root_set[chunk_fragment] = nil
+        __root_list[__root_count] = nil
+        __root_count = __root_count - 1
     end
 
     do
@@ -5885,7 +5906,9 @@ function __evolved_execute(query)
             chunk_stack_size = chunk_stack_size + query_chunk_count
         end
     elseif query_exclude_count > 0 then
-        for _, root_chunk in __lua_next, __root_chunks do
+        for root_index = 1, __root_count do
+            local root_chunk = __root_list[root_index]
+
             local is_root_chunk_matched =
                 not root_chunk.__has_explicit_fragments and
                 not query_exclude_set[root_chunk.__fragment]
@@ -5896,7 +5919,9 @@ function __evolved_execute(query)
             end
         end
     else
-        for _, root_chunk in __lua_next, __root_chunks do
+        for root_index = 1, __root_count do
+            local root_chunk = __root_list[root_index]
+
             local is_root_chunk_matched =
                 not root_chunk.__has_explicit_fragments
 
@@ -5997,7 +6022,9 @@ function __evolved_collect_garbage()
         local postorder_chunk_stack ---@type evolved.chunk[]?
         local postorder_chunk_stack_size = 0
 
-        for _, root_chunk in __lua_next, __root_chunks do
+        for root_index = 1, __root_count do
+            local root_chunk = __root_list[root_index]
+
             if not working_chunk_stack then
                 ---@type evolved.chunk[]
                 working_chunk_stack = __acquire_table(__table_pool_tag.chunk_list)
