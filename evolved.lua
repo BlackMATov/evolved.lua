@@ -1,7 +1,7 @@
 local evolved = {
     __HOMEPAGE = 'https://github.com/BlackMATov/evolved.lua',
     __DESCRIPTION = 'Evolved ECS (Entity-Component-System) for Lua',
-    __VERSION = '1.8.0',
+    __VERSION = '1.9.0',
     __LICENSE = [[
         MIT License
 
