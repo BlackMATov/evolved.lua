@@ -10,7 +10,6 @@
 
 - We should have a way to not copy components on deferred spawn/clone
 - Having a light version of the gargabe collector can be useful for some use-cases
-- We can shrink the table pool tables on garbage collection if they are too large
 - Basic default component value as true looks awful, should we use something else?
 
 ## Known Issues

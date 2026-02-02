@@ -702,6 +702,19 @@ local __table_pool_tag = {
     __count = 9,
 }
 
+---@type table<evolved.table_pool_tag, integer>
+local __table_pool_reserve = {
+    [__table_pool_tag.bytecode] = 16,
+    [__table_pool_tag.chunk_list] = 16,
+    [__table_pool_tag.system_list] = 16,
+    [__table_pool_tag.each_state] = 16,
+    [__table_pool_tag.execute_state] = 16,
+    [__table_pool_tag.entity_list] = 16,
+    [__table_pool_tag.fragment_set] = 16,
+    [__table_pool_tag.fragment_list] = 16,
+    [__table_pool_tag.component_table] = 16,
+}
+
 ---@class (exact) evolved.table_pool
 ---@field package __size integer
 ---@field package [integer] table
@@ -709,14 +722,20 @@ local __table_pool_tag = {
 ---@type table<evolved.table_pool_tag, evolved.table_pool>
 local __tagged_table_pools = (function()
     local table_pools = __lua_table_new(__table_pool_tag.__count)
-    local table_pool_reserve = 16
 
-    for tag = 1, __table_pool_tag.__count do
+    for table_pool_tag = 1, __table_pool_tag.__count do
+        local table_pool_reserve = __table_pool_reserve[table_pool_tag]
+
         ---@type evolved.table_pool
         local table_pool = __lua_table_new(table_pool_reserve)
-        for i = 1, table_pool_reserve do table_pool[i] = {} end
+
+        for table_pool_index = 1, table_pool_reserve do
+            table_pool[table_pool_index] = {}
+        end
+
         table_pool.__size = table_pool_reserve
-        table_pools[tag] = table_pool
+
+        table_pools[table_pool_tag] = table_pool
     end
 
     return table_pools
@@ -6191,11 +6210,19 @@ function __evolved_collect_garbage()
         end
     end
 
-    for table_tag = 1, __table_pool_tag.__count do
-        local table_pool = __tagged_table_pools[table_tag]
-        for pool_index = 1, table_pool.__size do
-            table_pool[pool_index] = {}
+    for table_pool_tag = 1, __table_pool_tag.__count do
+        local table_pool_reserve = __table_pool_reserve[table_pool_tag]
+
+        ---@type evolved.table_pool
+        local new_table_pool = __lua_table_new(table_pool_reserve)
+
+        for table_pool_index = 1, table_pool_reserve do
+            new_table_pool[table_pool_index] = {}
         end
+
+        new_table_pool.__size = table_pool_reserve
+
+        __tagged_table_pools[table_pool_tag] = new_table_pool
     end
 
     do
