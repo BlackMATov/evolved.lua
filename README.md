@@ -1569,6 +1569,7 @@ builder_mt:destruction_policy :: id -> builder
 ### vX.Y.Z
 
 - Performance improvements of the [`evolved.destroy`](#evolveddestroy) and [`evolved.batch_destroy`](#evolvedbatch_destroy) functions
+- Ensured deterministic chunk ordering to improve processing consistency across runs
 
 ### v1.8.0
 
