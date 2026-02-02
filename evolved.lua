@@ -243,8 +243,13 @@ local __lua_table_new = (function()
         if table_create then return function(nseq) return table_create(nseq or 0) end end
     end
 
-    do
-        local table_new_loader = package and package.preload and package.preload['table.new']
+    if package and package.loaded then
+        local loaded_table_create = package.loaded.table and package.loaded.table.create
+        if loaded_table_create then return function(nseq) return loaded_table_create(nseq or 0) end end
+    end
+
+    if package and package.preload then
+        local table_new_loader = package.preload['table.new']
         local table_new = table_new_loader and table_new_loader()
         if table_new then return function(nseq) return table_new(nseq or 0, 0) end end
     end
@@ -265,8 +270,13 @@ local __lua_table_clear = (function()
         if table_clear then return table_clear end
     end
 
-    do
-        local table_clear_loader = package and package.preload and package.preload['table.clear']
+    if package and package.loaded then
+        local loaded_table_clear = package.loaded.table and package.loaded.table.clear
+        if loaded_table_clear then return loaded_table_clear end
+    end
+
+    if package and package.preload then
+        local table_clear_loader = package.preload['table.clear']
         local table_clear = table_clear_loader and table_clear_loader()
         if table_clear then return table_clear end
     end
@@ -299,8 +309,13 @@ local __lua_table_move = (function()
         if table_move then return table_move end
     end
 
-    do
-        local table_move_loader = package and package.preload and package.preload['table.move']
+    if package and package.loaded then
+        local loaded_table_move = package.loaded.table and package.loaded.table.move
+        if loaded_table_move then return loaded_table_move end
+    end
+
+    if package and package.preload then
+        local table_move_loader = package.preload['table.move']
         local table_move = table_move_loader and table_move_loader()
         if table_move then return table_move end
     end
