@@ -1,5 +1,7 @@
 local evo = require 'evolved'
 
+evo.debug_mode(true)
+
 ---@type ffilib?
 local ffi = (function()
     if package and package.loaded then

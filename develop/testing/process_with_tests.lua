@@ -1,5 +1,7 @@
 local evo = require 'evolved'
 
+evo.debug_mode(true)
+
 do
     local f = evo.id()
     local e = evo.builder():set(f, 42):spawn()
