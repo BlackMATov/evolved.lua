@@ -78,11 +78,11 @@ end
 ---
 
 if math.random(1, 2) == 1 then
-    evo.collect_garbage()
+    evo.collect_garbage(math.random(1, 2) == 1)
 end
 
 evo.destroy(__table_unpack(all_entity_list))
 
 if math.random(1, 2) == 1 then
-    evo.collect_garbage()
+    evo.collect_garbage(math.random(1, 2) == 1)
 end

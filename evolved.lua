@@ -6145,7 +6145,8 @@ function __evolved_debug_mode(yesno)
     __debug_mode = yesno
 end
 
-function __evolved_collect_garbage()
+---@param no_shrink boolean?
+function __evolved_collect_garbage(no_shrink)
     if __defer_depth > 0 then
         __defer_call_hook(__evolved_collect_garbage)
         return
@@ -6209,16 +6210,16 @@ function __evolved_collect_garbage()
             local postorder_chunk_entity_count = postorder_chunk.__entity_count
             local postorder_chunk_entity_capacity = postorder_chunk.__entity_capacity
 
-            local should_be_purged =
+            local can_be_purged =
                 postorder_chunk_child_count == 0 and
                 postorder_chunk_entity_count == 0
 
-            local should_be_shrunk =
+            local can_be_shrunk =
                 postorder_chunk_entity_count < postorder_chunk_entity_capacity
 
-            if should_be_purged then
+            if can_be_purged then
                 __purge_chunk(postorder_chunk)
-            elseif should_be_shrunk then
+            elseif can_be_shrunk and not no_shrink then
                 __shrink_chunk(postorder_chunk, 0)
             end
         end
@@ -6234,29 +6235,31 @@ function __evolved_collect_garbage()
         end
     end
 
-    for table_pool_tag = 1, __table_pool_tag.__count do
-        local table_pool_reserve = __table_pool_reserve[table_pool_tag]
+    if not no_shrink then
+        for table_pool_tag = 1, __table_pool_tag.__count do
+            local table_pool_reserve = __table_pool_reserve[table_pool_tag]
 
-        ---@type evolved.table_pool
-        local new_table_pool = __lua_table_new(table_pool_reserve)
+            ---@type evolved.table_pool
+            local new_table_pool = __lua_table_new(table_pool_reserve)
 
-        for table_pool_index = 1, table_pool_reserve do
-            new_table_pool[table_pool_index] = {}
+            for table_pool_index = 1, table_pool_reserve do
+                new_table_pool[table_pool_index] = {}
+            end
+
+            new_table_pool.__size = table_pool_reserve
+
+            __tagged_table_pools[table_pool_tag] = new_table_pool
         end
 
-        new_table_pool.__size = table_pool_reserve
+        do
+            __entity_chunks = __table_dup(__entity_chunks)
+            __entity_places = __table_dup(__entity_places)
+        end
 
-        __tagged_table_pools[table_pool_tag] = new_table_pool
-    end
-
-    do
-        __entity_chunks = __table_dup(__entity_chunks)
-        __entity_places = __table_dup(__entity_places)
-    end
-
-    do
-        __defer_points = __list_dup(__defer_points, __defer_depth)
-        __defer_bytecode = __list_dup(__defer_bytecode, __defer_length)
+        do
+            __defer_points = __list_dup(__defer_points, __defer_depth)
+            __defer_bytecode = __list_dup(__defer_bytecode, __defer_length)
+        end
     end
 
     __evolved_commit()

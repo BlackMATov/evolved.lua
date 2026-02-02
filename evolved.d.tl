@@ -212,7 +212,7 @@
     process_with: function(system: System, ...: any)
 
     debug_mode: function(yesno: boolean)
-    collect_garbage: function()
+    collect_garbage: function(no_shrink?: boolean)
 
     chunk: function(fragment: Fragment, ...: Fragment): Chunk, { Entity }, integer
     builder: function(): Builder

@@ -55,6 +55,7 @@
     - [Fragment Requirements](#fragment-requirements)
     - [Destruction Policies](#destruction-policies)
     - [Custom Component Storages](#custom-component-storages)
+  - [Garbage Collection](#garbage-collection)
 - [Cheat Sheet](#cheat-sheet)
   - [Aliases](#aliases)
   - [Predefs](#predefs)
@@ -1346,6 +1347,24 @@ evolved.builder()
 evolved.process_with(MOVEMENT_SYSTEM, 0.016)
 ```
 
+### Garbage Collection
+
+While using the library, some internal data structures can become obsolete and should be cleaned up to free memory. For example, empty chunks that no longer contain entities can be removed. Component storages can also have unused capacity that can be shrunk to save memory. The library provides a function to control this garbage collection process.
+
+```lua
+---@param no_shrink? boolean
+function evolved.collect_garbage(no_shrink) end
+```
+
+By default, [`evolved.collect_garbage`](#evolvedcollect_garbage) cleans up obsolete data structures and shrinks component storages to fit their current size. If you pass `true`, it only cleans up obsolete data structures and skips shrinking. This avoids the overhead of resizing storages, which can be expensive.
+
+Call this function periodically to keep memory usage under control. It is best to call it between levels or during loading screens when performance is not critical. Also, call Lua's built-in garbage collector afterward to ensure all unused memory is freed.
+
+```lua
+evolved.collect_garbage()
+collectgarbage('collect')
+```
+
 ## Cheat Sheet
 
 ### Aliases
@@ -1481,7 +1500,7 @@ process :: system... -> ()
 process_with :: system, ... -> ()
 
 debug_mode :: boolean -> ()
-collect_garbage :: ()
+collect_garbage :: boolean? -> ()
 ```
 
 ### Classes
@@ -2007,7 +2026,8 @@ function evolved.debug_mode(yesno) end
 ### `evolved.collect_garbage`
 
 ```lua
-function evolved.collect_garbage() end
+---@param no_shrink? boolean
+function evolved.collect_garbage(no_shrink) end
 ```
 
 ## Classes
