@@ -798,10 +798,11 @@ end
 
 ---@generic V
 ---@param list V[]
+---@param size? integer
 ---@return V[]
 ---@nodiscard
-function __list_dup(list)
-    local list_size = #list
+function __list_dup(list, size)
+    local list_size = size or #list
 
     if list_size == 0 then
         return {}
@@ -820,10 +821,11 @@ end
 ---@param list V[]
 ---@param item V
 ---@param comp? fun(a: V, b: V): boolean
+---@param size? integer
 ---@return integer lower_bound_index
 ---@nodiscard
-function __list_lwr(list, item, comp)
-    local lower, upper = 1, #list
+function __list_lwr(list, item, comp, size)
+    local lower, upper = 1, size or #list
 
     if comp then
         while lower <= upper do
@@ -850,6 +852,28 @@ function __list_lwr(list, item, comp)
     end
 
     return lower
+end
+
+---
+---
+---
+---
+---
+
+local __table_dup
+
+---@generic K, V
+---@param table table<K, V>
+---@return table<K, V>
+---@nodiscard
+function __table_dup(table)
+    local dup_table = {}
+
+    for k, v in __lua_next, table do
+        dup_table[k] = v
+    end
+
+    return dup_table
 end
 
 ---
@@ -1407,7 +1431,7 @@ end
 function __add_root_chunk(root)
     local root_index = __list_lwr(__root_list, root, function(a, b)
         return a.__fragment < b.__fragment
-    end)
+    end, __root_count)
 
     for sib_root_index = __root_count, root_index, -1 do
         local sib_root = __root_list[sib_root_index]
@@ -1452,7 +1476,7 @@ end
 function __add_child_chunk(child, parent)
     local child_index = __list_lwr(parent.__child_list, child, function(a, b)
         return a.__fragment < b.__fragment
-    end)
+    end, parent.__child_count)
 
     for sib_child_index = parent.__child_count, child_index, -1 do
         local sib_child = parent.__child_list[sib_child_index]
@@ -6226,47 +6250,13 @@ function __evolved_collect_garbage()
     end
 
     do
-        ---@type table<integer, evolved.chunk>
-        local new_entity_chunks = {}
-
-        for entity_primary, entity_chunk in __lua_next, __entity_chunks do
-            new_entity_chunks[entity_primary] = entity_chunk
-        end
-
-        __entity_chunks = new_entity_chunks
+        __entity_chunks = __table_dup(__entity_chunks)
+        __entity_places = __table_dup(__entity_places)
     end
 
     do
-        ---@type table<integer, integer>
-        local new_entity_places = {}
-
-        for entity_primary, entity_place in __lua_next, __entity_places do
-            new_entity_places[entity_primary] = entity_place
-        end
-
-        __entity_places = new_entity_places
-    end
-
-    do
-        ---@type integer[]
-        local new_defer_points = __lua_table_new(__defer_depth)
-
-        __lua_table_move(
-            __defer_points, 1, __defer_depth,
-            1, new_defer_points)
-
-        __defer_points = new_defer_points
-    end
-
-    do
-        ---@type any[]
-        local new_defer_bytecode = __lua_table_new(__defer_length)
-
-        __lua_table_move(
-            __defer_bytecode, 1, __defer_length,
-            1, new_defer_bytecode)
-
-        __defer_bytecode = new_defer_bytecode
+        __defer_points = __list_dup(__defer_points, __defer_depth)
+        __defer_bytecode = __list_dup(__defer_bytecode, __defer_length)
     end
 
     __evolved_commit()
