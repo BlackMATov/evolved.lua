@@ -6780,7 +6780,7 @@ end
 ---@return evolved.builder builder
 function __builder_mt:clear()
     self.__chunk = nil
-    __lua_table_clear(self.__component_table)
+    __lua_table_clear(self.__component_table, true, false)
     return self
 end
 
