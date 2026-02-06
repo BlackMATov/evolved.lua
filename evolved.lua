@@ -5521,6 +5521,98 @@ function __evolved_remove(entity, ...)
     __evolved_commit()
 end
 
+---
+--- Registry via Hooks (Sidecar Indexing)
+---
+---
+
+do
+    ---@type table<string, evolved.id>
+    local __name_to_id_index = {}
+
+    ---@param entity evolved.entity
+    ---@param fragment evolved.fragment
+    ---@param new_name string
+    ---@param old_name? string
+    __evolved_set(__NAME, __ON_SET, function(entity, fragment, new_name, old_name)
+        if old_name and __name_to_id_index[old_name] == entity then
+            __name_to_id_index[old_name] = nil
+        end
+
+        if new_name then
+            if __name_to_id_index[new_name] and __name_to_id_index[new_name] ~= entity then
+                __warning_fmt('name collision detected: "%s" is already registered to %s, overwriting with %s',
+                    new_name, __id_name(__name_to_id_index[new_name]), __id_name(entity))
+            end
+            __name_to_id_index[new_name] = entity
+        end
+    end)
+
+    ---@param entity evolved.entity
+    ---@param fragment evolved.fragment
+    ---@param old_name string
+    __evolved_set(__NAME, __ON_REMOVE, function(entity, fragment, old_name)
+        if old_name and __name_to_id_index[old_name] == entity then
+            __name_to_id_index[old_name] = nil
+        end
+    end)
+
+    ---@param name string
+    ---@return evolved.id?
+    ---@nodiscard
+    function evolved.find(name)
+        return __name_to_id_index[name]
+    end
+
+    ---@param name string
+    ---@param id? evolved.id
+    ---@return evolved.id
+    function evolved.register(name, id)
+        id = id or __evolved_id()
+        __evolved_set(id, __NAME, name)
+        return id
+    end
+
+    ---@param ... string names
+    ---@return evolved.id ... ids
+    ---@nodiscard
+    function evolved.register_many(...)
+        local name_count = __lua_select('#', ...)
+
+        if name_count == 0 then
+            return
+        end
+
+        if name_count == 1 then
+            local name1 = ...
+            return evolved.register(name1)
+        end
+
+        if name_count == 2 then
+            local name1, name2 = ...
+            return evolved.register(name1), evolved.register(name2)
+        end
+
+        if name_count == 3 then
+            local name1, name2, name3 = ...
+            return evolved.register(name1), evolved.register(name2), evolved.register(name3)
+        end
+
+        if name_count == 4 then
+            local name1, name2, name3, name4 = ...
+            return evolved.register(name1), evolved.register(name2),
+                   evolved.register(name3), evolved.register(name4)
+        end
+
+        do
+            local name1, name2, name3, name4 = ...
+            return evolved.register(name1), evolved.register(name2),
+                   evolved.register(name3), evolved.register(name4),
+                   evolved.register_many(__lua_select(5, ...))
+        end
+    end
+end
+
 ---@param ... evolved.entity entities
 function __evolved_clear(...)
     local argument_count = __lua_select('#', ...)
