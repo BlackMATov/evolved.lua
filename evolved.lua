@@ -141,8 +141,8 @@ local __minor_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<ev
 local __query_chunks = {} ---@type table<evolved.query, evolved.assoc_list<evolved.chunk>>
 local __major_queries = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.query>>
 
-local __entity_chunks = {} ---@type table<integer, evolved.chunk>
-local __entity_places = {} ---@type table<integer, integer>
+local __entity_chunks = {} ---@type (evolved.chunk|false)[]
+local __entity_places = {} ---@type integer[]
 
 local __sorted_includes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
 local __sorted_excludes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
@@ -674,6 +674,9 @@ local function __acquire_id()
         local acquired_id = acquired_primary + shifted_secondary
         freelist_ids[acquired_primary] = acquired_id
 
+        __entity_chunks[acquired_primary] = false
+        __entity_places[acquired_primary] = 0
+
         return acquired_id --[[@as evolved.id]]
     end
 end
@@ -867,28 +870,6 @@ function __list_lwr(list, item, comp, size)
     end
 
     return lower
-end
-
----
----
----
----
----
-
-local __table_dup
-
----@generic K, V
----@param table table<K, V>
----@return table<K, V>
----@nodiscard
-function __table_dup(table)
-    local dup_table = {}
-
-    for k, v in __lua_next, table do
-        dup_table[k] = v
-    end
-
-    return dup_table
 end
 
 ---
@@ -3364,8 +3345,8 @@ function __clear_entity_one(entity)
         if chunk then
             __detach_entity(chunk, place)
 
-            entity_chunks[entity_primary] = nil
-            entity_places[entity_primary] = nil
+            entity_chunks[entity_primary] = false
+            entity_places[entity_primary] = 0
 
             __structural_changes = __structural_changes + 1
         end
@@ -3431,8 +3412,8 @@ function __destroy_entity_one(entity)
         if chunk then
             __detach_entity(chunk, place)
 
-            entity_chunks[entity_primary] = nil
-            entity_places[entity_primary] = nil
+            entity_chunks[entity_primary] = false
+            entity_places[entity_primary] = 0
 
             __structural_changes = __structural_changes + 1
         end
@@ -4144,8 +4125,8 @@ function __chunk_remove(old_chunk, ...)
         for old_place = 1, old_entity_count do
             local entity = old_entity_list[old_place]
             local entity_primary = entity % 2 ^ 20
-            entity_chunks[entity_primary] = nil
-            entity_places[entity_primary] = nil
+            entity_chunks[entity_primary] = false
+            entity_places[entity_primary] = 0
         end
 
         __detach_all_entities(old_chunk)
@@ -4207,8 +4188,8 @@ function __chunk_clear(chunk)
         for place = 1, chunk_entity_count do
             local entity = chunk_entity_list[place]
             local entity_primary = entity % 2 ^ 20
-            entity_chunks[entity_primary] = nil
-            entity_places[entity_primary] = nil
+            entity_chunks[entity_primary] = false
+            entity_places[entity_primary] = 0
         end
 
         __detach_all_entities(chunk)
@@ -5255,11 +5236,11 @@ function __evolved_set(entity, fragment, component)
     local old_chunk = entity_chunks[entity_primary]
     local old_place = entity_places[entity_primary]
 
-    local new_chunk = __chunk_with_fragment(old_chunk, fragment)
+    local new_chunk = __chunk_with_fragment(old_chunk or nil, fragment)
 
     __evolved_defer()
 
-    if old_chunk == new_chunk then
+    if old_chunk and old_chunk == new_chunk then
         local old_component_indices = old_chunk.__component_indices
         local old_component_storages = old_chunk.__component_storages
 
@@ -5479,16 +5460,11 @@ function __evolved_remove(entity, ...)
     local old_chunk = entity_chunks[entity_primary]
     local old_place = entity_places[entity_primary]
 
-    local new_chunk = __chunk_without_fragments(old_chunk, ...)
-
-    if old_chunk == new_chunk then
-        -- nothing to remove
-        return
-    end
+    local new_chunk = __chunk_without_fragments(old_chunk or nil, ...)
 
     __evolved_defer()
 
-    do
+    if old_chunk and old_chunk ~= new_chunk then
         local old_fragment_list = old_chunk.__fragment_list
         local old_fragment_count = old_chunk.__fragment_count
         local old_component_indices = old_chunk.__component_indices
@@ -5550,8 +5526,8 @@ function __evolved_remove(entity, ...)
         do
             __detach_entity(old_chunk, old_place)
 
-            entity_chunks[entity_primary] = new_chunk
-            entity_places[entity_primary] = new_chunk and new_chunk.__entity_count
+            entity_chunks[entity_primary] = new_chunk or false
+            entity_places[entity_primary] = new_chunk and new_chunk.__entity_count or 0
 
             __structural_changes = __structural_changes + 1
         end
@@ -6267,8 +6243,8 @@ function __evolved_collect_garbage(no_shrink)
         end
 
         do
-            __entity_chunks = __table_dup(__entity_chunks)
-            __entity_places = __table_dup(__entity_places)
+            __entity_chunks = __list_dup(__entity_chunks, __acquired_count)
+            __entity_places = __list_dup(__entity_places, __acquired_count)
         end
 
         do
