@@ -208,6 +208,9 @@
 
     locate: function(entity: Entity): Chunk | nil, integer
 
+    lookup: function(name: string): Entity | nil
+    multi_lookup: function(name: string): { Entity }, integer
+
     process: function(...: System)
     process_with: function(system: System, ...: any)
 

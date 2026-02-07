@@ -1496,6 +1496,9 @@ execute :: query -> {execute_state? -> chunk?, entity[]?, integer?}, execute_sta
 
 locate :: entity -> chunk?, integer
 
+lookup :: string -> entity?
+multi_lookup :: string -> entity[], integer
+
 process :: system... -> ()
 process_with :: system, ... -> ()
 
@@ -1999,6 +2002,25 @@ function evolved.execute(query) end
 ---@return integer place
 ---@nodiscard
 function evolved.locate(entity) end
+```
+
+### `evolved.lookup`
+
+```lua
+---@param name string
+---@return evolved.entity? entity
+---@nodiscard
+function evolved.lookup(name) end
+```
+
+### `evolved.multi_lookup`
+
+```lua
+---@param name string
+---@return evolved.entity[] entity_list
+---@return integer entity_count
+---@nodiscard
+function evolved.multi_lookup(name) end
 ```
 
 ### `evolved.process`
