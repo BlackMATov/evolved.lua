@@ -1155,6 +1155,9 @@ local __evolved_execute
 
 local __evolved_locate
 
+local __evolved_lookup
+local __evolved_multi_lookup
+
 local __evolved_process
 local __evolved_process_with
 
@@ -6086,6 +6089,19 @@ function __evolved_locate(entity)
     return entity_chunk, __entity_places[entity_primary]
 end
 
+---@param name string
+---@return evolved.entity? entity
+---@nodiscard
+function __evolved_lookup(name)
+end
+
+---@param name string
+---@return evolved.entity[] entity_list
+---@return integer entity_count
+---@nodiscard
+function __evolved_multi_lookup(name)
+end
+
 ---@param ... evolved.system systems
 function __evolved_process(...)
     local argument_count = __lua_select('#', ...)
@@ -7153,6 +7169,24 @@ __evolved_set(__ON_REMOVE, __UNIQUE)
 ---
 ---
 
+---@param entity evolved.entity
+---@param new_name string
+---@param old_name string
+__evolved_set(__NAME, __ON_SET, function(entity, _, new_name, old_name)
+end)
+
+---@param entity evolved.entity
+---@param old_name string
+__evolved_set(__NAME, __ON_REMOVE, function(entity, _, old_name)
+end)
+
+
+---
+---
+---
+---
+---
+
 ---@param query evolved.query
 local function __insert_query(query)
     local query_includes = __sorted_includes[query]
@@ -7523,6 +7557,9 @@ evolved.each = __evolved_each
 evolved.execute = __evolved_execute
 
 evolved.locate = __evolved_locate
+
+evolved.lookup = __evolved_lookup
+evolved.multi_lookup = __evolved_multi_lookup
 
 evolved.process = __evolved_process
 evolved.process_with = __evolved_process_with
