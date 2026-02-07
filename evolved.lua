@@ -803,14 +803,12 @@ end
 ---
 ---
 
-local __list_new
-local __list_dup
-local __list_lwr
+local __list_fns = {}
 
 ---@param reserve? integer
 ---@return any[]
 ---@nodiscard
-function __list_new(reserve)
+function __list_fns.new(reserve)
     return __lua_table_new(reserve)
 end
 
@@ -819,14 +817,14 @@ end
 ---@param size? integer
 ---@return V[]
 ---@nodiscard
-function __list_dup(list, size)
+function __list_fns.dup(list, size)
     local list_size = size or #list
 
     if list_size == 0 then
         return {}
     end
 
-    local dup_list = __list_new(list_size)
+    local dup_list = __list_fns.new(list_size)
 
     __lua_table_move(
         list, 1, list_size,
@@ -842,7 +840,7 @@ end
 ---@param size? integer
 ---@return integer lower_bound_index
 ---@nodiscard
-function __list_lwr(list, item, comp, size)
+function __list_fns.lwr(list, item, comp, size)
     local lower, upper = 1, size or #list
 
     if comp then
@@ -884,20 +882,12 @@ end
 ---  __item_count: integer,
 --- }
 
-local __assoc_list_new
-local __assoc_list_move
-local __assoc_list_move_ex
-local __assoc_list_sort
-local __assoc_list_sort_ex
-local __assoc_list_insert
-local __assoc_list_insert_ex
-local __assoc_list_remove
-local __assoc_list_remove_ex
+local __assoc_list_fns = {}
 
 ---@param reserve? integer
 ---@return evolved.assoc_list
 ---@nodiscard
-function __assoc_list_new(reserve)
+function __assoc_list_fns.new(reserve)
     ---@type evolved.assoc_list
     return {
         __item_set = __lua_table_new(),
@@ -912,8 +902,8 @@ end
 ---@param src_item_last integer
 ---@param dst_al evolved.assoc_list<K>
 ---@return integer new_dst_item_count
-function __assoc_list_move(src_item_list, src_item_first, src_item_last, dst_al)
-    local new_dst_item_count = __assoc_list_move_ex(
+function __assoc_list_fns.move(src_item_list, src_item_first, src_item_last, dst_al)
+    local new_dst_item_count = __assoc_list_fns.move_ex(
         src_item_list, src_item_first, src_item_last,
         dst_al.__item_set, dst_al.__item_list, dst_al.__item_count)
 
@@ -930,8 +920,8 @@ end
 ---@param dst_item_count integer
 ---@return integer new_dst_item_count
 ---@nodiscard
-function __assoc_list_move_ex(src_item_list, src_item_first, src_item_last,
-                              dst_item_set, dst_item_list, dst_item_count)
+function __assoc_list_fns.move_ex(src_item_list, src_item_first, src_item_last,
+                                  dst_item_set, dst_item_list, dst_item_count)
     if src_item_last < src_item_first then
         return dst_item_count
     end
@@ -951,8 +941,8 @@ end
 ---@generic K
 ---@param al evolved.assoc_list<K>
 ---@param comp? fun(a: K, b: K): boolean
-function __assoc_list_sort(al, comp)
-    __assoc_list_sort_ex(
+function __assoc_list_fns.sort(al, comp)
+    __assoc_list_fns.sort_ex(
         al.__item_set, al.__item_list, al.__item_count,
         comp)
 end
@@ -962,7 +952,7 @@ end
 ---@param al_item_list K[]
 ---@param al_item_count integer
 ---@param comp? fun(a: K, b: K): boolean
-function __assoc_list_sort_ex(al_item_set, al_item_list, al_item_count, comp)
+function __assoc_list_fns.sort_ex(al_item_set, al_item_list, al_item_count, comp)
     if al_item_count < 2 then
         return
     end
@@ -979,8 +969,8 @@ end
 ---@param al evolved.assoc_list<K>
 ---@param item K
 ---@return integer new_al_count
-function __assoc_list_insert(al, item)
-    local new_al_count = __assoc_list_insert_ex(
+function __assoc_list_fns.insert(al, item)
+    local new_al_count = __assoc_list_fns.insert_ex(
         al.__item_set, al.__item_list, al.__item_count,
         item)
 
@@ -995,7 +985,7 @@ end
 ---@param item K
 ---@return integer new_al_count
 ---@nodiscard
-function __assoc_list_insert_ex(al_item_set, al_item_list, al_item_count, item)
+function __assoc_list_fns.insert_ex(al_item_set, al_item_list, al_item_count, item)
     local item_index = al_item_set[item]
 
     if item_index then
@@ -1013,8 +1003,8 @@ end
 ---@param al evolved.assoc_list<K>
 ---@param item K
 ---@return integer new_al_count
-function __assoc_list_remove(al, item)
-    local new_al_count = __assoc_list_remove_ex(
+function __assoc_list_fns.remove(al, item)
+    local new_al_count = __assoc_list_fns.remove_ex(
         al.__item_set, al.__item_list, al.__item_count,
         item)
 
@@ -1029,7 +1019,7 @@ end
 ---@param item K
 ---@return integer new_al_count
 ---@nodiscard
-function __assoc_list_remove_ex(al_item_set, al_item_list, al_item_count, item)
+function __assoc_list_fns.remove_ex(al_item_set, al_item_list, al_item_count, item)
     local item_index = al_item_set[item]
 
     if not item_index then
@@ -1300,7 +1290,7 @@ function __new_chunk(chunk_parent, chunk_fragment)
         local chunk_parent_fragment_list = chunk_parent.__fragment_list
         local chunk_parent_fragment_count = chunk_parent.__fragment_count
 
-        chunk_fragment_count = __assoc_list_move_ex(
+        chunk_fragment_count = __assoc_list_fns.move_ex(
             chunk_parent_fragment_list, 1, chunk_parent_fragment_count,
             chunk_fragment_set, chunk_fragment_list, chunk_fragment_count)
     end
@@ -1365,11 +1355,11 @@ function __new_chunk(chunk_parent, chunk_fragment)
 
         if not major_chunks then
             ---@type evolved.assoc_list<evolved.chunk>
-            major_chunks = __assoc_list_new(4)
+            major_chunks = __assoc_list_fns.new(4)
             __major_chunks[major] = major_chunks
         end
 
-        __assoc_list_insert(major_chunks, chunk)
+        __assoc_list_fns.insert(major_chunks, chunk)
     end
 
     for chunk_fragment_index = 1, chunk_fragment_count do
@@ -1378,11 +1368,11 @@ function __new_chunk(chunk_parent, chunk_fragment)
 
         if not minor_chunks then
             ---@type evolved.assoc_list<evolved.chunk>
-            minor_chunks = __assoc_list_new(4)
+            minor_chunks = __assoc_list_fns.new(4)
             __minor_chunks[minor] = minor_chunks
         end
 
-        __assoc_list_insert(minor_chunks, chunk)
+        __assoc_list_fns.insert(minor_chunks, chunk)
     end
 
     __update_chunk_caches(chunk)
@@ -1425,7 +1415,7 @@ end
 
 ---@param root evolved.chunk
 function __add_root_chunk(root)
-    local root_index = __list_lwr(__root_list, root, function(a, b)
+    local root_index = __list_fns.lwr(__root_list, root, function(a, b)
         return a.__fragment < b.__fragment
     end, __root_count)
 
@@ -1470,7 +1460,7 @@ end
 ---@param child evolved.chunk
 ---@param parent evolved.chunk
 function __add_child_chunk(child, parent)
-    local child_index = __list_lwr(parent.__child_list, child, function(a, b)
+    local child_index = __list_fns.lwr(parent.__child_list, child, function(a, b)
         return a.__fragment < b.__fragment
     end, parent.__child_count)
 
@@ -1624,9 +1614,9 @@ function __update_chunk_queries(chunk)
 
         if major_query_chunks then
             if __query_major_matches(chunk, major_query) then
-                __assoc_list_insert(major_query_chunks, chunk)
+                __assoc_list_fns.insert(major_query_chunks, chunk)
             else
-                __assoc_list_remove(major_query_chunks, chunk)
+                __assoc_list_fns.remove(major_query_chunks, chunk)
             end
         end
     end
@@ -1901,7 +1891,7 @@ function __cache_query_chunks(query)
     local query_variant_count = query_variants and query_variants.__item_count or 0
 
     ---@type evolved.assoc_list<evolved.chunk>
-    local query_chunks = __assoc_list_new(4)
+    local query_chunks = __assoc_list_fns.new(4)
     __query_chunks[query] = query_chunks
 
     if query_include_count > 0 then
@@ -1915,7 +1905,7 @@ function __cache_query_chunks(query)
             local major_chunk = major_chunk_list[major_chunk_index]
 
             if __query_major_matches(major_chunk, query) then
-                __assoc_list_insert(query_chunks, major_chunk)
+                __assoc_list_fns.insert(query_chunks, major_chunk)
             end
         end
     end
@@ -1932,7 +1922,7 @@ function __cache_query_chunks(query)
                 local major_chunk = major_chunk_list[major_chunk_index]
 
                 if __query_major_matches(major_chunk, query) then
-                    __assoc_list_insert(query_chunks, major_chunk)
+                    __assoc_list_fns.insert(query_chunks, major_chunk)
                 end
             end
         end
@@ -3118,7 +3108,7 @@ function __purge_chunk(chunk)
         local major = chunk.__fragment
         local major_chunks = __major_chunks[major]
 
-        if major_chunks and __assoc_list_remove(major_chunks, chunk) == 0 then
+        if major_chunks and __assoc_list_fns.remove(major_chunks, chunk) == 0 then
             __major_chunks[major] = nil
         end
     end
@@ -3127,7 +3117,7 @@ function __purge_chunk(chunk)
         local minor = chunk.__fragment_list[chunk_fragment_index]
         local minor_chunks = __minor_chunks[minor]
 
-        if minor_chunks and __assoc_list_remove(minor_chunks, chunk) == 0 then
+        if minor_chunks and __assoc_list_fns.remove(minor_chunks, chunk) == 0 then
             __minor_chunks[minor] = nil
         end
     end
@@ -6243,13 +6233,13 @@ function __evolved_collect_garbage(no_shrink)
         end
 
         do
-            __entity_chunks = __list_dup(__entity_chunks, __acquired_count)
-            __entity_places = __list_dup(__entity_places, __acquired_count)
+            __entity_chunks = __list_fns.dup(__entity_chunks, __acquired_count)
+            __entity_places = __list_fns.dup(__entity_places, __acquired_count)
         end
 
         do
-            __defer_points = __list_dup(__defer_points, __defer_depth)
-            __defer_bytecode = __list_dup(__defer_bytecode, __defer_length)
+            __defer_points = __list_fns.dup(__defer_points, __defer_depth)
+            __defer_bytecode = __list_fns.dup(__defer_bytecode, __defer_length)
         end
     end
 
@@ -6833,7 +6823,7 @@ function __builder_mt:include(...)
     local include_count = include_list and #include_list or 0
 
     if include_count == 0 then
-        include_list = __list_new(argument_count)
+        include_list = __list_fns.new(argument_count)
     end
 
     for argument_index = 1, argument_count do
@@ -6858,7 +6848,7 @@ function __builder_mt:exclude(...)
     local exclude_count = exclude_list and #exclude_list or 0
 
     if exclude_count == 0 then
-        exclude_list = __list_new(argument_count)
+        exclude_list = __list_fns.new(argument_count)
     end
 
     for argument_index = 1, argument_count do
@@ -6883,7 +6873,7 @@ function __builder_mt:variant(...)
     local variant_count = variant_list and #variant_list or 0
 
     if variant_count == 0 then
-        variant_list = __list_new(argument_count)
+        variant_list = __list_fns.new(argument_count)
     end
 
     for argument_index = 1, argument_count do
@@ -6908,7 +6898,7 @@ function __builder_mt:require(...)
     local require_count = require_list and #require_list or 0
 
     if require_count == 0 then
-        require_list = __list_new(argument_count)
+        require_list = __list_fns.new(argument_count)
     end
 
     for argument_index = 1, argument_count do
@@ -7140,17 +7130,17 @@ __evolved_set(__DISABLED, __TAG)
 __evolved_set(__DISABLED, __UNIQUE)
 __evolved_set(__DISABLED, __EXPLICIT)
 
-__evolved_set(__INCLUDES, __DEFAULT, __list_new())
-__evolved_set(__INCLUDES, __DUPLICATE, __list_dup)
+__evolved_set(__INCLUDES, __DEFAULT, __list_fns.new())
+__evolved_set(__INCLUDES, __DUPLICATE, __list_fns.dup)
 
-__evolved_set(__EXCLUDES, __DEFAULT, __list_new())
-__evolved_set(__EXCLUDES, __DUPLICATE, __list_dup)
+__evolved_set(__EXCLUDES, __DEFAULT, __list_fns.new())
+__evolved_set(__EXCLUDES, __DUPLICATE, __list_fns.dup)
 
-__evolved_set(__VARIANTS, __DEFAULT, __list_new())
-__evolved_set(__VARIANTS, __DUPLICATE, __list_dup)
+__evolved_set(__VARIANTS, __DEFAULT, __list_fns.new())
+__evolved_set(__VARIANTS, __DUPLICATE, __list_fns.dup)
 
-__evolved_set(__REQUIRES, __DEFAULT, __list_new())
-__evolved_set(__REQUIRES, __DUPLICATE, __list_dup)
+__evolved_set(__REQUIRES, __DEFAULT, __list_fns.new())
+__evolved_set(__REQUIRES, __DUPLICATE, __list_fns.dup)
 
 __evolved_set(__ON_SET, __UNIQUE)
 __evolved_set(__ON_ASSIGN, __UNIQUE)
@@ -7179,11 +7169,11 @@ local function __insert_query(query)
 
         if not major_queries then
             ---@type evolved.assoc_list<evolved.query>
-            major_queries = __assoc_list_new(4)
+            major_queries = __assoc_list_fns.new(4)
             __major_queries[query_major] = major_queries
         end
 
-        __assoc_list_insert(major_queries, query)
+        __assoc_list_fns.insert(major_queries, query)
     end
 
     for query_variant_index = 1, query_variant_count do
@@ -7194,11 +7184,11 @@ local function __insert_query(query)
 
             if not major_queries then
                 ---@type evolved.assoc_list<evolved.query>
-                major_queries = __assoc_list_new(4)
+                major_queries = __assoc_list_fns.new(4)
                 __major_queries[query_variant] = major_queries
             end
 
-            __assoc_list_insert(major_queries, query)
+            __assoc_list_fns.insert(major_queries, query)
         end
     end
 end
@@ -7217,7 +7207,7 @@ local function __remove_query(query)
         local query_major = query_include_list[query_include_count]
         local major_queries = __major_queries[query_major]
 
-        if major_queries and __assoc_list_remove(major_queries, query) == 0 then
+        if major_queries and __assoc_list_fns.remove(major_queries, query) == 0 then
             __major_queries[query_major] = nil
         end
     end
@@ -7228,7 +7218,7 @@ local function __remove_query(query)
         if query_include_count == 0 or query_variant > query_include_list[query_include_count] then
             local major_queries = __major_queries[query_variant]
 
-            if major_queries and __assoc_list_remove(major_queries, query) == 0 then
+            if major_queries and __assoc_list_fns.remove(major_queries, query) == 0 then
                 __major_queries[query_variant] = nil
             end
         end
@@ -7252,10 +7242,10 @@ __evolved_set(__INCLUDES, __ON_SET, function(query, _, include_list)
 
     if include_count > 0 then
         ---@type evolved.assoc_list<evolved.fragment>
-        local sorted_includes = __assoc_list_new(include_count)
+        local sorted_includes = __assoc_list_fns.new(include_count)
 
-        __assoc_list_move(include_list, 1, include_count, sorted_includes)
-        __assoc_list_sort(sorted_includes)
+        __assoc_list_fns.move(include_list, 1, include_count, sorted_includes)
+        __assoc_list_fns.sort(sorted_includes)
 
         __sorted_includes[query] = sorted_includes
     else
@@ -7290,10 +7280,10 @@ __evolved_set(__EXCLUDES, __ON_SET, function(query, _, exclude_list)
 
     if exclude_count > 0 then
         ---@type evolved.assoc_list<evolved.fragment>
-        local sorted_excludes = __assoc_list_new(exclude_count)
+        local sorted_excludes = __assoc_list_fns.new(exclude_count)
 
-        __assoc_list_move(exclude_list, 1, exclude_count, sorted_excludes)
-        __assoc_list_sort(sorted_excludes)
+        __assoc_list_fns.move(exclude_list, 1, exclude_count, sorted_excludes)
+        __assoc_list_fns.sort(sorted_excludes)
 
         __sorted_excludes[query] = sorted_excludes
     else
@@ -7328,10 +7318,10 @@ __evolved_set(__VARIANTS, __ON_SET, function(query, _, variant_list)
 
     if variant_count > 0 then
         ---@type evolved.assoc_list<evolved.fragment>
-        local sorted_variants = __assoc_list_new(variant_count)
+        local sorted_variants = __assoc_list_fns.new(variant_count)
 
-        __assoc_list_move(variant_list, 1, variant_count, sorted_variants)
-        __assoc_list_sort(sorted_variants)
+        __assoc_list_fns.move(variant_list, 1, variant_count, sorted_variants)
+        __assoc_list_fns.sort(sorted_variants)
 
         __sorted_variants[query] = sorted_variants
     else
@@ -7364,10 +7354,10 @@ __evolved_set(__REQUIRES, __ON_SET, function(fragment, _, require_list)
 
     if require_count > 0 then
         ---@type evolved.assoc_list<evolved.fragment>
-        local sorted_requires = __assoc_list_new(require_count)
+        local sorted_requires = __assoc_list_fns.new(require_count)
 
-        __assoc_list_move(require_list, 1, require_count, sorted_requires)
-        __assoc_list_sort(sorted_requires)
+        __assoc_list_fns.move(require_list, 1, require_count, sorted_requires)
+        __assoc_list_fns.sort(sorted_requires)
 
         __sorted_requires[fragment] = sorted_requires
     else
@@ -7397,11 +7387,11 @@ local function __add_subsystem(subsystem)
 
         if not group_subsystems then
             ---@type evolved.assoc_list<evolved.system>
-            group_subsystems = __assoc_list_new(4)
+            group_subsystems = __assoc_list_fns.new(4)
             __group_subsystems[subsystem_group] = group_subsystems
         end
 
-        __assoc_list_insert(group_subsystems, subsystem)
+        __assoc_list_fns.insert(group_subsystems, subsystem)
     end
 end
 
@@ -7412,7 +7402,7 @@ local function __remove_subsystem(subsystem)
     if subsystem_group then
         local group_subsystems = __group_subsystems[subsystem_group]
 
-        if group_subsystems and __assoc_list_remove(group_subsystems, subsystem) == 0 then
+        if group_subsystems and __assoc_list_fns.remove(group_subsystems, subsystem) == 0 then
             __group_subsystems[subsystem_group] = nil
         end
     end
