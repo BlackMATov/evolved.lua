@@ -53,6 +53,7 @@
     - [Internal Fragments](#internal-fragments)
     - [Shared Components](#shared-components)
     - [Fragment Requirements](#fragment-requirements)
+    - [Id Names](#id-names)
     - [Destruction Policies](#destruction-policies)
     - [Custom Component Storages](#custom-component-storages)
   - [Garbage Collection](#garbage-collection)
@@ -64,6 +65,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
+  - [vX.Y.Z](#vxyz)
   - [v1.9.0](#v190)
   - [v1.8.0](#v180)
   - [v1.7.0](#v170)
@@ -1161,6 +1163,41 @@ local enemy = evolved.builder()
 assert(evolved.has_all(enemy, position, velocity))
 ```
 
+#### Id Names
+
+The library provides a way to assign names to any id using the [`evolved.NAME`](#evolvedname) fragment. This is useful for debugging and development purposes, as it allows you to identify entities or fragments by their names instead of their identifiers. The name of an entity can be retrieved using the [`evolved.name`](#evolvedname-1) function.
+
+```lua
+local evolved = require 'evolved'
+
+local player = evolved.builder()
+    :name('Player')
+    :build()
+
+assert(evolved.name(player) == 'Player')
+```
+
+Names are not unique, so multiple entities can have the same name. Also, the name of an entity can be changed at any time by setting a new name using the [`evolved.NAME`](#evolvedname) fragment as a usual component.
+
+You can find entities by their names using the [`evolved.lookup`](#evolvedlookup) and [`evolved.multi_lookup`](#evolvedmulti_lookup) functions. The [`evolved.lookup`](#evolvedlookup) function returns the first entity with the specified name, while the [`evolved.multi_lookup`](#evolvedmulti_lookup) function returns a list of all entities with the specified name.
+
+```lua
+local evolved = require 'evolved'
+
+local player1 = evolved.builder()
+    :name('Player')
+    :build()
+
+local player2 = evolved.builder()
+    :name('Player')
+    :build()
+
+assert(evolved.lookup('Player') == player1)
+
+local player_list, player_count = evolved.multi_lookup('Player')
+assert(player_count == 2 and player_list[1] == player1 and player_list[2] == player2)
+```
+
 #### Destruction Policies
 
 Typically, fragments remain alive for the entire lifetime of the program. However, in some cases, you might want to destroy fragments when they are no longer needed. For example, you can use some runtime entities as fragments for other entities. In this case, you might want to destroy such fragments even while they are still attached to other entities. Since entities cannot have destroyed fragments, a destruction policy must be applied to resolve this. By default, the library will remove the destroyed fragment from all entities that have it.
@@ -1496,6 +1533,9 @@ execute :: query -> {execute_state? -> chunk?, entity[]?, integer?}, execute_sta
 
 locate :: entity -> chunk?, integer
 
+lookup :: string -> entity?
+multi_lookup :: string -> entity[], integer
+
 process :: system... -> ()
 process_with :: system, ... -> ()
 
@@ -1584,6 +1624,10 @@ builder_mt:destruction_policy :: id -> builder
 ```
 
 ## Changelog
+
+### vX.Y.Z
+
+- Added the new [`evolved.lookup`](#evolvedlookup) and [`evolved.multi_lookup`](#evolvedmulti_lookup) functions that allow finding ids by their names
 
 ### v1.9.0
 
@@ -1999,6 +2043,25 @@ function evolved.execute(query) end
 ---@return integer place
 ---@nodiscard
 function evolved.locate(entity) end
+```
+
+### `evolved.lookup`
+
+```lua
+---@param name string
+---@return evolved.entity? entity
+---@nodiscard
+function evolved.lookup(name) end
+```
+
+### `evolved.multi_lookup`
+
+```lua
+---@param name string
+---@return evolved.entity[] entity_list
+---@return integer entity_count
+---@nodiscard
+function evolved.multi_lookup(name) end
 ```
 
 ### `evolved.process`
