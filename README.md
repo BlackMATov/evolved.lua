@@ -1628,6 +1628,7 @@ builder_mt:destruction_policy :: id -> builder
 ### vX.Y.Z
 
 - Added the new [`evolved.lookup`](#evolvedlookup) and [`evolved.multi_lookup`](#evolvedmulti_lookup) functions that allow finding ids by their names
+- Added a non-shrinking version of the [`evolved.collect_garbage`](#evolvedcollect_garbage) function that only collects garbage without shrinking storages
 
 ### v1.9.0
 
