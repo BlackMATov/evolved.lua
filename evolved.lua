@@ -1149,11 +1149,6 @@ local __DESTRUCTION_POLICY_REMOVE_FRAGMENT = __acquire_id()
 ---
 
 local __safe_tbls = {
-    __EMPTY_ENTITY_LIST = __lua_setmetatable({}, {
-        __tostring = function() return 'empty entity list' end,
-        __newindex = function() __error_fmt 'attempt to modify empty entity list' end
-    }) --[=[@as evolved.id[]]=],
-
     __EMPTY_FRAGMENT_SET = __lua_setmetatable({}, {
         __tostring = function() return 'empty fragment set' end,
         __newindex = function() __error_fmt 'attempt to modify empty fragment set' end
@@ -1184,9 +1179,13 @@ local __evolved_cancel
 
 local __evolved_spawn
 local __evolved_multi_spawn
+local __evolved_multi_spawn_nr
+local __evolved_multi_spawn_to
 
 local __evolved_clone
 local __evolved_multi_clone
+local __evolved_multi_clone_nr
+local __evolved_multi_clone_to
 
 local __evolved_alive
 local __evolved_alive_all
@@ -1221,6 +1220,7 @@ local __evolved_locate
 
 local __evolved_lookup
 local __evolved_multi_lookup
+local __evolved_multi_lookup_to
 
 local __evolved_process
 local __evolved_process_with
@@ -2681,10 +2681,11 @@ end
 
 ---@param chunk? evolved.chunk
 ---@param entity_list evolved.entity[]
+---@param entity_first integer
 ---@param entity_count integer
 ---@param component_table? evolved.component_table
 ---@param component_mapper? evolved.component_mapper
-function __multi_spawn_entity(chunk, entity_list, entity_count, component_table, component_mapper)
+function __multi_spawn_entity(chunk, entity_list, entity_first, entity_count, component_table, component_mapper)
     if __defer_depth <= 0 then
         __error_fmt('spawn entity operations should be deferred')
     end
@@ -2732,7 +2733,7 @@ function __multi_spawn_entity(chunk, entity_list, entity_count, component_table,
         local entity_places = __entity_places
 
         for place = b_place, e_place do
-            local entity = entity_list[place - b_place + 1]
+            local entity = entity_list[place - b_place + entity_first]
             chunk_entity_list[place] = entity
 
             local entity_primary = entity % 2 ^ 20
@@ -2980,10 +2981,11 @@ end
 
 ---@param prefab evolved.entity
 ---@param entity_list evolved.entity[]
+---@param entity_first integer
 ---@param entity_count integer
 ---@param component_table? evolved.component_table
 ---@param component_mapper? evolved.component_mapper
-function __multi_clone_entity(prefab, entity_list, entity_count, component_table, component_mapper)
+function __multi_clone_entity(prefab, entity_list, entity_first, entity_count, component_table, component_mapper)
     if __defer_depth <= 0 then
         __error_fmt('clone entity operations should be deferred')
     end
@@ -2999,7 +3001,9 @@ function __multi_clone_entity(prefab, entity_list, entity_count, component_table
     end
 
     if not prefab_chunk or not prefab_chunk.__without_unique_fragments then
-        return __multi_spawn_entity(nil, entity_list, entity_count, component_table, component_mapper)
+        return __multi_spawn_entity(nil,
+            entity_list, entity_first, entity_count,
+            component_table, component_mapper)
     end
 
     local chunk = component_table
@@ -3048,7 +3052,7 @@ function __multi_clone_entity(prefab, entity_list, entity_count, component_table
         local entity_places = __entity_places
 
         for place = b_place, e_place do
-            local entity = entity_list[place - b_place + 1]
+            local entity = entity_list[place - b_place + entity_first]
             chunk_entity_list[place] = entity
 
             local entity_primary = entity % 2 ^ 20
@@ -4379,10 +4383,10 @@ function __defer_spawn_entity(chunk, entity, component_table, component_mapper)
 end
 
 __defer_ops[__defer_op.spawn_entity] = function(bytes, index)
-    local chunk = bytes[index + 0]
-    local entity = bytes[index + 1]
-    local component_table2 = bytes[index + 2]
-    local component_mapper = bytes[index + 3]
+    local chunk = bytes[index + 0] ---@type evolved.chunk
+    local entity = bytes[index + 1] ---@type evolved.entity
+    local component_table2 = bytes[index + 2] ---@type evolved.component_table?
+    local component_mapper = bytes[index + 3] ---@type evolved.component_mapper?
 
     __evolved_defer()
     do
@@ -4399,15 +4403,16 @@ end
 
 ---@param chunk? evolved.chunk
 ---@param entity_list evolved.entity[]
+---@param entity_first integer
 ---@param entity_count integer
 ---@param component_table? evolved.component_table
 ---@param component_mapper? evolved.component_mapper
-function __defer_multi_spawn_entity(chunk, entity_list, entity_count, component_table, component_mapper)
+function __defer_multi_spawn_entity(chunk, entity_list, entity_first, entity_count, component_table, component_mapper)
     ---@type evolved.entity[]
     local entity_list2 = __acquire_table(__table_pool_tag.entity_list)
 
     __lua_table_move(
-        entity_list, 1, entity_count,
+        entity_list, entity_first, entity_first + entity_count - 1,
         1, entity_list2)
 
     ---@type evolved.component_table?
@@ -4435,15 +4440,17 @@ function __defer_multi_spawn_entity(chunk, entity_list, entity_count, component_
 end
 
 __defer_ops[__defer_op.multi_spawn_entity] = function(bytes, index)
-    local chunk = bytes[index + 0]
-    local entity_count = bytes[index + 1]
-    local entity_list2 = bytes[index + 2]
-    local component_table2 = bytes[index + 3]
-    local component_mapper = bytes[index + 4]
+    local chunk = bytes[index + 0] ---@type evolved.chunk
+    local entity_count = bytes[index + 1] ---@type integer
+    local entity_list2 = bytes[index + 2] ---@type evolved.entity[]
+    local component_table2 = bytes[index + 3] ---@type evolved.component_table?
+    local component_mapper = bytes[index + 4] ---@type evolved.component_mapper?
 
     __evolved_defer()
     do
-        __multi_spawn_entity(chunk, entity_list2, entity_count, component_table2, component_mapper)
+        __multi_spawn_entity(chunk,
+            entity_list2, 1, entity_count,
+            component_table2, component_mapper)
 
         if entity_list2 then
             __release_table(__table_pool_tag.entity_list, entity_list2, false, true)
@@ -4487,10 +4494,10 @@ function __defer_clone_entity(prefab, entity, component_table, component_mapper)
 end
 
 __defer_ops[__defer_op.clone_entity] = function(bytes, index)
-    local prefab = bytes[index + 0]
-    local entity = bytes[index + 1]
-    local component_table2 = bytes[index + 2]
-    local component_mapper = bytes[index + 3]
+    local prefab = bytes[index + 0] ---@type evolved.entity
+    local entity = bytes[index + 1] ---@type evolved.entity
+    local component_table2 = bytes[index + 2] ---@type evolved.component_table?
+    local component_mapper = bytes[index + 3] ---@type evolved.component_mapper?
 
     __evolved_defer()
     do
@@ -4507,15 +4514,16 @@ end
 
 ---@param prefab evolved.entity
 ---@param entity_list evolved.entity[]
+---@param entity_first integer
 ---@param entity_count integer
 ---@param component_table? evolved.component_table
 ---@param component_mapper? evolved.component_mapper
-function __defer_multi_clone_entity(prefab, entity_list, entity_count, component_table, component_mapper)
+function __defer_multi_clone_entity(prefab, entity_list, entity_first, entity_count, component_table, component_mapper)
     ---@type evolved.entity[]
     local entity_list2 = __acquire_table(__table_pool_tag.entity_list)
 
     __lua_table_move(
-        entity_list, 1, entity_count,
+        entity_list, entity_first, entity_first + entity_count - 1,
         1, entity_list2)
 
     ---@type evolved.component_table?
@@ -4543,15 +4551,17 @@ function __defer_multi_clone_entity(prefab, entity_list, entity_count, component
 end
 
 __defer_ops[__defer_op.multi_clone_entity] = function(bytes, index)
-    local prefab = bytes[index + 0]
-    local entity_count = bytes[index + 1]
-    local entity_list2 = bytes[index + 2]
-    local component_table2 = bytes[index + 3]
-    local component_mapper = bytes[index + 4]
+    local prefab = bytes[index + 0] ---@type evolved.entity
+    local entity_count = bytes[index + 1] ---@type integer
+    local entity_list2 = bytes[index + 2] ---@type evolved.entity[]
+    local component_table2 = bytes[index + 3] ---@type evolved.component_table?
+    local component_mapper = bytes[index + 4] ---@type evolved.component_mapper?
 
     __evolved_defer()
     do
-        __multi_clone_entity(prefab, entity_list2, entity_count, component_table2, component_mapper)
+        __multi_clone_entity(prefab,
+            entity_list2, 1, entity_count,
+            component_table2, component_mapper)
 
         if entity_list2 then
             __release_table(__table_pool_tag.entity_list, entity_list2, false, true)
@@ -4922,9 +4932,47 @@ end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function __evolved_multi_spawn(entity_count, component_table, component_mapper)
     if entity_count <= 0 then
-        return __safe_tbls.__EMPTY_ENTITY_LIST, 0
+        return {}, 0
+    end
+
+    local entity_list = __lua_table_new(entity_count)
+
+    __evolved_multi_spawn_to(
+        entity_list, 1, entity_count,
+        component_table, component_mapper)
+
+    return entity_list, entity_count
+end
+
+---@param entity_count integer
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+function __evolved_multi_spawn_nr(entity_count, component_table, component_mapper)
+    if entity_count <= 0 then
+        return
+    end
+
+    local entity_list = __acquire_table(__table_pool_tag.entity_list)
+
+    __evolved_multi_spawn_to(
+        entity_list, 1, entity_count,
+        component_table, component_mapper)
+
+    __release_table(__table_pool_tag.entity_list, entity_list, false, true)
+end
+
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+function __evolved_multi_spawn_to(out_entity_list, out_entity_first,
+                                  entity_count, component_table, component_mapper)
+    if entity_count <= 0 then
+        return
     end
 
     if __debug_mode then
@@ -4938,27 +4986,27 @@ function __evolved_multi_spawn(entity_count, component_table, component_mapper)
         end
     end
 
-    local entity_list = __lua_table_new(entity_count)
-
-    for entity_index = 1, entity_count do
-        entity_list[entity_index] = __acquire_id()
+    for entity_index = out_entity_first, out_entity_first + entity_count - 1 do
+        out_entity_list[entity_index] = __acquire_id()
     end
 
     if not component_table or not __lua_next(component_table) then
-        return entity_list, entity_count
+        return
     end
 
     if __defer_depth > 0 then
-        __defer_multi_spawn_entity(nil, entity_list, entity_count, component_table, component_mapper)
+        __defer_multi_spawn_entity(nil,
+            out_entity_list, out_entity_first, entity_count,
+            component_table, component_mapper)
     else
         __evolved_defer()
         do
-            __multi_spawn_entity(nil, entity_list, entity_count, component_table, component_mapper)
+            __multi_spawn_entity(nil,
+                out_entity_list, out_entity_first, entity_count,
+                component_table, component_mapper)
         end
         __evolved_commit()
     end
-
-    return entity_list, entity_count
 end
 
 ---@param prefab evolved.entity
@@ -5003,9 +5051,49 @@ end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function __evolved_multi_clone(entity_count, prefab, component_table, component_mapper)
     if entity_count <= 0 then
-        return __safe_tbls.__EMPTY_ENTITY_LIST, 0
+        return {}, 0
+    end
+
+    local entity_list = __lua_table_new(entity_count)
+
+    __evolved_multi_clone_to(
+        entity_list, 1, entity_count,
+        prefab, component_table, component_mapper)
+
+    return entity_list, entity_count
+end
+
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+function __evolved_multi_clone_nr(entity_count, prefab, component_table, component_mapper)
+    if entity_count <= 0 then
+        return
+    end
+
+    local entity_list = __acquire_table(__table_pool_tag.entity_list)
+
+    __evolved_multi_clone_to(
+        entity_list, 1, entity_count,
+        prefab, component_table, component_mapper)
+
+    __release_table(__table_pool_tag.entity_list, entity_list, false, true)
+end
+
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+function __evolved_multi_clone_to(out_entity_list, out_entity_first,
+                                  entity_count, prefab, component_table, component_mapper)
+    if entity_count <= 0 then
+        return
     end
 
     if __debug_mode then
@@ -5024,23 +5112,23 @@ function __evolved_multi_clone(entity_count, prefab, component_table, component_
         end
     end
 
-    local entity_list = __lua_table_new(entity_count)
-
-    for entity_index = 1, entity_count do
-        entity_list[entity_index] = __acquire_id()
+    for entity_index = out_entity_first, out_entity_first + entity_count - 1 do
+        out_entity_list[entity_index] = __acquire_id()
     end
 
     if __defer_depth > 0 then
-        __defer_multi_clone_entity(prefab, entity_list, entity_count, component_table, component_mapper)
+        __defer_multi_clone_entity(prefab,
+            out_entity_list, out_entity_first, entity_count,
+            component_table, component_mapper)
     else
         __evolved_defer()
         do
-            __multi_clone_entity(prefab, entity_list, entity_count, component_table, component_mapper)
+            __multi_clone_entity(prefab,
+                out_entity_list, out_entity_first, entity_count,
+                component_table, component_mapper)
         end
         __evolved_commit()
     end
-
-    return entity_list, entity_count
 end
 
 ---@param entity evolved.entity
@@ -6165,13 +6253,26 @@ end
 ---@return integer entity_count
 ---@nodiscard
 function __evolved_multi_lookup(name)
+    local entity_list = {}
+    local entity_count = __evolved_multi_lookup_to(entity_list, 1, name)
+    return entity_list, entity_count
+end
+
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param name string
+---@return integer entity_count
+function __evolved_multi_lookup_to(out_entity_list, out_entity_first, name)
     do
         local named_entities = __named_entities[name]
         local named_entity_list = named_entities and named_entities.__item_list
         local named_entity_count = named_entities and named_entities.__item_count or 0
 
         if named_entity_count > 0 then
-            return __list_fns.dup(named_entity_list, named_entity_count), named_entity_count
+            __lua_table_move(
+                named_entity_list, 1, named_entity_count,
+                out_entity_first, out_entity_list)
+            return named_entity_count
         end
     end
 
@@ -6179,11 +6280,12 @@ function __evolved_multi_lookup(name)
         local named_entity = __named_entity[name]
 
         if named_entity then
-            return { named_entity }, 1
+            out_entity_list[out_entity_first] = named_entity
+            return 1
         end
     end
 
-    return __safe_tbls.__EMPTY_ENTITY_LIST, 0
+    return 0
 end
 
 ---@param ... evolved.system systems
@@ -6531,11 +6633,37 @@ end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function __builder_mt:multi_build(entity_count, prefab, component_mapper)
     if prefab then
         return self:multi_clone(entity_count, prefab, component_mapper)
     else
         return self:multi_spawn(entity_count, component_mapper)
+    end
+end
+
+---@param entity_count integer
+---@param prefab? evolved.entity
+---@param component_mapper? evolved.component_mapper
+function __builder_mt:multi_build_nr(entity_count, prefab, component_mapper)
+    if prefab then
+        self:multi_clone_nr(entity_count, prefab, component_mapper)
+    else
+        self:multi_spawn_nr(entity_count, component_mapper)
+    end
+end
+
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param prefab? evolved.entity
+---@param component_mapper? evolved.component_mapper
+function __builder_mt:multi_build_to(out_entity_list, out_entity_first,
+                                     entity_count, prefab, component_mapper)
+    if prefab then
+        self:multi_clone_to(out_entity_list, out_entity_first, entity_count, prefab, component_mapper)
+    else
+        self:multi_spawn_to(out_entity_list, out_entity_first, entity_count, component_mapper)
     end
 end
 
@@ -6579,9 +6707,41 @@ end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function __builder_mt:multi_spawn(entity_count, component_mapper)
     if entity_count <= 0 then
-        return __safe_tbls.__EMPTY_ENTITY_LIST, 0
+        return {}, 0
+    end
+
+    local entity_list = __lua_table_new(entity_count)
+
+    self:multi_spawn_to(entity_list, 1, entity_count, component_mapper)
+
+    return entity_list, entity_count
+end
+
+---@param entity_count integer
+---@param component_mapper? evolved.component_mapper
+function __builder_mt:multi_spawn_nr(entity_count, component_mapper)
+    if entity_count <= 0 then
+        return
+    end
+
+    local entity_list = __acquire_table(__table_pool_tag.entity_list)
+
+    self:multi_spawn_to(entity_list, 1, entity_count, component_mapper)
+
+    __release_table(__table_pool_tag.entity_list, entity_list, false, true)
+end
+
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param component_mapper? evolved.component_mapper
+function __builder_mt:multi_spawn_to(out_entity_list, out_entity_first,
+                                     entity_count, component_mapper)
+    if entity_count <= 0 then
+        return
     end
 
     local chunk = self.__chunk
@@ -6598,27 +6758,27 @@ function __builder_mt:multi_spawn(entity_count, component_mapper)
         end
     end
 
-    local entity_list = __lua_table_new(entity_count)
-
-    for entity_index = 1, entity_count do
-        entity_list[entity_index] = __acquire_id()
+    for entity_index = out_entity_first, out_entity_first + entity_count - 1 do
+        out_entity_list[entity_index] = __acquire_id()
     end
 
     if not component_table or not __lua_next(component_table) then
-        return entity_list, entity_count
+        return
     end
 
     if __defer_depth > 0 then
-        __defer_multi_spawn_entity(chunk, entity_list, entity_count, component_table, component_mapper)
+        __defer_multi_spawn_entity(chunk,
+            out_entity_list, out_entity_first, entity_count,
+            component_table, component_mapper)
     else
         __evolved_defer()
         do
-            __multi_spawn_entity(chunk, entity_list, entity_count, component_table, component_mapper)
+            __multi_spawn_entity(chunk,
+                out_entity_list, out_entity_first, entity_count,
+                component_table, component_mapper)
         end
         __evolved_commit()
     end
-
-    return entity_list, entity_count
 end
 
 ---@param prefab evolved.entity
@@ -6663,9 +6823,43 @@ end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function __builder_mt:multi_clone(entity_count, prefab, component_mapper)
     if entity_count <= 0 then
-        return __safe_tbls.__EMPTY_ENTITY_LIST, 0
+        return {}, 0
+    end
+
+    local entity_list = __lua_table_new(entity_count)
+
+    self:multi_clone_to(entity_list, 1, entity_count, prefab, component_mapper)
+
+    return entity_list, entity_count
+end
+
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_mapper? evolved.component_mapper
+function __builder_mt:multi_clone_nr(entity_count, prefab, component_mapper)
+    if entity_count <= 0 then
+        return
+    end
+
+    local entity_list = __acquire_table(__table_pool_tag.entity_list)
+
+    self:multi_clone_to(entity_list, 1, entity_count, prefab, component_mapper)
+
+    __release_table(__table_pool_tag.entity_list, entity_list, false, true)
+end
+
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_mapper? evolved.component_mapper
+function __builder_mt:multi_clone_to(out_entity_list, out_entity_first,
+                                     entity_count, prefab, component_mapper)
+    if entity_count <= 0 then
+        return
     end
 
     local component_table = self.__component_table
@@ -6686,23 +6880,23 @@ function __builder_mt:multi_clone(entity_count, prefab, component_mapper)
         end
     end
 
-    local entity_list = __lua_table_new(entity_count)
-
-    for entity_index = 1, entity_count do
-        entity_list[entity_index] = __acquire_id()
+    for entity_index = out_entity_first, out_entity_first + entity_count - 1 do
+        out_entity_list[entity_index] = __acquire_id()
     end
 
     if __defer_depth > 0 then
-        __defer_multi_clone_entity(prefab, entity_list, entity_count, component_table, component_mapper)
+        __defer_multi_clone_entity(prefab,
+            out_entity_list, out_entity_first, entity_count,
+            component_table, component_mapper)
     else
         __evolved_defer()
         do
-            __multi_clone_entity(prefab, entity_list, entity_count, component_table, component_mapper)
+            __multi_clone_entity(prefab,
+                out_entity_list, out_entity_first, entity_count,
+                component_table, component_mapper)
         end
         __evolved_commit()
     end
-
-    return entity_list, entity_count
 end
 
 ---@param fragment evolved.fragment
@@ -7660,9 +7854,13 @@ evolved.cancel = __evolved_cancel
 
 evolved.spawn = __evolved_spawn
 evolved.multi_spawn = __evolved_multi_spawn
+evolved.multi_spawn_nr = __evolved_multi_spawn_nr
+evolved.multi_spawn_to = __evolved_multi_spawn_to
 
 evolved.clone = __evolved_clone
 evolved.multi_clone = __evolved_multi_clone
+evolved.multi_clone_nr = __evolved_multi_clone_nr
+evolved.multi_clone_to = __evolved_multi_clone_to
 
 evolved.alive = __evolved_alive
 evolved.alive_all = __evolved_alive_all
@@ -7695,6 +7893,7 @@ evolved.locate = __evolved_locate
 
 evolved.lookup = __evolved_lookup
 evolved.multi_lookup = __evolved_multi_lookup
+evolved.multi_lookup_to = __evolved_multi_lookup_to
 
 evolved.process = __evolved_process
 evolved.process_with = __evolved_process_with

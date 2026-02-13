@@ -1500,9 +1500,13 @@ cancel :: boolean
 
 spawn :: component_table?, component_mapper? -> entity
 multi_spawn :: integer, component_table?, component_mapper? -> entity[], integer
+multi_spawn_nr :: integer, component_table?, component_mapper? -> ()
+multi_spawn_to :: entity[], integer, integer, component_table?, component_mapper? -> ()
 
 clone :: entity, component_table?, component_mapper? -> entity
 multi_clone :: integer, entity, component_table?, component_mapper? -> entity[], integer
+multi_clone_nr :: integer, entity, component_table?, component_mapper? -> ()
+multi_clone_to :: entity[], integer, integer, entity, component_table?, component_mapper? -> ()
 
 alive :: entity -> boolean
 alive_all :: entity... -> boolean
@@ -1535,6 +1539,7 @@ locate :: entity -> chunk?, integer
 
 lookup :: string -> entity?
 multi_lookup :: string -> entity[], integer
+multi_lookup_to :: entity[], integer, string -> integer
 
 process :: system... -> ()
 process_with :: system, ... -> ()
@@ -1569,12 +1574,18 @@ builder :: builder
 
 builder_mt:build :: entity?, component_mapper? -> entity
 builder_mt:multi_build :: integer, entity?, component_mapper? -> entity[], integer
+builder_mt:multi_build_nr :: integer, entity?, component_mapper? -> ()
+builder_mt:multi_build_to :: entity[], integer, integer, entity?, component_mapper? -> ()
 
 builder_mt:spawn :: component_mapper? -> entity
 builder_mt:multi_spawn :: integer, component_mapper? -> entity[], integer
+builder_mt:multi_spawn_nr :: integer, component_mapper? -> ()
+builder_mt:multi_spawn_to :: entity[], integer, integer, component_mapper? -> ()
 
 builder_mt:clone :: entity, component_mapper? -> entity
 builder_mt:multi_clone :: integer, entity, component_mapper? -> entity[], integer
+builder_mt:multi_clone_nr :: integer, entity, component_mapper? -> ()
+builder_mt:multi_clone_to :: entity[], integer, integer, entity, component_mapper? -> ()
 
 builder_mt:has :: fragment -> boolean
 builder_mt:has_all :: fragment... -> boolean
@@ -1835,7 +1846,29 @@ function evolved.spawn(component_table, component_mapper) end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.multi_spawn(entity_count, component_table, component_mapper) end
+```
+
+### `evolved.multi_spawn_nr`
+
+```lua
+---@param entity_count integer
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+function evolved.multi_spawn_nr(entity_count, component_table, component_mapper) end
+```
+
+### `evolved.multi_spawn_to`
+
+```lua
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+function evolved.multi_spawn_to(out_entity_list, out_entity_first,
+                                entity_count, component_table, component_mapper) end
 ```
 
 ### `evolved.clone`
@@ -1857,7 +1890,31 @@ function evolved.clone(prefab, component_table, component_mapper) end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.multi_clone(entity_count, prefab, component_table, component_mapper) end
+```
+
+### `evolved.multi_clone_nr`
+
+```lua
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+function evolved.multi_clone_nr(entity_count, prefab, component_table, component_mapper) end
+```
+
+### `evolved.multi_clone_to`
+
+```lua
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+function evolved.multi_clone_to(out_entity_list, out_entity_first,
+                                entity_count, prefab, component_table, component_mapper) end
 ```
 
 ### `evolved.alive`
@@ -2065,6 +2122,16 @@ function evolved.lookup(name) end
 function evolved.multi_lookup(name) end
 ```
 
+### `evolved.multi_lookup_to`
+
+```lua
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param name string
+---@return integer entity_count
+function evolved.multi_lookup_to(out_entity_list, out_entity_first, name) end
+```
+
 ### `evolved.process`
 
 ```lua
@@ -2207,7 +2274,29 @@ function evolved.builder_mt:build(prefab, component_mapper) end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.builder_mt:multi_build(entity_count, prefab, component_mapper) end
+```
+
+### `evolved.builder_mt:multi_build_nr`
+
+```lua
+---@param entity_count integer
+---@param prefab? evolved.entity
+---@param component_mapper? evolved.component_mapper
+function evolved.builder_mt:multi_build_nr(entity_count, prefab, component_mapper) end
+```
+
+### `evolved.builder_mt:multi_build_to`
+
+```lua
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param prefab? evolved.entity
+---@param component_mapper? evolved.component_mapper
+function evolved.builder_mt:multi_build_to(out_entity_list, out_entity_first,
+                                           entity_count, prefab, component_mapper) end
 ```
 
 #### `evolved.builder_mt:spawn`
@@ -2225,7 +2314,27 @@ function evolved.builder_mt:spawn(component_mapper) end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.builder_mt:multi_spawn(entity_count, component_mapper) end
+```
+
+#### `evolved.builder_mt:multi_spawn_nr`
+
+```lua
+---@param entity_count integer
+---@param component_mapper? evolved.component_mapper
+function evolved.builder_mt:multi_spawn_nr(entity_count, component_mapper) end
+```
+
+#### `evolved.builder_mt:multi_spawn_to`
+
+```lua
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param component_mapper? evolved.component_mapper
+function evolved.builder_mt:multi_spawn_to(out_entity_list, out_entity_first,
+                                           entity_count, component_mapper) end
 ```
 
 #### `evolved.builder_mt:clone`
@@ -2245,7 +2354,29 @@ function evolved.builder_mt:clone(prefab, component_mapper) end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.builder_mt:multi_clone(entity_count, prefab, component_mapper) end
+```
+
+#### `evolved.builder_mt:multi_clone_nr`
+
+```lua
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_mapper? evolved.component_mapper
+function evolved.builder_mt:multi_clone_nr(entity_count, prefab, component_mapper) end
+```
+
+#### `evolved.builder_mt:multi_clone_to`
+
+```lua
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_mapper? evolved.component_mapper
+function evolved.builder_mt:multi_clone_to(out_entity_list, out_entity_first,
+                                           entity_count, prefab, component_mapper) end
 ```
 
 #### `evolved.builder_mt:has`
