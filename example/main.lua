@@ -52,7 +52,7 @@ evolved.builder()
     :name('SYSTEMS.STARTUP')
     :group(STAGES.ON_SETUP)
     :prologue(function()
-        evolved.multi_clone(500, PREFABS.CIRCLE, nil, function(chunk, b_place, e_place)
+        evolved.multi_clone_nr(500, PREFABS.CIRCLE, nil, function(chunk, b_place, e_place)
             local screen_width, screen_height = love.graphics.getDimensions()
 
             ---@type number[], number[]
