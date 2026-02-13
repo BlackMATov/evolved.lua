@@ -40,12 +40,34 @@
             prefab?: Entity,
             component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
 
+        multi_build_nr: function(self: Builder,
+            entity_count: integer,
+            prefab?: Entity,
+            component_mapper?: function(Chunk, integer, integer))
+
+        multi_build_to: function(self: Builder,
+            out_entity_list: { Entity },
+            out_entity_first: integer,
+            entity_count: integer,
+            prefab?: Entity,
+            component_mapper?: function(Chunk, integer, integer))
+
         spawn: function(self: Builder,
             component_mapper?: function(Chunk, integer)): Entity
 
         multi_spawn: function(self: Builder,
             entity_count: integer,
             component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
+
+        multi_spawn_nr: function(self: Builder,
+            entity_count: integer,
+            component_mapper?: function(Chunk, integer, integer))
+
+        multi_spawn_to: function(self: Builder,
+            out_entity_list: { Entity },
+            out_entity_first: integer,
+            entity_count: integer,
+            component_mapper?: function(Chunk, integer, integer))
 
         clone: function(self: Builder,
             prefab: Entity,
@@ -55,6 +77,18 @@
             entity_count: integer,
             prefab: Entity,
             component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
+
+        multi_clone_nr: function(self: Builder,
+            entity_count: integer,
+            prefab: Entity,
+            component_mapper?: function(Chunk, integer, integer))
+
+        multi_clone_to: function(self: Builder,
+            out_entity_list: { Entity },
+            out_entity_first: integer,
+            entity_count: integer,
+            prefab: Entity,
+            component_mapper?: function(Chunk, integer, integer))
 
         has: function(self: Builder, fragment: Fragment): boolean
         has_all: function(self: Builder, ...: Fragment): boolean
@@ -164,6 +198,18 @@
         component_table?: { Fragment: any },
         component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
 
+    multi_spawn_nr: function(
+        entity_count: integer,
+        component_table?: { Fragment: any },
+        component_mapper?: function(Chunk, integer, integer))
+
+    multi_spawn_to: function(
+        out_entity_list: { Entity },
+        out_entity_first: integer,
+        entity_count: integer,
+        component_table?: { Fragment: any },
+        component_mapper?: function(Chunk, integer, integer))
+
     clone: function(
         prefab: Entity,
         component_table?: { Fragment: any },
@@ -174,6 +220,20 @@
         prefab: Entity,
         component_table?: { Fragment: any },
         component_mapper?: function(Chunk, integer, integer)): { Entity }, integer
+
+    multi_clone_nr: function(
+        entity_count: integer,
+        prefab: Entity,
+        component_table?: { Fragment: any },
+        component_mapper?: function(Chunk, integer, integer))
+
+    multi_clone_to: function(
+        out_entity_list: { Entity },
+        out_entity_first: integer,
+        entity_count: integer,
+        prefab: Entity,
+        component_table?: { Fragment: any },
+        component_mapper?: function(Chunk, integer, integer))
 
     alive: function(entity: Entity): boolean
     alive_all: function(...: Entity): boolean
@@ -210,6 +270,7 @@
 
     lookup: function(name: string): Entity | nil
     multi_lookup: function(name: string): { Entity }, integer
+    multi_lookup_to: function(out_entity_list: { Entity }, out_entity_first: integer, name: string): integer
 
     process: function(...: System)
     process_with: function(system: System, ...: any)
