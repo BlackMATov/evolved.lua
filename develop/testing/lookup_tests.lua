@@ -174,3 +174,22 @@ do
         assert(entity_list and #entity_list == 0 and entity_count == 0)
     end
 end
+
+do
+    local e1, e2 = evo.id(2)
+
+    evo.set(e1, evo.NAME, 'lookup_e')
+    evo.set(e2, evo.NAME, 'lookup_e')
+
+    do
+        local entity_list = {}
+        local entity_count = evo.multi_lookup_to(entity_list, 1, 'lookup_e')
+        assert(entity_count == 2 and entity_list[1] == e1 and entity_list[2] == e2)
+    end
+
+    do
+        local entity_list = {}
+        local entity_count = evo.multi_lookup_to(entity_list, 2, 'lookup_e')
+        assert(entity_count == 2 and entity_list[2] == e1 and entity_list[3] == e2)
+    end
+end
