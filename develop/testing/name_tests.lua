@@ -1,5 +1,7 @@
 local evo = require 'evolved'
 
+evo.debug_mode(true)
+
 do
     local id = evo.id()
 

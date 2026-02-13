@@ -45,7 +45,8 @@
     - [Batch Operations](#batch-operations)
   - [Systems](#systems)
     - [Processing Payloads](#processing-payloads)
-  - [Predefined Traits](#predefined-traits)
+  - [Predefined Fragments](#predefined-fragments)
+    - [Entity Names](#entity-names)
     - [Fragment Tags](#fragment-tags)
     - [Fragment Hooks](#fragment-hooks)
     - [Unique Fragments](#unique-fragments)
@@ -55,6 +56,7 @@
     - [Fragment Requirements](#fragment-requirements)
     - [Destruction Policies](#destruction-policies)
     - [Custom Component Storages](#custom-component-storages)
+  - [Garbage Collection](#garbage-collection)
 - [Cheat Sheet](#cheat-sheet)
   - [Aliases](#aliases)
   - [Predefs](#predefs)
@@ -63,6 +65,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
+  - [v1.10.0](#v1100)
   - [v1.9.0](#v190)
   - [v1.8.0](#v180)
   - [v1.7.0](#v170)
@@ -488,6 +491,7 @@ When you need to spawn multiple entities with identical fragments, use `multi_sp
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.multi_spawn(entity_count, component_table, component_mapper) end
 
 ---@param entity_count integer
@@ -496,6 +500,7 @@ function evolved.multi_spawn(entity_count, component_table, component_mapper) en
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.multi_clone(entity_count, prefab, component_table, component_mapper) end
 ```
 
@@ -525,6 +530,36 @@ end)
 ```
 
 Of course, you can use `evolved.multi_clone` in the same way. Builders can also be used for multi-entity spawning and cloning by calling the corresponding methods on the builder object.
+
+Also, for all `multi_` functions, the library provides [`_nr`](#evolvedmulti_spawn_nr) and [`_to`](#evolvedmulti_spawn_to) suffix variants that allow you to perform these operations without returning the list of spawned entities or by copying the spawned entities to your own table, which can be more efficient because it avoids the overhead of allocating and returning a new table.
+
+```lua
+local evolved = require 'evolved'
+
+local position_x, position_y = evolved.id(2)
+
+do
+    -- we don't interest in the list of spawned entities,
+    -- so we use the _nr variant of the multi_spawn function
+
+    evolved.multi_spawn_nr(100, {
+        [position_x] = 0,
+        [position_y] = 0,
+    })
+end
+
+do
+    -- store spawned entities in our own table starting at index 1,
+    -- so we use the _to variant of the multi_spawn function
+
+    local entity_list = {}
+
+    evolved.multi_spawn_to(entity_list, 1, 100, {
+        [position_x] = 0,
+        [position_y] = 0,
+    })
+end
+```
 
 ### Access Operations
 
@@ -980,7 +1015,42 @@ evolved.process_with(physics_system, delta_time)
 
 `delta_time` in this example is passed as a processing payload to the system's execution callback. Payloads can be of any type and can be multiple values. Also, payloads are passed to prologue and epilogue callbacks if they are defined. Every subsystem in a group will receive the same payload when the group is processed with [`evolved.process_with`](#evolvedprocess_with).
 
-### Predefined Traits
+### Predefined Fragments
+
+#### Entity Names
+
+The library provides a way to assign names to any id using the [`evolved.NAME`](#evolvedname) fragment. This is useful for debugging and development purposes, as it allows you to identify entities or fragments by their names instead of their identifiers. The name of an entity can be retrieved using the [`evolved.name`](#evolvedname-1) function.
+
+```lua
+local evolved = require 'evolved'
+
+local player = evolved.builder()
+    :name('Player')
+    :build()
+
+assert(evolved.name(player) == 'Player')
+```
+
+Names are not unique, so multiple entities can have the same name. Also, the name of an entity can be changed at any time by setting a new name using the [`evolved.NAME`](#evolvedname) fragment as a usual component.
+
+You can find entities by their names using the [`evolved.lookup`](#evolvedlookup) and [`evolved.multi_lookup`](#evolvedmulti_lookup) functions. The [`evolved.lookup`](#evolvedlookup) function returns the first entity with the specified name, while the [`evolved.multi_lookup`](#evolvedmulti_lookup) function returns a list of all entities with the specified name.
+
+```lua
+local evolved = require 'evolved'
+
+local player1 = evolved.builder()
+    :name('Player')
+    :build()
+
+local player2 = evolved.builder()
+    :name('Player')
+    :build()
+
+assert(evolved.lookup('Player') == player1)
+
+local player_list, player_count = evolved.multi_lookup('Player')
+assert(player_count == 2 and player_list[1] == player1 and player_list[2] == player2)
+```
 
 #### Fragment Tags
 
@@ -1346,6 +1416,24 @@ evolved.builder()
 evolved.process_with(MOVEMENT_SYSTEM, 0.016)
 ```
 
+### Garbage Collection
+
+While using the library, some internal data structures can become obsolete and should be cleaned up to free memory. For example, empty chunks that no longer contain entities can be removed. Component storages can also have unused capacity that can be shrunk to save memory. The library provides a function to control this garbage collection process.
+
+```lua
+---@param no_shrink? boolean
+function evolved.collect_garbage(no_shrink) end
+```
+
+By default, [`evolved.collect_garbage`](#evolvedcollect_garbage) cleans up obsolete data structures and shrinks component storages to fit their current size. If you pass `true`, it only cleans up obsolete data structures and skips shrinking. This avoids the overhead of resizing storages, which can be expensive.
+
+Call this function periodically to keep memory usage under control. It is best to call it between levels or during loading screens when performance is not critical. Also, call Lua's built-in garbage collector afterward to ensure all unused memory is freed.
+
+```lua
+evolved.collect_garbage()
+collectgarbage('collect')
+```
+
 ## Cheat Sheet
 
 ### Aliases
@@ -1444,9 +1532,13 @@ cancel :: boolean
 
 spawn :: component_table?, component_mapper? -> entity
 multi_spawn :: integer, component_table?, component_mapper? -> entity[], integer
+multi_spawn_nr :: integer, component_table?, component_mapper? -> ()
+multi_spawn_to :: entity[], integer, integer, component_table?, component_mapper? -> ()
 
 clone :: entity, component_table?, component_mapper? -> entity
 multi_clone :: integer, entity, component_table?, component_mapper? -> entity[], integer
+multi_clone_nr :: integer, entity, component_table?, component_mapper? -> ()
+multi_clone_to :: entity[], integer, integer, entity, component_table?, component_mapper? -> ()
 
 alive :: entity -> boolean
 alive_all :: entity... -> boolean
@@ -1477,11 +1569,15 @@ execute :: query -> {execute_state? -> chunk?, entity[]?, integer?}, execute_sta
 
 locate :: entity -> chunk?, integer
 
+lookup :: string -> entity?
+multi_lookup :: string -> entity[], integer
+multi_lookup_to :: entity[], integer, string -> integer
+
 process :: system... -> ()
 process_with :: system, ... -> ()
 
 debug_mode :: boolean -> ()
-collect_garbage :: ()
+collect_garbage :: boolean? -> ()
 ```
 
 ### Classes
@@ -1510,12 +1606,18 @@ builder :: builder
 
 builder_mt:build :: entity?, component_mapper? -> entity
 builder_mt:multi_build :: integer, entity?, component_mapper? -> entity[], integer
+builder_mt:multi_build_nr :: integer, entity?, component_mapper? -> ()
+builder_mt:multi_build_to :: entity[], integer, integer, entity?, component_mapper? -> ()
 
 builder_mt:spawn :: component_mapper? -> entity
 builder_mt:multi_spawn :: integer, component_mapper? -> entity[], integer
+builder_mt:multi_spawn_nr :: integer, component_mapper? -> ()
+builder_mt:multi_spawn_to :: entity[], integer, integer, component_mapper? -> ()
 
 builder_mt:clone :: entity, component_mapper? -> entity
 builder_mt:multi_clone :: integer, entity, component_mapper? -> entity[], integer
+builder_mt:multi_clone_nr :: integer, entity, component_mapper? -> ()
+builder_mt:multi_clone_to :: entity[], integer, integer, entity, component_mapper? -> ()
 
 builder_mt:has :: fragment -> boolean
 builder_mt:has_all :: fragment... -> boolean
@@ -1565,6 +1667,12 @@ builder_mt:destruction_policy :: id -> builder
 ```
 
 ## Changelog
+
+### v1.10.0
+
+- Added the new [`evolved.lookup`](#evolvedlookup) and [`evolved.multi_lookup`](#evolvedmulti_lookup) functions that allow finding ids by their names
+- Added a non-shrinking version of the [`evolved.collect_garbage`](#evolvedcollect_garbage) function that only collects garbage without shrinking storages
+- Added [`_nr`](#evolvedmulti_spawn_nr) and [`_to`](#evolvedmulti_spawn_to) variants of the [`evolved.multi_spawn`](#evolvedmulti_spawn) and [`evolved.multi_clone`](#evolvedmulti_clone) functions that provide more efficient ways to spawn or clone entities in some cases
 
 ### v1.9.0
 
@@ -1771,7 +1879,29 @@ function evolved.spawn(component_table, component_mapper) end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.multi_spawn(entity_count, component_table, component_mapper) end
+```
+
+### `evolved.multi_spawn_nr`
+
+```lua
+---@param entity_count integer
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+function evolved.multi_spawn_nr(entity_count, component_table, component_mapper) end
+```
+
+### `evolved.multi_spawn_to`
+
+```lua
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+function evolved.multi_spawn_to(out_entity_list, out_entity_first,
+                                entity_count, component_table, component_mapper) end
 ```
 
 ### `evolved.clone`
@@ -1793,7 +1923,31 @@ function evolved.clone(prefab, component_table, component_mapper) end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.multi_clone(entity_count, prefab, component_table, component_mapper) end
+```
+
+### `evolved.multi_clone_nr`
+
+```lua
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+function evolved.multi_clone_nr(entity_count, prefab, component_table, component_mapper) end
+```
+
+### `evolved.multi_clone_to`
+
+```lua
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_table? evolved.component_table
+---@param component_mapper? evolved.component_mapper
+function evolved.multi_clone_to(out_entity_list, out_entity_first,
+                                entity_count, prefab, component_table, component_mapper) end
 ```
 
 ### `evolved.alive`
@@ -1982,6 +2136,35 @@ function evolved.execute(query) end
 function evolved.locate(entity) end
 ```
 
+### `evolved.lookup`
+
+```lua
+---@param name string
+---@return evolved.entity? entity
+---@nodiscard
+function evolved.lookup(name) end
+```
+
+### `evolved.multi_lookup`
+
+```lua
+---@param name string
+---@return evolved.entity[] entity_list
+---@return integer entity_count
+---@nodiscard
+function evolved.multi_lookup(name) end
+```
+
+### `evolved.multi_lookup_to`
+
+```lua
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param name string
+---@return integer entity_count
+function evolved.multi_lookup_to(out_entity_list, out_entity_first, name) end
+```
+
 ### `evolved.process`
 
 ```lua
@@ -2007,7 +2190,8 @@ function evolved.debug_mode(yesno) end
 ### `evolved.collect_garbage`
 
 ```lua
-function evolved.collect_garbage() end
+---@param no_shrink? boolean
+function evolved.collect_garbage(no_shrink) end
 ```
 
 ## Classes
@@ -2123,7 +2307,29 @@ function evolved.builder_mt:build(prefab, component_mapper) end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.builder_mt:multi_build(entity_count, prefab, component_mapper) end
+```
+
+### `evolved.builder_mt:multi_build_nr`
+
+```lua
+---@param entity_count integer
+---@param prefab? evolved.entity
+---@param component_mapper? evolved.component_mapper
+function evolved.builder_mt:multi_build_nr(entity_count, prefab, component_mapper) end
+```
+
+### `evolved.builder_mt:multi_build_to`
+
+```lua
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param prefab? evolved.entity
+---@param component_mapper? evolved.component_mapper
+function evolved.builder_mt:multi_build_to(out_entity_list, out_entity_first,
+                                           entity_count, prefab, component_mapper) end
 ```
 
 #### `evolved.builder_mt:spawn`
@@ -2141,7 +2347,27 @@ function evolved.builder_mt:spawn(component_mapper) end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.builder_mt:multi_spawn(entity_count, component_mapper) end
+```
+
+#### `evolved.builder_mt:multi_spawn_nr`
+
+```lua
+---@param entity_count integer
+---@param component_mapper? evolved.component_mapper
+function evolved.builder_mt:multi_spawn_nr(entity_count, component_mapper) end
+```
+
+#### `evolved.builder_mt:multi_spawn_to`
+
+```lua
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param component_mapper? evolved.component_mapper
+function evolved.builder_mt:multi_spawn_to(out_entity_list, out_entity_first,
+                                           entity_count, component_mapper) end
 ```
 
 #### `evolved.builder_mt:clone`
@@ -2161,7 +2387,29 @@ function evolved.builder_mt:clone(prefab, component_mapper) end
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.builder_mt:multi_clone(entity_count, prefab, component_mapper) end
+```
+
+#### `evolved.builder_mt:multi_clone_nr`
+
+```lua
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_mapper? evolved.component_mapper
+function evolved.builder_mt:multi_clone_nr(entity_count, prefab, component_mapper) end
+```
+
+#### `evolved.builder_mt:multi_clone_to`
+
+```lua
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param entity_count integer
+---@param prefab evolved.entity
+---@param component_mapper? evolved.component_mapper
+function evolved.builder_mt:multi_clone_to(out_entity_list, out_entity_first,
+                                           entity_count, prefab, component_mapper) end
 ```
 
 #### `evolved.builder_mt:has`

@@ -1,5 +1,7 @@
 local evo = require 'evolved'
 
+evo.debug_mode(true)
+
 do
     do
         local p = evo.spawn()
@@ -392,6 +394,168 @@ do
             assert(f1_inserted_count == 1)
             assert(f2_set_sum == 100 * 2 + 10 * 2)
             assert(f3_inserted_count == 1)
+        end
+    end
+end
+
+do
+    local f1, f2 = evo.id(2)
+    local p = evo.spawn { [f1] = 42, [f2] = 'hello' }
+
+    do
+        local entity_list, entity_count = {}, 2
+        evo.multi_clone_to(entity_list, 1, entity_count, p)
+        assert(evo.has_all(entity_list[1], f1, f2))
+        assert(evo.has_all(entity_list[2], f1, f2))
+        assert(evo.get(entity_list[1], f1) == 42 and evo.get(entity_list[1], f2) == 'hello')
+        assert(evo.get(entity_list[2], f1) == 42 and evo.get(entity_list[2], f2) == 'hello')
+    end
+
+    do
+        local entity_list, entity_count = {}, 2
+        evo.multi_clone_to(entity_list, 2, entity_count, p)
+        assert(evo.has_all(entity_list[2], f1, f2))
+        assert(evo.has_all(entity_list[3], f1, f2))
+        assert(evo.get(entity_list[2], f1) == 42 and evo.get(entity_list[2], f2) == 'hello')
+        assert(evo.get(entity_list[3], f1) == 42 and evo.get(entity_list[3], f2) == 'hello')
+    end
+
+    do
+        local entity_list, entity_count = {}, 2
+        evo.defer()
+        evo.multi_clone_to(entity_list, 1, entity_count, p)
+        assert(entity_list[1] and entity_list[2])
+        assert(evo.empty_all(entity_list[1], entity_list[2]))
+        evo.commit()
+        assert(evo.has_all(entity_list[1], f1, f2))
+        assert(evo.has_all(entity_list[2], f1, f2))
+        assert(evo.get(entity_list[1], f1) == 42 and evo.get(entity_list[1], f2) == 'hello')
+        assert(evo.get(entity_list[2], f1) == 42 and evo.get(entity_list[2], f2) == 'hello')
+    end
+
+    do
+        local entity_list, entity_count = {}, 2
+        evo.defer()
+        evo.multi_clone_to(entity_list, 2, entity_count, p)
+        assert(entity_list[2] and entity_list[3])
+        assert(evo.empty_all(entity_list[2], entity_list[3]))
+        evo.commit()
+        assert(evo.has_all(entity_list[2], f1, f2))
+        assert(evo.has_all(entity_list[3], f1, f2))
+        assert(evo.get(entity_list[2], f1) == 42 and evo.get(entity_list[2], f2) == 'hello')
+        assert(evo.get(entity_list[3], f1) == 42 and evo.get(entity_list[3], f2) == 'hello')
+    end
+end
+
+do
+    local f1, f2 = evo.id(2)
+    local q12 = evo.builder():include(f1, f2):build()
+    local p = evo.spawn { [f1] = 42, [f2] = 'hello' }
+
+    do
+        assert(select('#', evo.multi_clone_nr(2, p)) == 0)
+
+        do
+            local entity_count = 0
+
+            for chunk in evo.execute(q12) do
+                local _, chunk_entity_count = chunk:entities()
+                entity_count = entity_count + chunk_entity_count
+            end
+
+            assert(entity_count == 3)
+        end
+    end
+
+    do
+        local b = evo.builder():set(f1, 42):set(f2, 'hello')
+
+        assert(select('#', b:multi_clone_nr(2, p)) == 0)
+
+        do
+            local entity_count = 0
+
+            for chunk in evo.execute(q12) do
+                local _, chunk_entity_count = chunk:entities()
+                entity_count = entity_count + chunk_entity_count
+            end
+
+            assert(entity_count == 5)
+        end
+    end
+
+    do
+        local b = evo.builder():set(f1, 42):set(f2, 'hello')
+
+        assert(select('#', b:multi_build_nr(2, p)) == 0)
+
+        do
+            local entity_count = 0
+
+            for chunk in evo.execute(q12) do
+                local _, chunk_entity_count = chunk:entities()
+                entity_count = entity_count + chunk_entity_count
+            end
+
+            assert(entity_count == 7)
+        end
+    end
+end
+
+do
+    local f1, f2 = evo.id(2)
+    local q12 = evo.builder():include(f1, f2):build()
+    local p = evo.spawn { [f1] = 42, [f2] = 'hello' }
+
+    do
+        local entity_list = {}
+        assert(select('#', evo.multi_clone_to(entity_list, 1, 2, p)) == 0)
+
+        do
+            local entity_count = 0
+
+            for chunk in evo.execute(q12) do
+                local _, chunk_entity_count = chunk:entities()
+                entity_count = entity_count + chunk_entity_count
+            end
+
+            assert(entity_count == 3)
+        end
+    end
+
+    do
+        local b = evo.builder():set(f1, 42):set(f2, 'hello')
+
+        local entity_list = {}
+        assert(select('#', b:multi_clone_to(entity_list, 1, 2, p)) == 0)
+
+        do
+            local entity_count = 0
+
+            for chunk in evo.execute(q12) do
+                local _, chunk_entity_count = chunk:entities()
+                entity_count = entity_count + chunk_entity_count
+            end
+
+            assert(entity_count == 5)
+        end
+    end
+
+    do
+        local b = evo.builder():set(f1, 42):set(f2, 'hello')
+
+        local entity_list = {}
+        assert(select('#', b:multi_build_to(entity_list, 1, 2, p)) == 0)
+
+        do
+            local entity_count = 0
+
+            for chunk in evo.execute(q12) do
+                local _, chunk_entity_count = chunk:entities()
+                entity_count = entity_count + chunk_entity_count
+            end
+
+            assert(entity_count == 7)
         end
     end
 end

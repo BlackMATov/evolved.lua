@@ -9,7 +9,6 @@
 ## Thoughts
 
 - We should have a way to not copy components on deferred spawn/clone
-- Having a light version of the gargabe collector can be useful for some use-cases
 - Basic default component value as true looks awful, should we use something else?
 
 ## Known Issues

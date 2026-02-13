@@ -54,7 +54,7 @@ basics.describe_bench(string.format('Common Benchmarks: Evolved Entity Cycle | %
         local prefab_a = evo.builder():prefab():set(world):set(a, 0):spawn()
         local prefab_b = evo.builder():prefab():set(world):set(b, 0):spawn()
 
-        evo.multi_clone(N, prefab_a)
+        evo.multi_clone_nr(N, prefab_a)
 
         evo.builder()
             :set(world):group(world):query(query_a)
@@ -129,10 +129,10 @@ basics.describe_bench(string.format('Common Benchmarks: Evolved Simple Iteration
         local query_cd = evo.builder():set(world):include(c, d):spawn()
         local query_ce = evo.builder():set(world):include(c, e):spawn()
 
-        evo.multi_spawn(N, { [world] = true, [a] = 0, [b] = 0 })
-        evo.multi_spawn(N, { [world] = true, [a] = 0, [b] = 0, [c] = 0 })
-        evo.multi_spawn(N, { [world] = true, [a] = 0, [b] = 0, [c] = 0, [d] = 0 })
-        evo.multi_spawn(N, { [world] = true, [a] = 0, [b] = 0, [c] = 0, [e] = 0 })
+        evo.multi_spawn_nr(N, { [world] = true, [a] = 0, [b] = 0 })
+        evo.multi_spawn_nr(N, { [world] = true, [a] = 0, [b] = 0, [c] = 0 })
+        evo.multi_spawn_nr(N, { [world] = true, [a] = 0, [b] = 0, [c] = 0, [d] = 0 })
+        evo.multi_spawn_nr(N, { [world] = true, [a] = 0, [b] = 0, [c] = 0, [e] = 0 })
 
         evo.builder()
             :set(world):group(world):query(query_ab)
@@ -223,7 +223,7 @@ basics.describe_bench(string.format('Common Benchmarks: Evolved Packed Iteration
         local query_d = evo.builder():set(world):include(d):spawn()
         local query_e = evo.builder():set(world):include(e):spawn()
 
-        evo.multi_spawn(N, { [world] = true, [a] = 0, [b] = 0, [c] = 0, [d] = 0, [e] = 0 })
+        evo.multi_spawn_nr(N, { [world] = true, [a] = 0, [b] = 0, [c] = 0, [d] = 0, [e] = 0 })
 
         evo.builder()
             :set(world):group(world):query(query_a)
@@ -317,7 +317,7 @@ basics.describe_bench(string.format('Common Benchmarks: Evolved Fragmented Itera
         local query_z = evo.builder():set(world):include(chars[#chars]):spawn()
 
         for i = 1, #chars do
-            evo.multi_spawn(N, { [world] = true, [chars[i]] = i, [data] = i })
+            evo.multi_spawn_nr(N, { [world] = true, [chars[i]] = i, [data] = i })
         end
 
         evo.builder()

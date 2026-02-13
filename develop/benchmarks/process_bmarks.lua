@@ -20,7 +20,7 @@ basics.describe_bench(string.format('Process Benchmarks: Evolved AoS Processing 
         local pf = evo.builder():set(wf):spawn()
         local vf = evo.builder():set(wf):spawn()
 
-        evo.multi_spawn(N, {
+        evo.multi_spawn_nr(N, {
             [wf] = true,
             [pf] = { x = 0, y = 0, z = 0, w = 0 },
             [vf] = { x = 0, y = 0, z = 0, w = 0 },
@@ -67,7 +67,7 @@ basics.describe_bench(string.format('Process Benchmarks: Evolved SoA Processing 
         local vzf = evo.builder():set(wf):spawn()
         local vwf = evo.builder():set(wf):spawn()
 
-        evo.multi_spawn(N, {
+        evo.multi_spawn_nr(N, {
             [wf] = true,
             [pxf] = 0,
             [pyf] = 0,

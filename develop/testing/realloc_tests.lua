@@ -1,10 +1,18 @@
 local evo = require 'evolved'
 
+evo.debug_mode(true)
+
 ---@type ffilib?
 local ffi = (function()
-    local ffi_loader = package and package.preload and package.preload['ffi']
-    local ffi = ffi_loader and ffi_loader()
-    return ffi
+    if package and package.loaded then
+        local loaded_ffi = package.loaded.ffi
+        if loaded_ffi then return loaded_ffi end
+    end
+
+    if package and package.preload then
+        local ffi_loader = package.preload.ffi
+        if ffi_loader then return ffi_loader() end
+    end
 end)()
 
 if not ffi then
