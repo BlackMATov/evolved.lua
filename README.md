@@ -65,7 +65,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
-  - [vX.Y.Z](#vxyz)
+  - [v1.10.0](#v1100)
   - [v1.9.0](#v190)
   - [v1.8.0](#v180)
   - [v1.7.0](#v170)
@@ -491,6 +491,7 @@ When you need to spawn multiple entities with identical fragments, use `multi_sp
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.multi_spawn(entity_count, component_table, component_mapper) end
 
 ---@param entity_count integer
@@ -499,6 +500,7 @@ function evolved.multi_spawn(entity_count, component_table, component_mapper) en
 ---@param component_mapper? evolved.component_mapper
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
+---@nodiscard
 function evolved.multi_clone(entity_count, prefab, component_table, component_mapper) end
 ```
 
@@ -528,6 +530,36 @@ end)
 ```
 
 Of course, you can use `evolved.multi_clone` in the same way. Builders can also be used for multi-entity spawning and cloning by calling the corresponding methods on the builder object.
+
+Also, for all `multi_` functions, the library provides [`_nr`](#evolvedmulti_spawn_nr) and [`_to`](#evolvedmulti_spawn_to) suffix variants that allow you to perform these operations without returning the list of spawned entities or by copying the spawned entities to your own table, which can be more efficient because it avoids the overhead of allocating and returning a new table.
+
+```lua
+local evolved = require 'evolved'
+
+local position_x, position_y = evolved.id(2)
+
+do
+    -- we don't interest in the list of spawned entities,
+    -- so we use the _nr variant of the multi_spawn function
+
+    evolved.multi_spawn_nr(100, {
+        [position_x] = 0,
+        [position_y] = 0,
+    })
+end
+
+do
+    -- store spawned entities in our own table starting at index 1,
+    -- so we use the _to variant of the multi_spawn function
+
+    local entity_list = {}
+
+    evolved.multi_spawn_to(entity_list, 1, 100, {
+        [position_x] = 0,
+        [position_y] = 0,
+    })
+end
+```
 
 ### Access Operations
 
@@ -1636,10 +1668,11 @@ builder_mt:destruction_policy :: id -> builder
 
 ## Changelog
 
-### vX.Y.Z
+### v1.10.0
 
 - Added the new [`evolved.lookup`](#evolvedlookup) and [`evolved.multi_lookup`](#evolvedmulti_lookup) functions that allow finding ids by their names
 - Added a non-shrinking version of the [`evolved.collect_garbage`](#evolvedcollect_garbage) function that only collects garbage without shrinking storages
+- Added [`_nr`](#evolvedmulti_spawn_nr) and [`_to`](#evolvedmulti_spawn_to) variants of the [`evolved.multi_spawn`](#evolvedmulti_spawn) and [`evolved.multi_clone`](#evolvedmulti_clone) functions that provide more efficient ways to spawn or clone entities in some cases
 
 ### v1.9.0
 
