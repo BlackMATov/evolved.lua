@@ -45,7 +45,8 @@
     - [Batch Operations](#batch-operations)
   - [Systems](#systems)
     - [Processing Payloads](#processing-payloads)
-  - [Predefined Traits](#predefined-traits)
+  - [Predefined Fragments](#predefined-fragments)
+    - [Entity Names](#entity-names)
     - [Fragment Tags](#fragment-tags)
     - [Fragment Hooks](#fragment-hooks)
     - [Unique Fragments](#unique-fragments)
@@ -53,7 +54,6 @@
     - [Internal Fragments](#internal-fragments)
     - [Shared Components](#shared-components)
     - [Fragment Requirements](#fragment-requirements)
-    - [Id Names](#id-names)
     - [Destruction Policies](#destruction-policies)
     - [Custom Component Storages](#custom-component-storages)
   - [Garbage Collection](#garbage-collection)
@@ -983,7 +983,42 @@ evolved.process_with(physics_system, delta_time)
 
 `delta_time` in this example is passed as a processing payload to the system's execution callback. Payloads can be of any type and can be multiple values. Also, payloads are passed to prologue and epilogue callbacks if they are defined. Every subsystem in a group will receive the same payload when the group is processed with [`evolved.process_with`](#evolvedprocess_with).
 
-### Predefined Traits
+### Predefined Fragments
+
+#### Entity Names
+
+The library provides a way to assign names to any id using the [`evolved.NAME`](#evolvedname) fragment. This is useful for debugging and development purposes, as it allows you to identify entities or fragments by their names instead of their identifiers. The name of an entity can be retrieved using the [`evolved.name`](#evolvedname-1) function.
+
+```lua
+local evolved = require 'evolved'
+
+local player = evolved.builder()
+    :name('Player')
+    :build()
+
+assert(evolved.name(player) == 'Player')
+```
+
+Names are not unique, so multiple entities can have the same name. Also, the name of an entity can be changed at any time by setting a new name using the [`evolved.NAME`](#evolvedname) fragment as a usual component.
+
+You can find entities by their names using the [`evolved.lookup`](#evolvedlookup) and [`evolved.multi_lookup`](#evolvedmulti_lookup) functions. The [`evolved.lookup`](#evolvedlookup) function returns the first entity with the specified name, while the [`evolved.multi_lookup`](#evolvedmulti_lookup) function returns a list of all entities with the specified name.
+
+```lua
+local evolved = require 'evolved'
+
+local player1 = evolved.builder()
+    :name('Player')
+    :build()
+
+local player2 = evolved.builder()
+    :name('Player')
+    :build()
+
+assert(evolved.lookup('Player') == player1)
+
+local player_list, player_count = evolved.multi_lookup('Player')
+assert(player_count == 2 and player_list[1] == player1 and player_list[2] == player2)
+```
 
 #### Fragment Tags
 
@@ -1161,41 +1196,6 @@ local enemy = evolved.builder()
     :build()
 
 assert(evolved.has_all(enemy, position, velocity))
-```
-
-#### Id Names
-
-The library provides a way to assign names to any id using the [`evolved.NAME`](#evolvedname) fragment. This is useful for debugging and development purposes, as it allows you to identify entities or fragments by their names instead of their identifiers. The name of an entity can be retrieved using the [`evolved.name`](#evolvedname-1) function.
-
-```lua
-local evolved = require 'evolved'
-
-local player = evolved.builder()
-    :name('Player')
-    :build()
-
-assert(evolved.name(player) == 'Player')
-```
-
-Names are not unique, so multiple entities can have the same name. Also, the name of an entity can be changed at any time by setting a new name using the [`evolved.NAME`](#evolvedname) fragment as a usual component.
-
-You can find entities by their names using the [`evolved.lookup`](#evolvedlookup) and [`evolved.multi_lookup`](#evolvedmulti_lookup) functions. The [`evolved.lookup`](#evolvedlookup) function returns the first entity with the specified name, while the [`evolved.multi_lookup`](#evolvedmulti_lookup) function returns a list of all entities with the specified name.
-
-```lua
-local evolved = require 'evolved'
-
-local player1 = evolved.builder()
-    :name('Player')
-    :build()
-
-local player2 = evolved.builder()
-    :name('Player')
-    :build()
-
-assert(evolved.lookup('Player') == player1)
-
-local player_list, player_count = evolved.multi_lookup('Player')
-assert(player_count == 2 and player_list[1] == player1 and player_list[2] == player2)
 ```
 
 #### Destruction Policies
