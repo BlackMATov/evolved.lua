@@ -1,4 +1,5 @@
 require 'develop.testing.build_tests'
+require 'develop.testing.cached_hooks_tests'
 require 'develop.testing.cancel_tests'
 require 'develop.testing.clone_tests'
 require 'develop.testing.depth_tests'
