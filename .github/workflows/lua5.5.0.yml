@@ -1,4 +1,4 @@
-name: lua5.3
+name: lua5.5.0
 
 on: [push, pull_request]
 
@@ -8,14 +8,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lua_version: ["5.3"]
+        lua_version: ["5.5.0"]
         operating_system: ["ubuntu-latest", "macos-latest", "windows-latest"]
     name: ${{matrix.operating_system}}-${{matrix.lua_version}}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: leafo/gh-actions-lua@v12
         with:
           luaVersion: ${{matrix.lua_version}}
       - run: |
+          lua -v
           lua ./develop/all.lua

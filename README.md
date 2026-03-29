@@ -2,19 +2,28 @@
 
 > Evolved ECS (Entity-Component-System) for Lua
 
-[![lua5.1][badge.lua5.1]][lua5.1]
-[![lua5.4][badge.lua5.4]][lua5.4]
-[![luajit][badge.luajit]][luajit]
+[![lua5.1.5][badge.lua5.1.5]][lua5.1.5]
+[![lua5.2.4][badge.lua5.2.4]][lua5.2.4]
+[![lua5.3.6][badge.lua5.3.6]][lua5.3.6]
+[![lua5.4.8][badge.lua5.4.8]][lua5.4.8]
+[![lua5.5.0][badge.lua5.5.0]][lua5.5.0]
+[![luajit2.1][badge.luajit2.1]][luajit2.1]
 [![license][badge.license]][license]
 
-[badge.lua5.1]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.1.yml?label=Lua%205.1
-[badge.lua5.4]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.4.yml?label=Lua%205.4
-[badge.luajit]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/luajit.yml?label=LuaJIT
+[badge.lua5.1.5]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.1.5.yml?label=Lua%205.1
+[badge.lua5.2.4]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.2.4.yml?label=Lua%205.2
+[badge.lua5.3.6]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.3.6.yml?label=Lua%205.3
+[badge.lua5.4.8]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.4.8.yml?label=Lua%205.4
+[badge.lua5.5.0]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.5.0.yml?label=Lua%205.5
+[badge.luajit2.1]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/luajit2.1.yml?label=LuaJIT%202.1
 [badge.license]: https://img.shields.io/badge/license-MIT-blue
 
-[lua5.1]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.1
-[lua5.4]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.4
-[luajit]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Aluajit
+[lua5.1.5]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.1.5
+[lua5.2.4]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.2.4
+[lua5.3.6]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.3.6
+[lua5.4.8]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.4.8
+[lua5.5.0]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.5.0
+[luajit2.1]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Aluajit2.1
 [license]: https://en.wikipedia.org/wiki/MIT_License
 
 [evolved]: https://github.com/BlackMATov/evolved.lua
