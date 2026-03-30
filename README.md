@@ -76,7 +76,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
-  - [vX.Y.Z](#vxyz)
+  - [v1.11.0](#v1110)
   - [v1.10.0](#v1100)
   - [v1.9.0](#v190)
   - [v1.8.0](#v180)
@@ -1703,7 +1703,7 @@ builder_mt:destruction_policy :: id -> builder
 
 ## Changelog
 
-### vX.Y.Z
+### v1.11.0
 
 - Slightly improved performance of modifying operations for fragments with [`ON_INSERT`](#evolvedon_insert) and [`ON_REMOVE`](#evolvedon_remove) hooks
 - Slightly improved performance of queries with [`EXPLICIT`](#evolvedexplicit) fragments
