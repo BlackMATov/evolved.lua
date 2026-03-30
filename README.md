@@ -30,6 +30,7 @@
 
 - [Introduction](#introduction)
   - [Performance](#performance)
+    - [Benchmarks](#benchmarks)
   - [Simplicity](#simplicity)
   - [Flexibility](#flexibility)
 - [Installation](#installation)
@@ -65,6 +66,7 @@
     - [Fragment Requirements](#fragment-requirements)
     - [Destruction Policies](#destruction-policies)
     - [Custom Component Storages](#custom-component-storages)
+  - [Error Handling](#error-handling)
   - [Garbage Collection](#garbage-collection)
 - [Cheat Sheet](#cheat-sheet)
   - [Aliases](#aliases)
@@ -97,6 +99,10 @@
 This library is designed to be fast. Many techniques are employed to achieve this. It uses an archetype-based approach to store entities and their components. Components are stored in contiguous arrays in a SoA (Structure of Arrays) manner, which allows for fast iteration and processing. Chunks are used to group entities with the same set of components together, enabling efficient filtering through queries. Additionally, all operations are designed to minimize GC (Garbage Collector) pressure and avoid unnecessary allocations. I have tried to take into account all the performance pitfalls of vanilla Lua and LuaJIT.
 
 Not all the optimizations I want to implement are done yet, but I will be working on them. However, I can already say that the library is fast enough for most use cases.
+
+#### Benchmarks
+
+The library contains some micro-benchmarks for internal use in the [develop/benchmarks](./develop/benchmarks/) directory, but they are not comprehensive and are not intended for comparison with other ECS libraries. I don't like cross-library benchmarks, as they are often biased and not representative of real-world performance. However, you can look at benchmarks from independent third-party authors, for example, [these](https://github.com/jeffzi/lua-ecs-benchmark) nice benchmarks by [@jeffzi](https://github.com/jeffzi) that cover most libraries, including `evolved.lua`.
 
 ### Simplicity
 
@@ -1425,6 +1431,24 @@ evolved.builder()
 
 evolved.process_with(MOVEMENT_SYSTEM, 0.016)
 ```
+
+### Error Handling
+
+Since systems perform processing in a deferred scope, any errors that occur during processing can leave the library in an inconsistent state. To handle this, the library runs a protected call for each system and catches any errors that occur. By default, the library will collect the error message and the current stack trace and rethrow the error with this information. It is safe to catch errors, but it can be inconvenient to use with a debugger, because debuggers usually break on the rethrow instead of the place where the error happened. To make it easier to debug errors in systems, the library provides a way to set a custom error handler that will be called when an error occurs during system processing. For example, you can set an error handler that breaks into the debugger:
+
+```lua
+-- we use Local Lua Debugger in this example
+local debugger = require 'lldebugger'
+debugger.start()
+
+local evolved = require 'evolved'
+evolved.error_handler(function(message)
+    debugger.requestBreak()
+    return debug.traceback(message)
+end)
+```
+
+This way, when an error occurs during system processing, the error handler will be called, which will break into the debugger, allowing you to inspect the state of the program at the moment of the error. After you continue execution in the debugger, the error will be rethrown with the original message and stack trace.
 
 ### Garbage Collection
 
