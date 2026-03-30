@@ -1587,6 +1587,7 @@ process :: system... -> ()
 process_with :: system, ... -> ()
 
 debug_mode :: boolean -> ()
+error_handler :: {string -> string}? -> ()
 collect_garbage :: boolean? -> ()
 ```
 
@@ -1682,6 +1683,7 @@ builder_mt:destruction_policy :: id -> builder
 
 - Slightly improved performance of modifying operations for fragments with [`ON_INSERT`](#evolvedon_insert) and [`ON_REMOVE`](#evolvedon_remove) hooks
 - Slightly improved performance of queries with [`EXPLICIT`](#evolvedexplicit) fragments
+- Added the new [`evolved.error_handler`](#evolvederror_handler) function that allows setting a custom error handler for better system processing debugging experience
 
 ### v1.10.0
 
@@ -2200,6 +2202,13 @@ function evolved.process_with(system, ...) end
 ```lua
 ---@param yesno boolean
 function evolved.debug_mode(yesno) end
+```
+
+### `evolved.error_handler`
+
+```lua
+---@param handler? fun(message: string): string
+function evolved.error_handler(handler) end
 ```
 
 ### `evolved.collect_garbage`

@@ -120,49 +120,6 @@ local evolved = {
 ---
 ---
 
-local __debug_mode = false ---@type boolean
-
-local __freelist_ids = {} ---@type integer[]
-local __acquired_count = 0 ---@type integer
-local __available_primary = 0 ---@type integer
-
-local __defer_depth = 0 ---@type integer
-local __defer_points = {} ---@type integer[]
-local __defer_length = 0 ---@type integer
-local __defer_bytecode = {} ---@type any[]
-
-local __root_set = {} ---@type table<evolved.fragment, integer>
-local __root_list = {} ---@type evolved.chunk[]
-local __root_count = 0 ---@type integer
-
-local __major_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
-local __minor_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
-
-local __query_chunks = {} ---@type table<evolved.query, evolved.assoc_list<evolved.chunk>>
-local __major_queries = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.query>>
-
-local __entity_chunks = {} ---@type (evolved.chunk|false)[]
-local __entity_places = {} ---@type integer[]
-
-local __named_entity = {} ---@type table<string, evolved.entity>
-local __named_entities = {} ---@type table<string, evolved.assoc_list<evolved.entity>>
-
-local __sorted_includes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
-local __sorted_excludes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
-local __sorted_variants = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
-local __sorted_requires = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.fragment>>
-
-local __subsystem_groups = {} ---@type table<evolved.system, evolved.system>
-local __group_subsystems = {} ---@type table<evolved.system, evolved.assoc_list<evolved.system>>
-
-local __structural_changes = 0 ---@type integer
-
----
----
----
----
----
-
 ---@class evolved.chunk
 ---@field package __parent? evolved.chunk
 ---@field package __child_set table<evolved.chunk, integer>
@@ -641,6 +598,50 @@ local function __warning_fmt(fmt, ...)
     __lua_print(__lua_debug_traceback(__lua_string_format('| evolved.lua (w) | %s',
         __lua_string_format(fmt, ...))))
 end
+
+---
+---
+---
+---
+---
+
+local __debug_mode = false ---@type boolean
+local __error_handler = __lua_debug_traceback ---@type fun(message: string): string
+
+local __freelist_ids = {} ---@type integer[]
+local __acquired_count = 0 ---@type integer
+local __available_primary = 0 ---@type integer
+
+local __defer_depth = 0 ---@type integer
+local __defer_points = {} ---@type integer[]
+local __defer_length = 0 ---@type integer
+local __defer_bytecode = {} ---@type any[]
+
+local __root_set = {} ---@type table<evolved.fragment, integer>
+local __root_list = {} ---@type evolved.chunk[]
+local __root_count = 0 ---@type integer
+
+local __major_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
+local __minor_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
+
+local __query_chunks = {} ---@type table<evolved.query, evolved.assoc_list<evolved.chunk>>
+local __major_queries = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.query>>
+
+local __entity_chunks = {} ---@type (evolved.chunk|false)[]
+local __entity_places = {} ---@type integer[]
+
+local __named_entity = {} ---@type table<string, evolved.entity>
+local __named_entities = {} ---@type table<string, evolved.assoc_list<evolved.entity>>
+
+local __sorted_includes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
+local __sorted_excludes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
+local __sorted_variants = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
+local __sorted_requires = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.fragment>>
+
+local __subsystem_groups = {} ---@type table<evolved.system, evolved.system>
+local __group_subsystems = {} ---@type table<evolved.system, evolved.assoc_list<evolved.system>>
+
+local __structural_changes = 0 ---@type integer
 
 ---
 ---
@@ -1233,6 +1234,7 @@ local __evolved_process
 local __evolved_process_with
 
 local __evolved_debug_mode
+local __evolved_error_handler
 local __evolved_collect_garbage
 
 local __evolved_chunk
@@ -4768,7 +4770,7 @@ local function __system_process(system, ...)
         __QUERY, __EXECUTE, __PROLOGUE, __EPILOGUE)
 
     if prologue then
-        local success, result = __lua_xpcall(prologue, __lua_debug_traceback, ...)
+        local success, result = __lua_xpcall(prologue, __error_handler, ...)
 
         if not success then
             __error_fmt('system prologue failed: %s', result)
@@ -4778,7 +4780,7 @@ local function __system_process(system, ...)
     if execute then
         __evolved_defer()
         do
-            local success, result = __lua_xpcall(__query_execute, __lua_debug_traceback, query or system, execute, ...)
+            local success, result = __lua_xpcall(__query_execute, __error_handler, query or system, execute, ...)
 
             if not success then
                 __evolved_cancel()
@@ -4814,7 +4816,7 @@ local function __system_process(system, ...)
     end
 
     if epilogue then
-        local success, result = __lua_xpcall(epilogue, __lua_debug_traceback, ...)
+        local success, result = __lua_xpcall(epilogue, __error_handler, ...)
 
         if not success then
             __error_fmt('system epilogue failed: %s', result)
@@ -6413,6 +6415,11 @@ function __evolved_debug_mode(yesno)
     __debug_mode = yesno
 end
 
+---@param handler? fun(message: string): string
+function __evolved_error_handler(handler)
+    __error_handler = handler or __lua_debug_traceback
+end
+
 ---@param no_shrink boolean?
 function __evolved_collect_garbage(no_shrink)
     if __defer_depth > 0 then
@@ -7601,8 +7608,10 @@ end)
 ---
 ---
 
+local __query_hook_fns = {}
+
 ---@param query evolved.query
-local function __insert_query(query)
+function __query_hook_fns.insert_query(query)
     local query_includes = __sorted_includes[query]
     local query_include_list = query_includes and query_includes.__item_list
     local query_include_count = query_includes and query_includes.__item_count or 0
@@ -7642,7 +7651,7 @@ local function __insert_query(query)
 end
 
 ---@param query evolved.query
-local function __remove_query(query)
+function __query_hook_fns.remove_query(query)
     local query_includes = __sorted_includes[query]
     local query_include_list = query_includes and query_includes.__item_list
     local query_include_count = query_includes and query_includes.__item_count or 0
@@ -7684,7 +7693,7 @@ end
 ---@param query evolved.query
 ---@param include_list evolved.fragment[]
 __evolved_set(__INCLUDES, __ON_SET, function(query, _, include_list)
-    __remove_query(query)
+    __query_hook_fns.remove_query(query)
 
     local include_count = #include_list
 
@@ -7700,16 +7709,16 @@ __evolved_set(__INCLUDES, __ON_SET, function(query, _, include_list)
         __sorted_includes[query] = nil
     end
 
-    __insert_query(query)
+    __query_hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
 __evolved_set(__INCLUDES, __ON_REMOVE, function(query)
-    __remove_query(query)
+    __query_hook_fns.remove_query(query)
 
     __sorted_includes[query] = nil
 
-    __insert_query(query)
+    __query_hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
@@ -7722,7 +7731,7 @@ end)
 ---@param query evolved.query
 ---@param exclude_list evolved.fragment[]
 __evolved_set(__EXCLUDES, __ON_SET, function(query, _, exclude_list)
-    __remove_query(query)
+    __query_hook_fns.remove_query(query)
 
     local exclude_count = #exclude_list
 
@@ -7738,16 +7747,16 @@ __evolved_set(__EXCLUDES, __ON_SET, function(query, _, exclude_list)
         __sorted_excludes[query] = nil
     end
 
-    __insert_query(query)
+    __query_hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
 __evolved_set(__EXCLUDES, __ON_REMOVE, function(query)
-    __remove_query(query)
+    __query_hook_fns.remove_query(query)
 
     __sorted_excludes[query] = nil
 
-    __insert_query(query)
+    __query_hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
@@ -7760,7 +7769,7 @@ end)
 ---@param query evolved.query
 ---@param variant_list evolved.fragment[]
 __evolved_set(__VARIANTS, __ON_SET, function(query, _, variant_list)
-    __remove_query(query)
+    __query_hook_fns.remove_query(query)
 
     local variant_count = #variant_list
 
@@ -7776,16 +7785,16 @@ __evolved_set(__VARIANTS, __ON_SET, function(query, _, variant_list)
         __sorted_variants[query] = nil
     end
 
-    __insert_query(query)
+    __query_hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
 __evolved_set(__VARIANTS, __ON_REMOVE, function(query)
-    __remove_query(query)
+    __query_hook_fns.remove_query(query)
 
     __sorted_variants[query] = nil
 
-    __insert_query(query)
+    __query_hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
@@ -7826,8 +7835,10 @@ end)
 ---
 ---
 
+local __group_hook_fns = {}
+
 ---@param subsystem evolved.system
-local function __add_subsystem(subsystem)
+function __group_hook_fns.add_subsystem(subsystem)
     local subsystem_group = __subsystem_groups[subsystem]
 
     if subsystem_group then
@@ -7844,7 +7855,7 @@ local function __add_subsystem(subsystem)
 end
 
 ---@param subsystem evolved.system
-local function __remove_subsystem(subsystem)
+function __group_hook_fns.remove_subsystem(subsystem)
     local subsystem_group = __subsystem_groups[subsystem]
 
     if subsystem_group then
@@ -7856,23 +7867,29 @@ local function __remove_subsystem(subsystem)
     end
 end
 
+---
+---
+---
+---
+---
+
 ---@param system evolved.system
 __evolved_set(__GROUP, __ON_SET, function(system, _, group)
-    __remove_subsystem(system)
+    __group_hook_fns.remove_subsystem(system)
 
     __subsystem_groups[system] = group
 
-    __add_subsystem(system)
+    __group_hook_fns.add_subsystem(system)
     __update_major_chunks(system)
 end)
 
 ---@param system evolved.system
 __evolved_set(__GROUP, __ON_REMOVE, function(system)
-    __remove_subsystem(system)
+    __group_hook_fns.remove_subsystem(system)
 
     __subsystem_groups[system] = nil
 
-    __add_subsystem(system)
+    __group_hook_fns.add_subsystem(system)
     __update_major_chunks(system)
 end)
 
@@ -7984,6 +8001,7 @@ evolved.process = __evolved_process
 evolved.process_with = __evolved_process_with
 
 evolved.debug_mode = __evolved_debug_mode
+evolved.error_handler = __evolved_error_handler
 evolved.collect_garbage = __evolved_collect_garbage
 
 evolved.chunk = __evolved_chunk

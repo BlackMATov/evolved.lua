@@ -1,5 +1,12 @@
 if os.getenv('LOCAL_LUA_DEBUGGER_VSCODE') == '1' then
-    require('lldebugger').start()
+    local debugger = require 'lldebugger'
+    debugger.start()
+
+    local evolved = require 'evolved'
+    evolved.error_handler(function(err)
+        debugger.requestBreak()
+        return debug.traceback(err)
+    end)
 end
 
 ---@type love.conf
