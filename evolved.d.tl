@@ -276,6 +276,7 @@
     process_with: function(system: System, ...: any)
 
     debug_mode: function(yesno: boolean)
+    error_handler: function(handler?: function(message: string): string)
     collect_garbage: function(no_shrink?: boolean)
 
     chunk: function(fragment: Fragment, ...: Fragment): Chunk, { Entity }, integer
