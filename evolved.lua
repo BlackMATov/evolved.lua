@@ -1,7 +1,7 @@
 local evolved = {
     __HOMEPAGE = 'https://github.com/BlackMATov/evolved.lua',
     __DESCRIPTION = 'Evolved ECS (Entity-Component-System) for Lua',
-    __VERSION = '1.10.0',
+    __VERSION = '1.11.0',
     __LICENSE = [[
         MIT License
 
@@ -120,49 +120,6 @@ local evolved = {
 ---
 ---
 
-local __debug_mode = false ---@type boolean
-
-local __freelist_ids = {} ---@type integer[]
-local __acquired_count = 0 ---@type integer
-local __available_primary = 0 ---@type integer
-
-local __defer_depth = 0 ---@type integer
-local __defer_points = {} ---@type integer[]
-local __defer_length = 0 ---@type integer
-local __defer_bytecode = {} ---@type any[]
-
-local __root_set = {} ---@type table<evolved.fragment, integer>
-local __root_list = {} ---@type evolved.chunk[]
-local __root_count = 0 ---@type integer
-
-local __major_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
-local __minor_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
-
-local __query_chunks = {} ---@type table<evolved.query, evolved.assoc_list<evolved.chunk>>
-local __major_queries = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.query>>
-
-local __entity_chunks = {} ---@type (evolved.chunk|false)[]
-local __entity_places = {} ---@type integer[]
-
-local __named_entity = {} ---@type table<string, evolved.entity>
-local __named_entities = {} ---@type table<string, evolved.assoc_list<evolved.entity>>
-
-local __sorted_includes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
-local __sorted_excludes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
-local __sorted_variants = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
-local __sorted_requires = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.fragment>>
-
-local __subsystem_groups = {} ---@type table<evolved.system, evolved.system>
-local __group_subsystems = {} ---@type table<evolved.system, evolved.assoc_list<evolved.system>>
-
-local __structural_changes = 0 ---@type integer
-
----
----
----
----
----
-
 ---@class evolved.chunk
 ---@field package __parent? evolved.chunk
 ---@field package __child_set table<evolved.chunk, integer>
@@ -202,6 +159,12 @@ local __structural_changes = 0 ---@type integer
 ---@field package __has_internal_minors boolean
 ---@field package __has_internal_fragments boolean
 ---@field package __has_required_fragments boolean
+---@field package __insert_fragment_list? evolved.fragment[]
+---@field package __insert_fragment_count integer
+---@field package __remove_fragment_list? evolved.fragment[]
+---@field package __remove_fragment_count integer
+---@field package __explicit_fragment_list? evolved.fragment[]
+---@field package __explicit_fragment_count integer
 local __chunk_mt = {}
 __chunk_mt.__index = __chunk_mt
 
@@ -642,6 +605,50 @@ end
 ---
 ---
 
+local __debug_mode = false ---@type boolean
+local __error_handler = __lua_debug_traceback ---@type fun(message: string): string
+
+local __freelist_ids = {} ---@type integer[]
+local __acquired_count = 0 ---@type integer
+local __available_primary = 0 ---@type integer
+
+local __defer_depth = 0 ---@type integer
+local __defer_points = {} ---@type integer[]
+local __defer_length = 0 ---@type integer
+local __defer_bytecode = {} ---@type any[]
+
+local __root_set = {} ---@type table<evolved.fragment, integer>
+local __root_list = {} ---@type evolved.chunk[]
+local __root_count = 0 ---@type integer
+
+local __major_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
+local __minor_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
+
+local __query_chunks = {} ---@type table<evolved.query, evolved.assoc_list<evolved.chunk>>
+local __major_queries = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.query>>
+
+local __entity_chunks = {} ---@type (evolved.chunk|false)[]
+local __entity_places = {} ---@type integer[]
+
+local __named_entity = {} ---@type table<string, evolved.entity>
+local __named_entities = {} ---@type table<string, evolved.assoc_list<evolved.entity>>
+
+local __sorted_includes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
+local __sorted_excludes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
+local __sorted_variants = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
+local __sorted_requires = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.fragment>>
+
+local __subsystem_groups = {} ---@type table<evolved.system, evolved.system>
+local __group_subsystems = {} ---@type table<evolved.system, evolved.assoc_list<evolved.system>>
+
+local __structural_changes = 0 ---@type integer
+
+---
+---
+---
+---
+---
+
 ---@return evolved.id
 ---@nodiscard
 local function __acquire_id()
@@ -819,12 +826,13 @@ end
 ---@param list V[]
 ---@param size? integer
 ---@return V[]
+---@return integer dup_list_size
 ---@nodiscard
 function __list_fns.dup(list, size)
     local list_size = size or #list
 
     if list_size == 0 then
-        return {}
+        return {}, 0
     end
 
     local dup_list = __list_fns.new(list_size)
@@ -833,7 +841,7 @@ function __list_fns.dup(list, size)
         list, 1, list_size,
         1, dup_list)
 
-    return dup_list
+    return dup_list, list_size
 end
 
 ---@generic V
@@ -1226,6 +1234,7 @@ local __evolved_process
 local __evolved_process_with
 
 local __evolved_debug_mode
+local __evolved_error_handler
 local __evolved_collect_garbage
 
 local __evolved_chunk
@@ -1408,6 +1417,12 @@ function __new_chunk(chunk_parent, chunk_fragment)
         __has_internal_minors = false,
         __has_internal_fragments = false,
         __has_required_fragments = false,
+        __insert_fragment_list = nil,
+        __insert_fragment_count = 0,
+        __remove_fragment_list = nil,
+        __remove_fragment_count = 0,
+        __explicit_fragment_list = nil,
+        __explicit_fragment_count = 0,
     }, __chunk_mt)
 
     if not chunk_parent then
@@ -1590,17 +1605,22 @@ function __update_chunk_caches(chunk)
     local chunk_fragment_list = chunk.__fragment_list
     local chunk_fragment_count = chunk.__fragment_count
 
-    local has_setup_hooks = chunk_parent ~= nil and chunk_parent.__has_setup_hooks
-        or __evolved_has_any(chunk_fragment, __DEFAULT, __DUPLICATE)
+    local has_setup_major = __evolved_has_any(chunk_fragment, __DEFAULT, __DUPLICATE)
+    local has_setup_minors = chunk_parent ~= nil and chunk_parent.__has_setup_hooks
 
-    local has_assign_hooks = chunk_parent ~= nil and chunk_parent.__has_assign_hooks
-        or __evolved_has_any(chunk_fragment, __ON_SET, __ON_ASSIGN)
+    local has_assign_major = __evolved_has_any(chunk_fragment, __ON_SET, __ON_ASSIGN)
+    local has_assign_minors = chunk_parent ~= nil and chunk_parent.__has_assign_hooks
 
-    local has_insert_hooks = chunk_parent ~= nil and chunk_parent.__has_insert_hooks
-        or __evolved_has_any(chunk_fragment, __ON_SET, __ON_INSERT)
+    local has_insert_major = __evolved_has_any(chunk_fragment, __ON_SET, __ON_INSERT)
+    local has_insert_minors = chunk_parent ~= nil and chunk_parent.__has_insert_hooks
 
-    local has_remove_hooks = chunk_parent ~= nil and chunk_parent.__has_remove_hooks
-        or __evolved_has(chunk_fragment, __ON_REMOVE)
+    local has_remove_major = __evolved_has(chunk_fragment, __ON_REMOVE)
+    local has_remove_minors = chunk_parent ~= nil and chunk_parent.__has_remove_hooks
+
+    local has_setup_hooks = has_setup_major or has_setup_minors
+    local has_assign_hooks = has_assign_major or has_assign_minors
+    local has_insert_hooks = has_insert_major or has_insert_minors
+    local has_remove_hooks = has_remove_major or has_remove_minors
 
     local has_unique_major = __evolved_has(chunk_fragment, __UNIQUE)
     local has_unique_minors = chunk_parent ~= nil and chunk_parent.__has_unique_fragments
@@ -1666,6 +1686,75 @@ function __update_chunk_caches(chunk)
         chunk.__without_unique_fragments = nil
     else
         chunk.__without_unique_fragments = chunk
+    end
+
+    if has_insert_hooks then
+        local parent_insert_fragment_list = chunk_parent and chunk_parent.__insert_fragment_list
+        local parent_insert_fragment_count = chunk_parent and chunk_parent.__insert_fragment_count or 0
+
+        if has_insert_major then
+            local insert_fragment_list, insert_fragment_count = parent_insert_fragment_list
+                and __list_fns.dup(parent_insert_fragment_list, parent_insert_fragment_count)
+                or __list_fns.new(1), 0
+
+            insert_fragment_count = parent_insert_fragment_count + 1
+            insert_fragment_list[insert_fragment_count] = chunk_fragment
+
+            chunk.__insert_fragment_list = insert_fragment_list
+            chunk.__insert_fragment_count = insert_fragment_count
+        else
+            chunk.__insert_fragment_list = parent_insert_fragment_list
+            chunk.__insert_fragment_count = parent_insert_fragment_count
+        end
+    else
+        chunk.__insert_fragment_list = nil
+        chunk.__insert_fragment_count = 0
+    end
+
+    if has_remove_hooks then
+        local parent_remove_fragment_list = chunk_parent and chunk_parent.__remove_fragment_list
+        local parent_remove_fragment_count = chunk_parent and chunk_parent.__remove_fragment_count or 0
+
+        if has_remove_major then
+            local remove_fragment_list, remove_fragment_count = parent_remove_fragment_list
+                and __list_fns.dup(parent_remove_fragment_list, parent_remove_fragment_count)
+                or __list_fns.new(1), 0
+
+            remove_fragment_count = parent_remove_fragment_count + 1
+            remove_fragment_list[remove_fragment_count] = chunk_fragment
+
+            chunk.__remove_fragment_list = remove_fragment_list
+            chunk.__remove_fragment_count = remove_fragment_count
+        else
+            chunk.__remove_fragment_list = parent_remove_fragment_list
+            chunk.__remove_fragment_count = parent_remove_fragment_count
+        end
+    else
+        chunk.__remove_fragment_list = nil
+        chunk.__remove_fragment_count = 0
+    end
+
+    if has_explicit_fragments then
+        local parent_explicit_fragment_list = chunk_parent and chunk_parent.__explicit_fragment_list
+        local parent_explicit_fragment_count = chunk_parent and chunk_parent.__explicit_fragment_count or 0
+
+        if has_explicit_major then
+            local explicit_fragment_list, explicit_fragment_count = parent_explicit_fragment_list
+                and __list_fns.dup(parent_explicit_fragment_list, parent_explicit_fragment_count)
+                or __list_fns.new(1), 0
+
+            explicit_fragment_count = parent_explicit_fragment_count + 1
+            explicit_fragment_list[explicit_fragment_count] = chunk_fragment
+
+            chunk.__explicit_fragment_list = explicit_fragment_list
+            chunk.__explicit_fragment_count = explicit_fragment_count
+        else
+            chunk.__explicit_fragment_list = parent_explicit_fragment_list
+            chunk.__explicit_fragment_count = parent_explicit_fragment_count
+        end
+    else
+        chunk.__explicit_fragment_list = nil
+        chunk.__explicit_fragment_count = 0
     end
 end
 
@@ -2063,17 +2152,15 @@ function __query_minor_matches(chunk, query)
         end
     end
 
-    if chunk.__has_explicit_fragments then
-        local chunk_fragment_list = chunk.__fragment_list
-        local chunk_fragment_count = chunk.__fragment_count
+    local chunk_explicit_fragment_list = chunk.__explicit_fragment_list
 
-        for chunk_fragment_index = 1, chunk_fragment_count do
-            local chunk_fragment = chunk_fragment_list[chunk_fragment_index]
+    if chunk_explicit_fragment_list then
+        for chunk_explicit_fragment_index = 1, chunk.__explicit_fragment_count do
+            local fragment = chunk_explicit_fragment_list[chunk_explicit_fragment_index]
 
             local is_chunk_fragment_matched =
-                (not __evolved_has(chunk_fragment, __EXPLICIT)) or
-                (query_variant_count > 0 and query_variant_set[chunk_fragment]) or
-                (query_include_count > 0 and query_include_set[chunk_fragment])
+                (query_variant_count > 0 and query_variant_set[fragment]) or
+                (query_include_count > 0 and query_include_set[fragment])
 
             if not is_chunk_fragment_matched then
                 return false
@@ -2639,12 +2726,11 @@ function __spawn_entity(chunk, entity, component_table, component_mapper)
         component_mapper(chunk, place, place)
     end
 
-    if chunk.__has_insert_hooks then
-        local chunk_fragment_list = chunk.__fragment_list
-        local chunk_fragment_count = chunk.__fragment_count
+    local chunk_insert_fragment_list = chunk.__insert_fragment_list
 
-        for chunk_fragment_index = 1, chunk_fragment_count do
-            local fragment = chunk_fragment_list[chunk_fragment_index]
+    if chunk_insert_fragment_list then
+        for chunk_insert_fragment_index = 1, chunk.__insert_fragment_count do
+            local fragment = chunk_insert_fragment_list[chunk_insert_fragment_index]
 
             ---@type evolved.set_hook?, evolved.insert_hook?
             local fragment_on_set, fragment_on_insert =
@@ -2778,12 +2864,11 @@ function __multi_spawn_entity(chunk, entity_list, entity_first, entity_count, co
         component_mapper(chunk, b_place, e_place)
     end
 
-    if chunk.__has_insert_hooks then
-        local chunk_fragment_list = chunk.__fragment_list
-        local chunk_fragment_count = chunk.__fragment_count
+    local chunk_insert_fragment_list = chunk.__insert_fragment_list
 
-        for chunk_fragment_index = 1, chunk_fragment_count do
-            local fragment = chunk_fragment_list[chunk_fragment_index]
+    if chunk_insert_fragment_list then
+        for chunk_insert_fragment_index = 1, chunk.__insert_fragment_count do
+            local fragment = chunk_insert_fragment_list[chunk_insert_fragment_index]
 
             ---@type evolved.set_hook?, evolved.insert_hook?
             local fragment_on_set, fragment_on_insert =
@@ -2939,12 +3024,11 @@ function __clone_entity(prefab, entity, component_table, component_mapper)
         component_mapper(chunk, place, place)
     end
 
-    if chunk.__has_insert_hooks then
-        local chunk_fragment_list = chunk.__fragment_list
-        local chunk_fragment_count = chunk.__fragment_count
+    local chunk_insert_fragment_list = chunk.__insert_fragment_list
 
-        for chunk_fragment_index = 1, chunk_fragment_count do
-            local fragment = chunk_fragment_list[chunk_fragment_index]
+    if chunk_insert_fragment_list then
+        for chunk_insert_fragment_index = 1, chunk.__insert_fragment_count do
+            local fragment = chunk_insert_fragment_list[chunk_insert_fragment_index]
 
             ---@type evolved.set_hook?, evolved.insert_hook?
             local fragment_on_set, fragment_on_insert =
@@ -3107,12 +3191,11 @@ function __multi_clone_entity(prefab, entity_list, entity_first, entity_count, c
         component_mapper(chunk, b_place, e_place)
     end
 
-    if chunk.__has_insert_hooks then
-        local chunk_fragment_list = chunk.__fragment_list
-        local chunk_fragment_count = chunk.__fragment_count
+    local chunk_insert_fragment_list = chunk.__insert_fragment_list
 
-        for chunk_fragment_index = 1, chunk_fragment_count do
-            local fragment = chunk_fragment_list[chunk_fragment_index]
+    if chunk_insert_fragment_list then
+        for chunk_insert_fragment_index = 1, chunk.__insert_fragment_count do
+            local fragment = chunk_insert_fragment_list[chunk_insert_fragment_index]
 
             ---@type evolved.set_hook?, evolved.insert_hook?
             local fragment_on_set, fragment_on_insert =
@@ -3377,27 +3460,29 @@ function __clear_entity_one(entity)
         local chunk = entity_chunks[entity_primary]
         local place = entity_places[entity_primary]
 
-        if chunk and chunk.__has_remove_hooks then
-            local chunk_fragment_list = chunk.__fragment_list
-            local chunk_fragment_count = chunk.__fragment_count
-            local chunk_component_indices = chunk.__component_indices
-            local chunk_component_storages = chunk.__component_storages
+        if chunk then
+            local chunk_remove_fragment_list = chunk.__remove_fragment_list
 
-            for chunk_fragment_index = 1, chunk_fragment_count do
-                local fragment = chunk_fragment_list[chunk_fragment_index]
+            if chunk_remove_fragment_list then
+                local chunk_component_indices = chunk.__component_indices
+                local chunk_component_storages = chunk.__component_storages
 
-                ---@type evolved.remove_hook?
-                local fragment_on_remove = __evolved_get(fragment, __ON_REMOVE)
+                for chunk_remove_fragment_index = 1, chunk.__remove_fragment_count do
+                    local fragment = chunk_remove_fragment_list[chunk_remove_fragment_index]
 
-                if fragment_on_remove then
-                    local component_index = chunk_component_indices[fragment]
+                    ---@type evolved.remove_hook?
+                    local fragment_on_remove = __evolved_get(fragment, __ON_REMOVE)
 
-                    if component_index then
-                        local component_storage = chunk_component_storages[component_index]
-                        local old_component = component_storage[place]
-                        fragment_on_remove(entity, fragment, old_component)
-                    else
-                        fragment_on_remove(entity, fragment)
+                    if fragment_on_remove then
+                        local component_index = chunk_component_indices[fragment]
+
+                        if component_index then
+                            local component_storage = chunk_component_storages[component_index]
+                            local old_component = component_storage[place]
+                            fragment_on_remove(entity, fragment, old_component)
+                        else
+                            fragment_on_remove(entity, fragment)
+                        end
                     end
                 end
             end
@@ -3444,27 +3529,29 @@ function __destroy_entity_one(entity)
         local chunk = entity_chunks[entity_primary]
         local place = entity_places[entity_primary]
 
-        if chunk and chunk.__has_remove_hooks then
-            local chunk_fragment_list = chunk.__fragment_list
-            local chunk_fragment_count = chunk.__fragment_count
-            local chunk_component_indices = chunk.__component_indices
-            local chunk_component_storages = chunk.__component_storages
+        if chunk then
+            local chunk_remove_fragment_list = chunk.__remove_fragment_list
 
-            for chunk_fragment_index = 1, chunk_fragment_count do
-                local fragment = chunk_fragment_list[chunk_fragment_index]
+            if chunk_remove_fragment_list then
+                local chunk_component_indices = chunk.__component_indices
+                local chunk_component_storages = chunk.__component_storages
 
-                ---@type evolved.remove_hook?
-                local fragment_on_remove = __evolved_get(fragment, __ON_REMOVE)
+                for chunk_remove_fragment_index = 1, chunk.__remove_fragment_count do
+                    local fragment = chunk_remove_fragment_list[chunk_remove_fragment_index]
 
-                if fragment_on_remove then
-                    local component_index = chunk_component_indices[fragment]
+                    ---@type evolved.remove_hook?
+                    local fragment_on_remove = __evolved_get(fragment, __ON_REMOVE)
 
-                    if component_index then
-                        local component_storage = chunk_component_storages[component_index]
-                        local old_component = component_storage[place]
-                        fragment_on_remove(entity, fragment, old_component)
-                    else
-                        fragment_on_remove(entity, fragment)
+                    if fragment_on_remove then
+                        local component_index = chunk_component_indices[fragment]
+
+                        if component_index then
+                            local component_storage = chunk_component_storages[component_index]
+                            local old_component = component_storage[place]
+                            fragment_on_remove(entity, fragment, old_component)
+                        else
+                            fragment_on_remove(entity, fragment)
+                        end
                     end
                 end
             end
@@ -4060,8 +4147,6 @@ function __chunk_remove(old_chunk, ...)
     local old_entity_list = old_chunk.__entity_list
     local old_entity_count = old_chunk.__entity_count
 
-    local old_fragment_list = old_chunk.__fragment_list
-    local old_fragment_count = old_chunk.__fragment_count
     local old_component_indices = old_chunk.__component_indices
     local old_component_storages = old_chunk.__component_storages
 
@@ -4075,12 +4160,14 @@ function __chunk_remove(old_chunk, ...)
         return
     end
 
-    if old_chunk.__has_remove_hooks then
+    local old_remove_fragment_list = old_chunk.__remove_fragment_list
+
+    if old_remove_fragment_list then
         local new_fragment_set = new_chunk and new_chunk.__fragment_set
             or __safe_tbls.__EMPTY_FRAGMENT_SET
 
-        for old_fragment_index = 1, old_fragment_count do
-            local fragment = old_fragment_list[old_fragment_index]
+        for old_remove_fragment_index = 1, old_chunk.__remove_fragment_count do
+            local fragment = old_remove_fragment_list[old_remove_fragment_index]
 
             if not new_fragment_set[fragment] then
                 ---@type evolved.remove_hook?
@@ -4209,14 +4296,14 @@ function __chunk_clear(chunk)
         return
     end
 
-    if chunk.__has_remove_hooks then
-        local chunk_fragment_list = chunk.__fragment_list
-        local chunk_fragment_count = chunk.__fragment_count
+    local chunk_remove_fragment_list = chunk.__remove_fragment_list
+
+    if chunk_remove_fragment_list then
         local chunk_component_indices = chunk.__component_indices
         local chunk_component_storages = chunk.__component_storages
 
-        for chunk_fragment_index = 1, chunk_fragment_count do
-            local fragment = chunk_fragment_list[chunk_fragment_index]
+        for chunk_remove_fragment_index = 1, chunk.__remove_fragment_count do
+            local fragment = chunk_remove_fragment_list[chunk_remove_fragment_index]
 
             ---@type evolved.remove_hook?
             local fragment_on_remove = __evolved_get(fragment, __ON_REMOVE)
@@ -4683,7 +4770,7 @@ local function __system_process(system, ...)
         __QUERY, __EXECUTE, __PROLOGUE, __EPILOGUE)
 
     if prologue then
-        local success, result = __lua_xpcall(prologue, __lua_debug_traceback, ...)
+        local success, result = __lua_xpcall(prologue, __error_handler, ...)
 
         if not success then
             __error_fmt('system prologue failed: %s', result)
@@ -4693,7 +4780,7 @@ local function __system_process(system, ...)
     if execute then
         __evolved_defer()
         do
-            local success, result = __lua_xpcall(__query_execute, __lua_debug_traceback, query or system, execute, ...)
+            local success, result = __lua_xpcall(__query_execute, __error_handler, query or system, execute, ...)
 
             if not success then
                 __evolved_cancel()
@@ -4729,7 +4816,7 @@ local function __system_process(system, ...)
     end
 
     if epilogue then
-        local success, result = __lua_xpcall(epilogue, __lua_debug_traceback, ...)
+        local success, result = __lua_xpcall(epilogue, __error_handler, ...)
 
         if not success then
             __error_fmt('system epilogue failed: %s', result)
@@ -5610,17 +5697,17 @@ function __evolved_remove(entity, ...)
     __evolved_defer()
 
     if old_chunk and old_chunk ~= new_chunk then
-        local old_fragment_list = old_chunk.__fragment_list
-        local old_fragment_count = old_chunk.__fragment_count
         local old_component_indices = old_chunk.__component_indices
         local old_component_storages = old_chunk.__component_storages
 
-        if old_chunk.__has_remove_hooks then
+        local old_remove_fragment_list = old_chunk.__remove_fragment_list
+
+        if old_remove_fragment_list then
             local new_fragment_set = new_chunk and new_chunk.__fragment_set
                 or __safe_tbls.__EMPTY_FRAGMENT_SET
 
-            for old_fragment_index = 1, old_fragment_count do
-                local fragment = old_fragment_list[old_fragment_index]
+            for old_remove_fragment_index = 1, old_chunk.__remove_fragment_count do
+                local fragment = old_remove_fragment_list[old_remove_fragment_index]
 
                 if not new_fragment_set[fragment] then
                     ---@type evolved.remove_hook?
@@ -6326,6 +6413,11 @@ end
 ---@param yesno boolean
 function __evolved_debug_mode(yesno)
     __debug_mode = yesno
+end
+
+---@param handler? fun(message: string): string
+function __evolved_error_handler(handler)
+    __error_handler = handler or __lua_debug_traceback
 end
 
 ---@param no_shrink boolean?
@@ -7516,8 +7608,10 @@ end)
 ---
 ---
 
+local __query_hook_fns = {}
+
 ---@param query evolved.query
-local function __insert_query(query)
+function __query_hook_fns.insert_query(query)
     local query_includes = __sorted_includes[query]
     local query_include_list = query_includes and query_includes.__item_list
     local query_include_count = query_includes and query_includes.__item_count or 0
@@ -7557,7 +7651,7 @@ local function __insert_query(query)
 end
 
 ---@param query evolved.query
-local function __remove_query(query)
+function __query_hook_fns.remove_query(query)
     local query_includes = __sorted_includes[query]
     local query_include_list = query_includes and query_includes.__item_list
     local query_include_count = query_includes and query_includes.__item_count or 0
@@ -7599,7 +7693,7 @@ end
 ---@param query evolved.query
 ---@param include_list evolved.fragment[]
 __evolved_set(__INCLUDES, __ON_SET, function(query, _, include_list)
-    __remove_query(query)
+    __query_hook_fns.remove_query(query)
 
     local include_count = #include_list
 
@@ -7615,16 +7709,16 @@ __evolved_set(__INCLUDES, __ON_SET, function(query, _, include_list)
         __sorted_includes[query] = nil
     end
 
-    __insert_query(query)
+    __query_hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
 __evolved_set(__INCLUDES, __ON_REMOVE, function(query)
-    __remove_query(query)
+    __query_hook_fns.remove_query(query)
 
     __sorted_includes[query] = nil
 
-    __insert_query(query)
+    __query_hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
@@ -7637,7 +7731,7 @@ end)
 ---@param query evolved.query
 ---@param exclude_list evolved.fragment[]
 __evolved_set(__EXCLUDES, __ON_SET, function(query, _, exclude_list)
-    __remove_query(query)
+    __query_hook_fns.remove_query(query)
 
     local exclude_count = #exclude_list
 
@@ -7653,16 +7747,16 @@ __evolved_set(__EXCLUDES, __ON_SET, function(query, _, exclude_list)
         __sorted_excludes[query] = nil
     end
 
-    __insert_query(query)
+    __query_hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
 __evolved_set(__EXCLUDES, __ON_REMOVE, function(query)
-    __remove_query(query)
+    __query_hook_fns.remove_query(query)
 
     __sorted_excludes[query] = nil
 
-    __insert_query(query)
+    __query_hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
@@ -7675,7 +7769,7 @@ end)
 ---@param query evolved.query
 ---@param variant_list evolved.fragment[]
 __evolved_set(__VARIANTS, __ON_SET, function(query, _, variant_list)
-    __remove_query(query)
+    __query_hook_fns.remove_query(query)
 
     local variant_count = #variant_list
 
@@ -7691,16 +7785,16 @@ __evolved_set(__VARIANTS, __ON_SET, function(query, _, variant_list)
         __sorted_variants[query] = nil
     end
 
-    __insert_query(query)
+    __query_hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
 __evolved_set(__VARIANTS, __ON_REMOVE, function(query)
-    __remove_query(query)
+    __query_hook_fns.remove_query(query)
 
     __sorted_variants[query] = nil
 
-    __insert_query(query)
+    __query_hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
@@ -7741,8 +7835,10 @@ end)
 ---
 ---
 
+local __group_hook_fns = {}
+
 ---@param subsystem evolved.system
-local function __add_subsystem(subsystem)
+function __group_hook_fns.add_subsystem(subsystem)
     local subsystem_group = __subsystem_groups[subsystem]
 
     if subsystem_group then
@@ -7759,7 +7855,7 @@ local function __add_subsystem(subsystem)
 end
 
 ---@param subsystem evolved.system
-local function __remove_subsystem(subsystem)
+function __group_hook_fns.remove_subsystem(subsystem)
     local subsystem_group = __subsystem_groups[subsystem]
 
     if subsystem_group then
@@ -7771,23 +7867,29 @@ local function __remove_subsystem(subsystem)
     end
 end
 
+---
+---
+---
+---
+---
+
 ---@param system evolved.system
 __evolved_set(__GROUP, __ON_SET, function(system, _, group)
-    __remove_subsystem(system)
+    __group_hook_fns.remove_subsystem(system)
 
     __subsystem_groups[system] = group
 
-    __add_subsystem(system)
+    __group_hook_fns.add_subsystem(system)
     __update_major_chunks(system)
 end)
 
 ---@param system evolved.system
 __evolved_set(__GROUP, __ON_REMOVE, function(system)
-    __remove_subsystem(system)
+    __group_hook_fns.remove_subsystem(system)
 
     __subsystem_groups[system] = nil
 
-    __add_subsystem(system)
+    __group_hook_fns.add_subsystem(system)
     __update_major_chunks(system)
 end)
 
@@ -7899,6 +8001,7 @@ evolved.process = __evolved_process
 evolved.process_with = __evolved_process_with
 
 evolved.debug_mode = __evolved_debug_mode
+evolved.error_handler = __evolved_error_handler
 evolved.collect_garbage = __evolved_collect_garbage
 
 evolved.chunk = __evolved_chunk

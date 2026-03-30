@@ -2,25 +2,35 @@
 
 > Evolved ECS (Entity-Component-System) for Lua
 
-[![lua5.1][badge.lua5.1]][lua5.1]
-[![lua5.4][badge.lua5.4]][lua5.4]
-[![luajit][badge.luajit]][luajit]
+[![lua5.1.5][badge.lua5.1.5]][lua5.1.5]
+[![lua5.2.4][badge.lua5.2.4]][lua5.2.4]
+[![lua5.3.6][badge.lua5.3.6]][lua5.3.6]
+[![lua5.4.8][badge.lua5.4.8]][lua5.4.8]
+[![lua5.5.0][badge.lua5.5.0]][lua5.5.0]
+[![luajit2.1][badge.luajit2.1]][luajit2.1]
 [![license][badge.license]][license]
 
-[badge.lua5.1]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.1.yml?label=Lua%205.1
-[badge.lua5.4]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.4.yml?label=Lua%205.4
-[badge.luajit]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/luajit.yml?label=LuaJIT
+[badge.lua5.1.5]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.1.5.yml?label=Lua%205.1
+[badge.lua5.2.4]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.2.4.yml?label=Lua%205.2
+[badge.lua5.3.6]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.3.6.yml?label=Lua%205.3
+[badge.lua5.4.8]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.4.8.yml?label=Lua%205.4
+[badge.lua5.5.0]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/lua5.5.0.yml?label=Lua%205.5
+[badge.luajit2.1]: https://img.shields.io/github/actions/workflow/status/BlackMATov/evolved.lua/.github/workflows/luajit2.1.yml?label=LuaJIT%202.1
 [badge.license]: https://img.shields.io/badge/license-MIT-blue
 
-[lua5.1]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.1
-[lua5.4]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.4
-[luajit]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Aluajit
+[lua5.1.5]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.1.5
+[lua5.2.4]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.2.4
+[lua5.3.6]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.3.6
+[lua5.4.8]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.4.8
+[lua5.5.0]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Alua5.5.0
+[luajit2.1]: https://github.com/BlackMATov/evolved.lua/actions?query=workflow%3Aluajit2.1
 [license]: https://en.wikipedia.org/wiki/MIT_License
 
 [evolved]: https://github.com/BlackMATov/evolved.lua
 
 - [Introduction](#introduction)
   - [Performance](#performance)
+    - [Benchmarks](#benchmarks)
   - [Simplicity](#simplicity)
   - [Flexibility](#flexibility)
 - [Installation](#installation)
@@ -56,6 +66,7 @@
     - [Fragment Requirements](#fragment-requirements)
     - [Destruction Policies](#destruction-policies)
     - [Custom Component Storages](#custom-component-storages)
+  - [Error Handling](#error-handling)
   - [Garbage Collection](#garbage-collection)
 - [Cheat Sheet](#cheat-sheet)
   - [Aliases](#aliases)
@@ -65,6 +76,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
+  - [v1.11.0](#v1110)
   - [v1.10.0](#v1100)
   - [v1.9.0](#v190)
   - [v1.8.0](#v180)
@@ -87,6 +99,10 @@
 This library is designed to be fast. Many techniques are employed to achieve this. It uses an archetype-based approach to store entities and their components. Components are stored in contiguous arrays in a SoA (Structure of Arrays) manner, which allows for fast iteration and processing. Chunks are used to group entities with the same set of components together, enabling efficient filtering through queries. Additionally, all operations are designed to minimize GC (Garbage Collector) pressure and avoid unnecessary allocations. I have tried to take into account all the performance pitfalls of vanilla Lua and LuaJIT.
 
 Not all the optimizations I want to implement are done yet, but I will be working on them. However, I can already say that the library is fast enough for most use cases.
+
+#### Benchmarks
+
+The library contains some micro-benchmarks for internal use in the [develop/benchmarks](./develop/benchmarks/) directory, but they are not comprehensive and are not intended for comparison with other ECS libraries. I don't like cross-library benchmarks, as they are often biased and not representative of real-world performance. However, you can look at benchmarks from independent third-party authors, for example, [these](https://github.com/jeffzi/lua-ecs-benchmark) nice benchmarks by [@jeffzi](https://github.com/jeffzi) that cover most libraries, including `evolved.lua`.
 
 ### Simplicity
 
@@ -1416,6 +1432,24 @@ evolved.builder()
 evolved.process_with(MOVEMENT_SYSTEM, 0.016)
 ```
 
+### Error Handling
+
+Since systems perform processing in a deferred scope, any errors that occur during processing can leave the library in an inconsistent state. To handle this, the library runs a protected call for each system and catches any errors that occur. By default, the library will collect the error message and the current stack trace and rethrow the error with this information. It is safe to catch errors, but it can be inconvenient to use with a debugger, because debuggers usually break on the rethrow instead of the place where the error happened. To make it easier to debug errors in systems, the library provides a way to set a custom error handler that will be called when an error occurs during system processing. For example, you can set an error handler that breaks into the debugger:
+
+```lua
+-- we use Local Lua Debugger in this example
+local debugger = require 'lldebugger'
+debugger.start()
+
+local evolved = require 'evolved'
+evolved.error_handler(function(message)
+    debugger.requestBreak()
+    return debug.traceback(message)
+end)
+```
+
+This way, when an error occurs during system processing, the error handler will be called, which will break into the debugger, allowing you to inspect the state of the program at the moment of the error. After you continue execution in the debugger, the error will be rethrown with the original message and stack trace.
+
 ### Garbage Collection
 
 While using the library, some internal data structures can become obsolete and should be cleaned up to free memory. For example, empty chunks that no longer contain entities can be removed. Component storages can also have unused capacity that can be shrunk to save memory. The library provides a function to control this garbage collection process.
@@ -1577,6 +1611,7 @@ process :: system... -> ()
 process_with :: system, ... -> ()
 
 debug_mode :: boolean -> ()
+error_handler :: {string -> string}? -> ()
 collect_garbage :: boolean? -> ()
 ```
 
@@ -1667,6 +1702,12 @@ builder_mt:destruction_policy :: id -> builder
 ```
 
 ## Changelog
+
+### v1.11.0
+
+- Slightly improved performance of modifying operations for fragments with [`ON_INSERT`](#evolvedon_insert) and [`ON_REMOVE`](#evolvedon_remove) hooks
+- Slightly improved performance of queries with [`EXPLICIT`](#evolvedexplicit) fragments
+- Added the new [`evolved.error_handler`](#evolvederror_handler) function that allows setting a custom error handler for better system processing debugging experience
 
 ### v1.10.0
 
@@ -2185,6 +2226,13 @@ function evolved.process_with(system, ...) end
 ```lua
 ---@param yesno boolean
 function evolved.debug_mode(yesno) end
+```
+
+### `evolved.error_handler`
+
+```lua
+---@param handler? fun(message: string): string
+function evolved.error_handler(handler) end
 ```
 
 ### `evolved.collect_garbage`

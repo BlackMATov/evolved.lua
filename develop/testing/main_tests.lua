@@ -2928,8 +2928,8 @@ do
         last_insert_entity, last_insert_component = 0, 0
         local e = evo.spawn({ [f2] = 21, [f1] = true })
         assert(set_count == 2 and insert_count == 2)
-        assert(last_set_entity == e and last_set_component == 21)
-        assert(last_insert_entity == e and last_insert_component == 21)
+        assert(last_set_entity == e and (last_set_component == 21 or last_set_component == true))
+        assert(last_insert_entity == e and (last_insert_component == 21 or last_insert_component == true))
     end
 
     do
@@ -2948,8 +2948,8 @@ do
         last_insert_entity, last_insert_component = 0, 0
         local e = evo.spawn({ [f3] = 33, [f2] = 22 })
         assert(set_count == 2 and insert_count == 2)
-        assert(last_set_entity == e and last_set_component == nil)
-        assert(last_insert_entity == e and last_insert_component == nil)
+        assert(last_set_entity == e and (last_set_component == nil or last_set_component == 22))
+        assert(last_insert_entity == e and (last_insert_component == nil or last_insert_component == 22))
     end
 end
 
