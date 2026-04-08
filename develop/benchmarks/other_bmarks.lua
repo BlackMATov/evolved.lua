@@ -75,6 +75,62 @@ end
 
 print '----------------------------------------'
 
+basics.describe_bench(string.format('Other Benchmarks: MultiSystem | %d entities', N),
+    function(w)
+        evo.process(w)
+    end, function()
+        local w = evo.builder()
+            :set(evo.DESTRUCTION_POLICY, evo.DESTRUCTION_POLICY_DESTROY_ENTITY)
+            :build()
+
+        local third = math.floor(N / 3)
+
+        for _ = 1, third do
+            evo.spawn({ [w] = true, [f1] = 0 })
+        end
+
+        for _ = 1, third do
+            evo.spawn({ [w] = true, [f2] = 0 })
+        end
+
+        for _ = 1, N - 2 * third do
+            evo.spawn({ [w] = true, [f1] = 1, [f2] = 2 })
+        end
+
+        evo.builder():set(w):group(w):include(f1)
+            :execute(function(chunk, _, entity_count)
+                local f1s = chunk:components(f1)
+
+                for i = 1, entity_count do
+                    f1s[i] = f1s[i] + 1
+                end
+            end):build()
+
+        evo.builder():set(w):group(w):include(f2)
+            :execute(function(chunk, _, entity_count)
+                local f2s = chunk:components(f2)
+
+                for i = 1, entity_count do
+                    f2s[i] = f2s[i] + 1
+                end
+            end):build()
+
+        evo.builder():set(w):group(w):include(f1, f2)
+            :execute(function(chunk, _, entity_count)
+                local f1s, f2s = chunk:components(f1, f2)
+
+                for i = 1, entity_count do
+                    f1s[i] = f1s[i] + f2s[i]
+                end
+            end):build()
+
+        return w
+    end, function(w)
+        evo.destroy(w)
+    end)
+
+print '----------------------------------------'
+
 for _, P in ipairs(Ps) do
     basics.describe_bench(string.format('Other Benchmarks: SystemWith1Component, %d padding | %d entities', P, N),
         function(w)
