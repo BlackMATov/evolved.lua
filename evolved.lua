@@ -180,15 +180,8 @@ __builder_mt.__index = __builder_mt
 ---
 ---
 
-local __lua_error = error
 local __lua_next = next
-local __lua_print = print
 local __lua_select = select
-local __lua_setmetatable = setmetatable
-local __lua_string_format = string.format
-local __lua_table_concat = table.concat
-local __lua_table_sort = table.sort
-local __lua_tostring = tostring
 
 ---@type fun(nseq?: integer): table
 local __lua_table_new = (function()
@@ -337,7 +330,7 @@ local __lua_debug_traceback = (function()
 
     ---@type fun(message?: any): string
     return function(message)
-        return __lua_tostring(message)
+        return tostring(message)
     end
 end)()
 
@@ -358,7 +351,7 @@ local __lua_xpcall = (function()
     local __xpcall_argument_1, __xpcall_argument_2, __xpcall_argument_3, __xpcall_argument_4
     local __xpcall_argument_5, __xpcall_argument_6, __xpcall_argument_7, __xpcall_argument_8
 
-    local __xpcall_argument_tail_list = __lua_setmetatable({}, { __mode = 'v' })
+    local __xpcall_argument_tail_list = setmetatable({}, { __mode = 'v' })
     local __xpcall_argument_tail_count = 0
 
     local function ret_xpcall_function_1(...)
@@ -588,15 +581,15 @@ end)()
 ---@param fmt string
 ---@param ... any
 local function __error_fmt(fmt, ...)
-    __lua_error(__lua_string_format('| evolved.lua (e) | %s',
-        __lua_string_format(fmt, ...)))
+    error(string.format('| evolved.lua (e) | %s',
+        string.format(fmt, ...)))
 end
 
 ---@param fmt string
 ---@param ... any
 local function __warning_fmt(fmt, ...)
-    __lua_print(__lua_debug_traceback(__lua_string_format('| evolved.lua (w) | %s',
-        __lua_string_format(fmt, ...))))
+    print(__lua_debug_traceback(string.format('| evolved.lua (w) | %s',
+        string.format(fmt, ...))))
 end
 
 ---
@@ -984,7 +977,7 @@ function __assoc_list_fns.sort_ex(al_item_set, al_item_list, al_item_count, comp
         return
     end
 
-    __lua_table_sort(al_item_list, comp)
+    table.sort(al_item_list, comp)
 
     for al_item_index = 1, al_item_count do
         local al_item = al_item_list[al_item_index]
@@ -1156,24 +1149,6 @@ local __DESTRUCTION_POLICY_REMOVE_FRAGMENT = __acquire_id()
 ---
 ---
 
-local __safe_tbls = {
-    __EMPTY_FRAGMENT_SET = __lua_setmetatable({}, {
-        __tostring = function() return 'empty fragment set' end,
-        __newindex = function() __error_fmt 'attempt to modify empty fragment set' end
-    }) --[[@as table<evolved.fragment, integer>]],
-
-    __EMPTY_COMPONENT_STORAGE = __lua_setmetatable({}, {
-        __tostring = function() return 'empty component storage' end,
-        __newindex = function() __error_fmt 'attempt to modify empty component storage' end
-    }) --[=[@as evolved.component[]]=],
-}
-
----
----
----
----
----
-
 local __evolved_id
 local __evolved_name
 
@@ -1236,9 +1211,6 @@ local __evolved_process_with
 local __evolved_debug_mode
 local __evolved_error_handler
 local __evolved_collect_garbage
-
-local __evolved_chunk
-local __evolved_builder
 
 ---
 ---
@@ -1331,6 +1303,24 @@ local __defer_multi_clone_entity
 ---
 ---
 
+local __safe_tbls = {
+    __EMPTY_FRAGMENT_SET = setmetatable({}, {
+        __tostring = function() return 'empty fragment set' end,
+        __newindex = function() __error_fmt 'attempt to modify empty fragment set' end
+    }) --[[@as table<evolved.fragment, integer>]],
+
+    __EMPTY_COMPONENT_STORAGE = setmetatable({}, {
+        __tostring = function() return 'empty component storage' end,
+        __newindex = function() __error_fmt 'attempt to modify empty component storage' end
+    }) --[=[@as evolved.component[]]=],
+}
+
+---
+---
+---
+---
+---
+
 ---@param id evolved.id
 ---@return string
 ---@nodiscard
@@ -1343,7 +1333,7 @@ function __id_name(id)
     end
 
     local id_primary, id_secondary = __evolved_unpack(id)
-    return __lua_string_format('$%d#%d:%d', id, id_primary, id_secondary)
+    return string.format('$%d#%d:%d', id, id_primary, id_secondary)
 end
 
 ---@param chunk_parent? evolved.chunk
@@ -1378,7 +1368,7 @@ function __new_chunk(chunk_parent, chunk_fragment)
     end
 
     ---@type evolved.chunk
-    local chunk = __lua_setmetatable({
+    local chunk = setmetatable({
         __parent = nil,
         __child_set = {},
         __child_list = {},
@@ -1516,7 +1506,7 @@ end
 function __remove_root_chunk(root)
     if root.__parent then
         __error_fmt('unexpected root chunk: (%s)',
-            __lua_tostring(root))
+            tostring(root))
         return
     end
 
@@ -1524,7 +1514,7 @@ function __remove_root_chunk(root)
 
     if not root_index or __root_list[root_index] ~= root then
         __error_fmt('unexpected root chunk: (%s)',
-            __lua_tostring(root))
+            tostring(root))
         return
     end
 
@@ -1568,7 +1558,7 @@ function __remove_child_chunk(child)
 
     if not parent then
         __error_fmt('unexpected child chunk: (%s)',
-            __lua_tostring(child))
+            tostring(child))
         return
     end
 
@@ -1576,7 +1566,7 @@ function __remove_child_chunk(child)
 
     if not child_index or parent.__child_list[child_index] ~= child then
         __error_fmt('unexpected child chunk: (%s)',
-            __lua_tostring(child))
+            tostring(child))
         return
     end
 
@@ -1872,7 +1862,7 @@ function __update_chunk_storages(chunk)
 
                 if not new_component_storage then
                     __error_fmt('component storage allocation failed: chunk (%s), fragment (%s)',
-                        __lua_tostring(chunk), __id_name(fragment))
+                        tostring(chunk), __id_name(fragment))
                 end
 
                 if fragment_duplicate then
@@ -1905,7 +1895,7 @@ function __update_chunk_storages(chunk)
 
                 if not new_component_storage then
                     __error_fmt('component storage allocation failed: chunk (%s), fragment (%s)',
-                        __lua_tostring(chunk), __id_name(fragment))
+                        tostring(chunk), __id_name(fragment))
                 end
 
                 if fragment_duplicate then
@@ -3340,11 +3330,11 @@ function __expand_chunk(chunk, min_capacity)
             if min_capacity > 0 and not new_component_storage then
                 __error_fmt(
                     'component storage reallocation failed: chunk (%s), fragment (%s)',
-                    __lua_tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
+                    tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
             elseif min_capacity == 0 and new_component_storage then
                 __warning_fmt(
                     'component storage reallocation for zero capacity should return nil: chunk (%s), fragment (%s)',
-                    __lua_tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
+                    tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
                 new_component_storage = nil
             end
 
@@ -3411,11 +3401,11 @@ function __shrink_chunk(chunk, min_capacity)
             if min_capacity > 0 and not new_component_storage then
                 __error_fmt(
                     'component storage reallocation failed: chunk (%s), fragment (%s)',
-                    __lua_tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
+                    tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
             elseif min_capacity == 0 and new_component_storage then
                 __warning_fmt(
                     'component storage reallocation for zero capacity should return nil: chunk (%s), fragment (%s)',
-                    __lua_tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
+                    tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
                 new_component_storage = nil
             end
 
@@ -6552,7 +6542,7 @@ end
 ---@return evolved.entity[] entity_list
 ---@return integer entity_count
 ---@nodiscard
-function __evolved_chunk(fragment, ...)
+function evolved.chunk(fragment, ...)
     local chunk = __chunk_fragments(fragment, ...)
     return chunk, chunk.__entity_list, chunk.__entity_count
 end
@@ -6564,7 +6554,7 @@ function __chunk_mt:__tostring()
         fragment_names[fragment_index] = __id_name(self.__fragment_list[fragment_index])
     end
 
-    return __lua_string_format('<%s>', __lua_table_concat(fragment_names, ', '))
+    return string.format('<%s>', table.concat(fragment_names, ', '))
 end
 
 ---@return boolean
@@ -6683,8 +6673,8 @@ end
 
 ---@return evolved.builder builder
 ---@nodiscard
-function __evolved_builder()
-    return __lua_setmetatable({
+function evolved.builder()
+    return setmetatable({
         __component_table = {},
     }, __builder_mt)
 end
@@ -6698,7 +6688,7 @@ function __builder_mt:__tostring()
         fragment_list[fragment_count] = fragment
     end
 
-    __lua_table_sort(fragment_list)
+    table.sort(fragment_list)
 
     local fragment_names = {} ---@type string[]
 
@@ -6706,7 +6696,7 @@ function __builder_mt:__tostring()
         fragment_names[fragment_index] = __id_name(fragment_list[fragment_index])
     end
 
-    return __lua_string_format('<%s>', __lua_table_concat(fragment_names, ', '))
+    return string.format('<%s>', table.concat(fragment_names, ', '))
 end
 
 ---@param prefab? evolved.entity
@@ -7539,9 +7529,11 @@ __evolved_set(__ON_REMOVE, __UNIQUE)
 ---
 ---
 
+local __hook_fns = {}
+
 ---@param name string
 ---@param entity evolved.entity
-local function __insert_named_entity(name, entity)
+function __hook_fns.insert_named_entity(name, entity)
     ---@type evolved.entity?
     local named_entity = __named_entity[name]
 
@@ -7563,7 +7555,7 @@ end
 
 ---@param name string
 ---@param entity evolved.entity
-local function __remove_named_entity(name, entity)
+function __hook_fns.remove_named_entity(name, entity)
     ---@type evolved.assoc_list<evolved.entity>?
     local named_entities = __named_entities[name]
 
@@ -7581,37 +7573,8 @@ local function __remove_named_entity(name, entity)
     end
 end
 
----@param entity evolved.entity
----@param new_name? string
----@param old_name? string
-__evolved_set(__NAME, __ON_SET, function(entity, _, new_name, old_name)
-    if old_name then
-        __remove_named_entity(old_name, entity)
-    end
-
-    if new_name then
-        __insert_named_entity(new_name, entity)
-    end
-end)
-
----@param entity evolved.entity
----@param old_name? string
-__evolved_set(__NAME, __ON_REMOVE, function(entity, _, old_name)
-    if old_name then
-        __remove_named_entity(old_name, entity)
-    end
-end)
-
----
----
----
----
----
-
-local __query_hook_fns = {}
-
 ---@param query evolved.query
-function __query_hook_fns.insert_query(query)
+function __hook_fns.insert_query(query)
     local query_includes = __sorted_includes[query]
     local query_include_list = query_includes and query_includes.__item_list
     local query_include_count = query_includes and query_includes.__item_count or 0
@@ -7651,7 +7614,7 @@ function __query_hook_fns.insert_query(query)
 end
 
 ---@param query evolved.query
-function __query_hook_fns.remove_query(query)
+function __hook_fns.remove_query(query)
     local query_includes = __sorted_includes[query]
     local query_include_list = query_includes and query_includes.__item_list
     local query_include_count = query_includes and query_includes.__item_count or 0
@@ -7684,6 +7647,63 @@ function __query_hook_fns.remove_query(query)
     __reset_query_chunks(query)
 end
 
+---@param subsystem evolved.system
+function __hook_fns.add_subsystem(subsystem)
+    local subsystem_group = __subsystem_groups[subsystem]
+
+    if subsystem_group then
+        local group_subsystems = __group_subsystems[subsystem_group]
+
+        if not group_subsystems then
+            ---@type evolved.assoc_list<evolved.system>
+            group_subsystems = __assoc_list_fns.new(4)
+            __group_subsystems[subsystem_group] = group_subsystems
+        end
+
+        __assoc_list_fns.insert(group_subsystems, subsystem)
+    end
+end
+
+---@param subsystem evolved.system
+function __hook_fns.remove_subsystem(subsystem)
+    local subsystem_group = __subsystem_groups[subsystem]
+
+    if subsystem_group then
+        local group_subsystems = __group_subsystems[subsystem_group]
+
+        if group_subsystems and __assoc_list_fns.remove(group_subsystems, subsystem) == 0 then
+            __group_subsystems[subsystem_group] = nil
+        end
+    end
+end
+
+---
+---
+---
+---
+---
+
+---@param entity evolved.entity
+---@param new_name? string
+---@param old_name? string
+__evolved_set(__NAME, __ON_SET, function(entity, _, new_name, old_name)
+    if old_name then
+        __hook_fns.remove_named_entity(old_name, entity)
+    end
+
+    if new_name then
+        __hook_fns.insert_named_entity(new_name, entity)
+    end
+end)
+
+---@param entity evolved.entity
+---@param old_name? string
+__evolved_set(__NAME, __ON_REMOVE, function(entity, _, old_name)
+    if old_name then
+        __hook_fns.remove_named_entity(old_name, entity)
+    end
+end)
+
 ---
 ---
 ---
@@ -7693,7 +7713,7 @@ end
 ---@param query evolved.query
 ---@param include_list evolved.fragment[]
 __evolved_set(__INCLUDES, __ON_SET, function(query, _, include_list)
-    __query_hook_fns.remove_query(query)
+    __hook_fns.remove_query(query)
 
     local include_count = #include_list
 
@@ -7709,16 +7729,16 @@ __evolved_set(__INCLUDES, __ON_SET, function(query, _, include_list)
         __sorted_includes[query] = nil
     end
 
-    __query_hook_fns.insert_query(query)
+    __hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
 __evolved_set(__INCLUDES, __ON_REMOVE, function(query)
-    __query_hook_fns.remove_query(query)
+    __hook_fns.remove_query(query)
 
     __sorted_includes[query] = nil
 
-    __query_hook_fns.insert_query(query)
+    __hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
@@ -7731,7 +7751,7 @@ end)
 ---@param query evolved.query
 ---@param exclude_list evolved.fragment[]
 __evolved_set(__EXCLUDES, __ON_SET, function(query, _, exclude_list)
-    __query_hook_fns.remove_query(query)
+    __hook_fns.remove_query(query)
 
     local exclude_count = #exclude_list
 
@@ -7747,16 +7767,16 @@ __evolved_set(__EXCLUDES, __ON_SET, function(query, _, exclude_list)
         __sorted_excludes[query] = nil
     end
 
-    __query_hook_fns.insert_query(query)
+    __hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
 __evolved_set(__EXCLUDES, __ON_REMOVE, function(query)
-    __query_hook_fns.remove_query(query)
+    __hook_fns.remove_query(query)
 
     __sorted_excludes[query] = nil
 
-    __query_hook_fns.insert_query(query)
+    __hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
@@ -7769,7 +7789,7 @@ end)
 ---@param query evolved.query
 ---@param variant_list evolved.fragment[]
 __evolved_set(__VARIANTS, __ON_SET, function(query, _, variant_list)
-    __query_hook_fns.remove_query(query)
+    __hook_fns.remove_query(query)
 
     local variant_count = #variant_list
 
@@ -7785,16 +7805,16 @@ __evolved_set(__VARIANTS, __ON_SET, function(query, _, variant_list)
         __sorted_variants[query] = nil
     end
 
-    __query_hook_fns.insert_query(query)
+    __hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
 __evolved_set(__VARIANTS, __ON_REMOVE, function(query)
-    __query_hook_fns.remove_query(query)
+    __hook_fns.remove_query(query)
 
     __sorted_variants[query] = nil
 
-    __query_hook_fns.insert_query(query)
+    __hook_fns.insert_query(query)
     __update_major_chunks(query)
 end)
 
@@ -7835,61 +7855,23 @@ end)
 ---
 ---
 
-local __group_hook_fns = {}
-
----@param subsystem evolved.system
-function __group_hook_fns.add_subsystem(subsystem)
-    local subsystem_group = __subsystem_groups[subsystem]
-
-    if subsystem_group then
-        local group_subsystems = __group_subsystems[subsystem_group]
-
-        if not group_subsystems then
-            ---@type evolved.assoc_list<evolved.system>
-            group_subsystems = __assoc_list_fns.new(4)
-            __group_subsystems[subsystem_group] = group_subsystems
-        end
-
-        __assoc_list_fns.insert(group_subsystems, subsystem)
-    end
-end
-
----@param subsystem evolved.system
-function __group_hook_fns.remove_subsystem(subsystem)
-    local subsystem_group = __subsystem_groups[subsystem]
-
-    if subsystem_group then
-        local group_subsystems = __group_subsystems[subsystem_group]
-
-        if group_subsystems and __assoc_list_fns.remove(group_subsystems, subsystem) == 0 then
-            __group_subsystems[subsystem_group] = nil
-        end
-    end
-end
-
----
----
----
----
----
-
 ---@param system evolved.system
 __evolved_set(__GROUP, __ON_SET, function(system, _, group)
-    __group_hook_fns.remove_subsystem(system)
+    __hook_fns.remove_subsystem(system)
 
     __subsystem_groups[system] = group
 
-    __group_hook_fns.add_subsystem(system)
+    __hook_fns.add_subsystem(system)
     __update_major_chunks(system)
 end)
 
 ---@param system evolved.system
 __evolved_set(__GROUP, __ON_REMOVE, function(system)
-    __group_hook_fns.remove_subsystem(system)
+    __hook_fns.remove_subsystem(system)
 
     __subsystem_groups[system] = nil
 
-    __group_hook_fns.add_subsystem(system)
+    __hook_fns.add_subsystem(system)
     __update_major_chunks(system)
 end)
 
@@ -8004,8 +7986,8 @@ evolved.debug_mode = __evolved_debug_mode
 evolved.error_handler = __evolved_error_handler
 evolved.collect_garbage = __evolved_collect_garbage
 
-evolved.chunk = __evolved_chunk
-evolved.builder = __evolved_builder
+evolved.chunk = evolved.chunk
+evolved.builder = evolved.builder
 
 ---
 ---
