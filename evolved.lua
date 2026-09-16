@@ -6410,7 +6410,7 @@ function __evolved_error_handler(handler)
     __error_handler = handler or __lua_debug_traceback
 end
 
----@param no_shrink boolean?
+---@param no_shrink? boolean
 function __evolved_collect_garbage(no_shrink)
     if __defer_depth > 0 then
         __defer_call_hook(__evolved_collect_garbage)

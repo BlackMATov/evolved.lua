@@ -1688,7 +1688,7 @@ builder_mt:require :: fragment... -> builder
 builder_mt:on_set :: {entity, fragment, component, component} -> builder
 builder_mt:on_assign :: {entity, fragment, component, component} -> builder
 builder_mt:on_insert :: {entity, fragment, component} -> builder
-builder_mt:on_remove :: {entity, fragment} -> builder
+builder_mt:on_remove :: {entity, fragment, component} -> builder
 
 builder_mt:group :: system -> builder
 
@@ -1849,7 +1849,7 @@ function evolved.id(count) end
 
 ```lua
 ---@param ... evolved.id ids
----@return string... names
+---@return string ... names
 ---@nodiscard
 function evolved.name(...) end
 ```
@@ -2347,7 +2347,7 @@ function evolved.builder() end
 function evolved.builder_mt:build(prefab, component_mapper) end
 ```
 
-### `evolved.builder_mt:multi_build`
+#### `evolved.builder_mt:multi_build`
 
 ```lua
 ---@param entity_count integer
@@ -2359,7 +2359,7 @@ function evolved.builder_mt:build(prefab, component_mapper) end
 function evolved.builder_mt:multi_build(entity_count, prefab, component_mapper) end
 ```
 
-### `evolved.builder_mt:multi_build_nr`
+#### `evolved.builder_mt:multi_build_nr`
 
 ```lua
 ---@param entity_count integer
@@ -2368,7 +2368,7 @@ function evolved.builder_mt:multi_build(entity_count, prefab, component_mapper) 
 function evolved.builder_mt:multi_build_nr(entity_count, prefab, component_mapper) end
 ```
 
-### `evolved.builder_mt:multi_build_to`
+#### `evolved.builder_mt:multi_build_to`
 
 ```lua
 ---@param out_entity_list evolved.entity[]
@@ -2626,7 +2626,7 @@ function evolved.builder_mt:exclude(...) end
 function evolved.builder_mt:variant(...) end
 ```
 
-### `evolved.builder_mt:require`
+#### `evolved.builder_mt:require`
 
 ```lua
 ---@param ... evolved.fragment fragments
