@@ -76,6 +76,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
+  - [v1.11.1](#v1111)
   - [v1.11.0](#v1110)
   - [v1.10.0](#v1100)
   - [v1.9.0](#v190)
@@ -1702,6 +1703,10 @@ builder_mt:destruction_policy :: id -> builder
 ```
 
 ## Changelog
+
+### v1.11.1
+
+- Minor annotation fixes
 
 ### v1.11.0
 
