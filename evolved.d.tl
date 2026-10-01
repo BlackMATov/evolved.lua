@@ -33,7 +33,7 @@
     interface Builder
         build: function(self: Builder,
             prefab?: Entity,
-            component_mapper?: function(Chunk, integer)): Entity
+            component_mapper?: function(Chunk, integer, integer)): Entity
 
         multi_build: function(self: Builder,
             entity_count: integer,
@@ -53,7 +53,7 @@
             component_mapper?: function(Chunk, integer, integer))
 
         spawn: function(self: Builder,
-            component_mapper?: function(Chunk, integer)): Entity
+            component_mapper?: function(Chunk, integer, integer)): Entity
 
         multi_spawn: function(self: Builder,
             entity_count: integer,
@@ -71,7 +71,7 @@
 
         clone: function(self: Builder,
             prefab: Entity,
-            component_mapper?: function(Chunk, integer)): Entity
+            component_mapper?: function(Chunk, integer, integer)): Entity
 
         multi_clone: function(self: Builder,
             entity_count: integer,
@@ -191,7 +191,7 @@
 
     spawn: function(
         component_table?: { Fragment: any },
-        component_mapper?: function(Chunk, integer)): Entity
+        component_mapper?: function(Chunk, integer, integer)): Entity
 
     multi_spawn: function(
         entity_count: integer,
@@ -213,7 +213,7 @@
     clone: function(
         prefab: Entity,
         component_table?: { Fragment: any },
-        component_mapper?: function(Chunk, integer)): Entity
+        component_mapper?: function(Chunk, integer, integer)): Entity
 
     multi_clone: function(
         entity_count: integer,
