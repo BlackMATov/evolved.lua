@@ -272,6 +272,10 @@
     multi_lookup: function(name: string): { Entity }, integer
     multi_lookup_to: function(out_entity_list: { Entity }, out_entity_first: integer, name: string): integer
 
+    search: function(query: Query): Entity | nil
+    multi_search: function(query: Query): { Entity }, integer
+    multi_search_to: function(out_entity_list: { Entity }, out_entity_first: integer, query: Query): integer
+
     process: function(...: System)
     process_with: function(system: System, ...: any)
 

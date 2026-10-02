@@ -1608,6 +1608,10 @@ lookup :: string -> entity?
 multi_lookup :: string -> entity[], integer
 multi_lookup_to :: entity[], integer, string -> integer
 
+search :: query -> entity?
+multi_search :: query -> entity[], integer
+multi_search_to :: entity[], integer, query -> integer
+
 process :: system... -> ()
 process_with :: system, ... -> ()
 

@@ -1205,6 +1205,10 @@ local __evolved_lookup
 local __evolved_multi_lookup
 local __evolved_multi_lookup_to
 
+local __evolved_search
+local __evolved_multi_search
+local __evolved_multi_search_to
+
 local __evolved_process
 local __evolved_process_with
 
@@ -6365,6 +6369,50 @@ function __evolved_multi_lookup_to(out_entity_list, out_entity_first, name)
     return 0
 end
 
+---@param query evolved.query
+---@return evolved.entity? entity
+---@nodiscard
+function __evolved_search(query)
+    local execute_iterator, execute_state = __evolved_execute(query)
+    if not execute_state then return end
+
+    local chunk, chunk_entity_list = execute_iterator(execute_state)
+    if not chunk or not chunk_entity_list then return end
+
+    __release_table(__table_pool_tag.chunk_list, execute_state[2], false, true)
+    __release_table(__table_pool_tag.execute_state, execute_state, true, true)
+
+    return chunk_entity_list[1]
+end
+
+---@param query evolved.query
+---@return evolved.entity[] entity_list
+---@return integer entity_count
+---@nodiscard
+function __evolved_multi_search(query)
+    local entity_list = {}
+    local entity_count = __evolved_multi_search_to(entity_list, 1, query)
+    return entity_list, entity_count
+end
+
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param query evolved.query
+---@return integer entity_count
+function __evolved_multi_search_to(out_entity_list, out_entity_first, query)
+    local out_entity_count = 0
+
+    for _, chunk_entity_list, chunk_entity_count in __evolved_execute(query) do
+        __lua_table_move(
+            chunk_entity_list, 1, chunk_entity_count,
+            out_entity_first + out_entity_count, out_entity_list)
+
+        out_entity_count = out_entity_count + chunk_entity_count
+    end
+
+    return out_entity_count
+end
+
 ---@param ... evolved.system systems
 function __evolved_process(...)
     local argument_count = __lua_select('#', ...)
@@ -7978,6 +8026,10 @@ evolved.locate = __evolved_locate
 evolved.lookup = __evolved_lookup
 evolved.multi_lookup = __evolved_multi_lookup
 evolved.multi_lookup_to = __evolved_multi_lookup_to
+
+evolved.search = __evolved_search
+evolved.multi_search = __evolved_multi_search
+evolved.multi_search_to = __evolved_multi_search_to
 
 evolved.process = __evolved_process
 evolved.process_with = __evolved_process_with
