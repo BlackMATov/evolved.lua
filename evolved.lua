@@ -7793,43 +7793,43 @@ end)
 ---
 ---
 
-__evolved_set(__TAG, __NAME, 'TAG')
-__evolved_set(__NAME, __NAME, 'NAME')
+__evolved_set(__TAG, __NAME, '__TAG')
+__evolved_set(__NAME, __NAME, '__NAME')
 
-__evolved_set(__UNIQUE, __NAME, 'UNIQUE')
-__evolved_set(__EXPLICIT, __NAME, 'EXPLICIT')
-__evolved_set(__INTERNAL, __NAME, 'INTERNAL')
+__evolved_set(__UNIQUE, __NAME, '__UNIQUE')
+__evolved_set(__EXPLICIT, __NAME, '__EXPLICIT')
+__evolved_set(__INTERNAL, __NAME, '__INTERNAL')
 
-__evolved_set(__DEFAULT, __NAME, 'DEFAULT')
-__evolved_set(__DUPLICATE, __NAME, 'DUPLICATE')
+__evolved_set(__DEFAULT, __NAME, '__DEFAULT')
+__evolved_set(__DUPLICATE, __NAME, '__DUPLICATE')
 
-__evolved_set(__REALLOC, __NAME, 'REALLOC')
-__evolved_set(__COMPMOVE, __NAME, 'COMPMOVE')
+__evolved_set(__REALLOC, __NAME, '__REALLOC')
+__evolved_set(__COMPMOVE, __NAME, '__COMPMOVE')
 
-__evolved_set(__PREFAB, __NAME, 'PREFAB')
-__evolved_set(__DISABLED, __NAME, 'DISABLED')
+__evolved_set(__PREFAB, __NAME, '__PREFAB')
+__evolved_set(__DISABLED, __NAME, '__DISABLED')
 
-__evolved_set(__INCLUDES, __NAME, 'INCLUDES')
-__evolved_set(__EXCLUDES, __NAME, 'EXCLUDES')
-__evolved_set(__VARIANTS, __NAME, 'VARIANTS')
-__evolved_set(__REQUIRES, __NAME, 'REQUIRES')
+__evolved_set(__INCLUDES, __NAME, '__INCLUDES')
+__evolved_set(__EXCLUDES, __NAME, '__EXCLUDES')
+__evolved_set(__VARIANTS, __NAME, '__VARIANTS')
+__evolved_set(__REQUIRES, __NAME, '__REQUIRES')
 
-__evolved_set(__ON_SET, __NAME, 'ON_SET')
-__evolved_set(__ON_ASSIGN, __NAME, 'ON_ASSIGN')
-__evolved_set(__ON_INSERT, __NAME, 'ON_INSERT')
-__evolved_set(__ON_REMOVE, __NAME, 'ON_REMOVE')
+__evolved_set(__ON_SET, __NAME, '__ON_SET')
+__evolved_set(__ON_ASSIGN, __NAME, '__ON_ASSIGN')
+__evolved_set(__ON_INSERT, __NAME, '__ON_INSERT')
+__evolved_set(__ON_REMOVE, __NAME, '__ON_REMOVE')
 
-__evolved_set(__GROUP, __NAME, 'GROUP')
+__evolved_set(__GROUP, __NAME, '__GROUP')
 
-__evolved_set(__QUERY, __NAME, 'QUERY')
-__evolved_set(__EXECUTE, __NAME, 'EXECUTE')
+__evolved_set(__QUERY, __NAME, '__QUERY')
+__evolved_set(__EXECUTE, __NAME, '__EXECUTE')
 
-__evolved_set(__PROLOGUE, __NAME, 'PROLOGUE')
-__evolved_set(__EPILOGUE, __NAME, 'EPILOGUE')
+__evolved_set(__PROLOGUE, __NAME, '__PROLOGUE')
+__evolved_set(__EPILOGUE, __NAME, '__EPILOGUE')
 
-__evolved_set(__DESTRUCTION_POLICY, __NAME, 'DESTRUCTION_POLICY')
-__evolved_set(__DESTRUCTION_POLICY_DESTROY_ENTITY, __NAME, 'DESTRUCTION_POLICY_DESTROY_ENTITY')
-__evolved_set(__DESTRUCTION_POLICY_REMOVE_FRAGMENT, __NAME, 'DESTRUCTION_POLICY_REMOVE_FRAGMENT')
+__evolved_set(__DESTRUCTION_POLICY, __NAME, '__DESTRUCTION_POLICY')
+__evolved_set(__DESTRUCTION_POLICY_DESTROY_ENTITY, __NAME, '__DESTRUCTION_POLICY_DESTROY_ENTITY')
+__evolved_set(__DESTRUCTION_POLICY_REMOVE_FRAGMENT, __NAME, '__DESTRUCTION_POLICY_REMOVE_FRAGMENT')
 
 ---
 ---

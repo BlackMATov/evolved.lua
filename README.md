@@ -1707,7 +1707,8 @@ builder_mt:destruction_policy :: id -> builder
 
 ### vX.Y.Z
 
-- Fixed issues: [#52](https://github.com/BlackMATov/evolved.lua/issues/52)
+- Lookup can now find internal fragments by their names: [#52](https://github.com/BlackMATov/evolved.lua/issues/52)
+- All internal names now have a double underscore prefix
 
 ### v1.11.1
 
