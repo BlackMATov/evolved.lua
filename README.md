@@ -51,7 +51,6 @@
   - [Modifying Operations](#modifying-operations)
   - [Debug Mode](#debug-mode)
   - [Queries](#queries)
-    - [Searching Entities](#searching-entities)
     - [Deferred Operations](#deferred-operations)
     - [Batch Operations](#batch-operations)
   - [Systems](#systems)
@@ -752,29 +751,6 @@ As you can see, `evolved.execute_iterator` returns a chunk, a list of entities i
 
 > [!NOTE]
 > But I haven't mentioned one important thing yet: [structural changes](#structural-changes) are not allowed during any iteration over chunks. This means that you cannot insert or remove fragments from entities while iterating. Also, you cannot destroy or spawn entities because this will cause structural changes too. This is done to avoid inconsistencies in the iteration process. If we allowed structural changes here, we might skip some entities during iteration, or process the same entity multiple times. The [debug mode](#debug-mode) can catch this kind of error.
-
-#### Searching Entities
-
-If you just need to collect entities matching a query and don't need to work with chunks and components, you can use the [`evolved.search`](#evolvedsearch), [`evolved.multi_search`](#evolvedmulti_search) and [`evolved.multi_search_to`](#evolvedmulti_search_to) functions. The [`evolved.search`](#evolvedsearch) function returns the first found entity matching the query, while the [`evolved.multi_search`](#evolvedmulti_search) function returns a list of all entities matching the query. The [`evolved.multi_search_to`](#evolvedmulti_search_to) function does the same, but appends the entities to the provided list starting from the specified index and returns only the number of found entities.
-
-```lua
----@param query evolved.query
----@return evolved.entity? entity
----@nodiscard
-function evolved.search(query) end
-
----@param query evolved.query
----@return evolved.entity[] entity_list
----@return integer entity_count
----@nodiscard
-function evolved.multi_search(query) end
-
----@param out_entity_list evolved.entity[]
----@param out_entity_first integer
----@param query evolved.query
----@return integer entity_count
-function evolved.multi_search_to(out_entity_list, out_entity_first, query) end
-```
 
 #### Deferred Operations
 
@@ -1633,10 +1609,6 @@ lookup :: string -> entity?
 multi_lookup :: string -> entity[], integer
 multi_lookup_to :: entity[], integer, string -> integer
 
-search :: query -> entity?
-multi_search :: query -> entity[], integer
-multi_search_to :: entity[], integer, query -> integer
-
 process :: system... -> ()
 process_with :: system, ... -> ()
 
@@ -1736,7 +1708,6 @@ builder_mt:destruction_policy :: id -> builder
 ### vX.Y.Z
 
 - Fixed issues: [#52](https://github.com/BlackMATov/evolved.lua/issues/52)
-- Added the new [`evolved.search`](#evolvedsearch), [`evolved.multi_search`](#evolvedmulti_search) functions that allow finding entities matching queries
 
 ### v1.11.1
 
@@ -2243,35 +2214,6 @@ function evolved.multi_lookup(name) end
 ---@param name string
 ---@return integer entity_count
 function evolved.multi_lookup_to(out_entity_list, out_entity_first, name) end
-```
-
-### `evolved.search`
-
-```lua
----@param query evolved.query
----@return evolved.entity? entity
----@nodiscard
-function evolved.search(query) end
-```
-
-### `evolved.multi_search`
-
-```lua
----@param query evolved.query
----@return evolved.entity[] entity_list
----@return integer entity_count
----@nodiscard
-function evolved.multi_search(query) end
-```
-
-### `evolved.multi_search_to`
-
-```lua
----@param out_entity_list evolved.entity[]
----@param out_entity_first integer
----@param query evolved.query
----@return integer entity_count
-function evolved.multi_search_to(out_entity_list, out_entity_first, query) end
 ```
 
 ### `evolved.process`
