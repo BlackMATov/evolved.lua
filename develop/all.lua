@@ -1,3 +1,5 @@
+require 'develop.issues.issue_52'
+
 require 'develop.testing.build_tests'
 require 'develop.testing.cached_hooks_tests'
 require 'develop.testing.cancel_tests'

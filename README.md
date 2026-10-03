@@ -1735,6 +1735,7 @@ builder_mt:destruction_policy :: id -> builder
 
 ### vX.Y.Z
 
+- Fixed issues: [#52](https://github.com/BlackMATov/evolved.lua/issues/52)
 - Added the new [`evolved.search`](#evolvedsearch), [`evolved.multi_search`](#evolvedmulti_search) functions that allow finding entities matching queries
 
 ### v1.11.1

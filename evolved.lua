@@ -7448,94 +7448,6 @@ __evolved_set(__COMPMOVE, __ON_REMOVE, __update_major_chunks)
 ---
 ---
 
-__evolved_set(__TAG, __NAME, 'TAG')
-__evolved_set(__NAME, __NAME, 'NAME')
-
-__evolved_set(__UNIQUE, __NAME, 'UNIQUE')
-__evolved_set(__EXPLICIT, __NAME, 'EXPLICIT')
-__evolved_set(__INTERNAL, __NAME, 'INTERNAL')
-
-__evolved_set(__DEFAULT, __NAME, 'DEFAULT')
-__evolved_set(__DUPLICATE, __NAME, 'DUPLICATE')
-
-__evolved_set(__REALLOC, __NAME, 'REALLOC')
-__evolved_set(__COMPMOVE, __NAME, 'COMPMOVE')
-
-__evolved_set(__PREFAB, __NAME, 'PREFAB')
-__evolved_set(__DISABLED, __NAME, 'DISABLED')
-
-__evolved_set(__INCLUDES, __NAME, 'INCLUDES')
-__evolved_set(__EXCLUDES, __NAME, 'EXCLUDES')
-__evolved_set(__VARIANTS, __NAME, 'VARIANTS')
-__evolved_set(__REQUIRES, __NAME, 'REQUIRES')
-
-__evolved_set(__ON_SET, __NAME, 'ON_SET')
-__evolved_set(__ON_ASSIGN, __NAME, 'ON_ASSIGN')
-__evolved_set(__ON_INSERT, __NAME, 'ON_INSERT')
-__evolved_set(__ON_REMOVE, __NAME, 'ON_REMOVE')
-
-__evolved_set(__GROUP, __NAME, 'GROUP')
-
-__evolved_set(__QUERY, __NAME, 'QUERY')
-__evolved_set(__EXECUTE, __NAME, 'EXECUTE')
-
-__evolved_set(__PROLOGUE, __NAME, 'PROLOGUE')
-__evolved_set(__EPILOGUE, __NAME, 'EPILOGUE')
-
-__evolved_set(__DESTRUCTION_POLICY, __NAME, 'DESTRUCTION_POLICY')
-__evolved_set(__DESTRUCTION_POLICY_DESTROY_ENTITY, __NAME, 'DESTRUCTION_POLICY_DESTROY_ENTITY')
-__evolved_set(__DESTRUCTION_POLICY_REMOVE_FRAGMENT, __NAME, 'DESTRUCTION_POLICY_REMOVE_FRAGMENT')
-
----
----
----
----
----
-
-__evolved_set(__TAG, __INTERNAL)
-__evolved_set(__NAME, __INTERNAL)
-
-__evolved_set(__UNIQUE, __INTERNAL)
-__evolved_set(__EXPLICIT, __INTERNAL)
-__evolved_set(__INTERNAL, __INTERNAL)
-
-__evolved_set(__DEFAULT, __INTERNAL)
-__evolved_set(__DUPLICATE, __INTERNAL)
-
-__evolved_set(__REALLOC, __INTERNAL)
-__evolved_set(__COMPMOVE, __INTERNAL)
-
-__evolved_set(__PREFAB, __INTERNAL)
-__evolved_set(__DISABLED, __INTERNAL)
-
-__evolved_set(__INCLUDES, __INTERNAL)
-__evolved_set(__EXCLUDES, __INTERNAL)
-__evolved_set(__VARIANTS, __INTERNAL)
-__evolved_set(__REQUIRES, __INTERNAL)
-
-__evolved_set(__ON_SET, __INTERNAL)
-__evolved_set(__ON_ASSIGN, __INTERNAL)
-__evolved_set(__ON_INSERT, __INTERNAL)
-__evolved_set(__ON_REMOVE, __INTERNAL)
-
-__evolved_set(__GROUP, __INTERNAL)
-
-__evolved_set(__QUERY, __INTERNAL)
-__evolved_set(__EXECUTE, __INTERNAL)
-
-__evolved_set(__PROLOGUE, __INTERNAL)
-__evolved_set(__EPILOGUE, __INTERNAL)
-
-__evolved_set(__DESTRUCTION_POLICY, __INTERNAL)
-__evolved_set(__DESTRUCTION_POLICY_DESTROY_ENTITY, __INTERNAL)
-__evolved_set(__DESTRUCTION_POLICY_REMOVE_FRAGMENT, __INTERNAL)
-
----
----
----
----
----
-
 __evolved_set(__TAG, __TAG)
 
 __evolved_set(__UNIQUE, __TAG)
@@ -7922,6 +7834,94 @@ __evolved_set(__GROUP, __ON_REMOVE, function(system)
     __hook_fns.add_subsystem(system)
     __update_major_chunks(system)
 end)
+
+---
+---
+---
+---
+---
+
+__evolved_set(__TAG, __NAME, 'TAG')
+__evolved_set(__NAME, __NAME, 'NAME')
+
+__evolved_set(__UNIQUE, __NAME, 'UNIQUE')
+__evolved_set(__EXPLICIT, __NAME, 'EXPLICIT')
+__evolved_set(__INTERNAL, __NAME, 'INTERNAL')
+
+__evolved_set(__DEFAULT, __NAME, 'DEFAULT')
+__evolved_set(__DUPLICATE, __NAME, 'DUPLICATE')
+
+__evolved_set(__REALLOC, __NAME, 'REALLOC')
+__evolved_set(__COMPMOVE, __NAME, 'COMPMOVE')
+
+__evolved_set(__PREFAB, __NAME, 'PREFAB')
+__evolved_set(__DISABLED, __NAME, 'DISABLED')
+
+__evolved_set(__INCLUDES, __NAME, 'INCLUDES')
+__evolved_set(__EXCLUDES, __NAME, 'EXCLUDES')
+__evolved_set(__VARIANTS, __NAME, 'VARIANTS')
+__evolved_set(__REQUIRES, __NAME, 'REQUIRES')
+
+__evolved_set(__ON_SET, __NAME, 'ON_SET')
+__evolved_set(__ON_ASSIGN, __NAME, 'ON_ASSIGN')
+__evolved_set(__ON_INSERT, __NAME, 'ON_INSERT')
+__evolved_set(__ON_REMOVE, __NAME, 'ON_REMOVE')
+
+__evolved_set(__GROUP, __NAME, 'GROUP')
+
+__evolved_set(__QUERY, __NAME, 'QUERY')
+__evolved_set(__EXECUTE, __NAME, 'EXECUTE')
+
+__evolved_set(__PROLOGUE, __NAME, 'PROLOGUE')
+__evolved_set(__EPILOGUE, __NAME, 'EPILOGUE')
+
+__evolved_set(__DESTRUCTION_POLICY, __NAME, 'DESTRUCTION_POLICY')
+__evolved_set(__DESTRUCTION_POLICY_DESTROY_ENTITY, __NAME, 'DESTRUCTION_POLICY_DESTROY_ENTITY')
+__evolved_set(__DESTRUCTION_POLICY_REMOVE_FRAGMENT, __NAME, 'DESTRUCTION_POLICY_REMOVE_FRAGMENT')
+
+---
+---
+---
+---
+---
+
+__evolved_set(__TAG, __INTERNAL)
+__evolved_set(__NAME, __INTERNAL)
+
+__evolved_set(__UNIQUE, __INTERNAL)
+__evolved_set(__EXPLICIT, __INTERNAL)
+__evolved_set(__INTERNAL, __INTERNAL)
+
+__evolved_set(__DEFAULT, __INTERNAL)
+__evolved_set(__DUPLICATE, __INTERNAL)
+
+__evolved_set(__REALLOC, __INTERNAL)
+__evolved_set(__COMPMOVE, __INTERNAL)
+
+__evolved_set(__PREFAB, __INTERNAL)
+__evolved_set(__DISABLED, __INTERNAL)
+
+__evolved_set(__INCLUDES, __INTERNAL)
+__evolved_set(__EXCLUDES, __INTERNAL)
+__evolved_set(__VARIANTS, __INTERNAL)
+__evolved_set(__REQUIRES, __INTERNAL)
+
+__evolved_set(__ON_SET, __INTERNAL)
+__evolved_set(__ON_ASSIGN, __INTERNAL)
+__evolved_set(__ON_INSERT, __INTERNAL)
+__evolved_set(__ON_REMOVE, __INTERNAL)
+
+__evolved_set(__GROUP, __INTERNAL)
+
+__evolved_set(__QUERY, __INTERNAL)
+__evolved_set(__EXECUTE, __INTERNAL)
+
+__evolved_set(__PROLOGUE, __INTERNAL)
+__evolved_set(__EPILOGUE, __INTERNAL)
+
+__evolved_set(__DESTRUCTION_POLICY, __INTERNAL)
+__evolved_set(__DESTRUCTION_POLICY_DESTROY_ENTITY, __INTERNAL)
+__evolved_set(__DESTRUCTION_POLICY_REMOVE_FRAGMENT, __INTERNAL)
 
 ---
 ---
