@@ -7590,6 +7590,11 @@ function __builder_mt:name(name)
 end
 
 ---@return evolved.builder builder
+function __builder_mt:index()
+    return self:set(__INDEX)
+end
+
+---@return evolved.builder builder
 function __builder_mt:unique()
     return self:set(__UNIQUE)
 end
@@ -8223,6 +8228,7 @@ __evolved_set(__DESTRUCTION_POLICY_REMOVE_FRAGMENT, __INTERNAL)
 evolved.TAG = __TAG
 evolved.NAME = __NAME
 
+evolved.INDEX = __INDEX
 evolved.UNIQUE = __UNIQUE
 evolved.EXPLICIT = __EXPLICIT
 evolved.INTERNAL = __INTERNAL
@@ -8317,6 +8323,10 @@ evolved.locate = __evolved_locate
 evolved.lookup = __evolved_lookup
 evolved.multi_lookup = __evolved_multi_lookup
 evolved.multi_lookup_to = __evolved_multi_lookup_to
+
+evolved.search = __evolved_search
+evolved.multi_search = __evolved_multi_search
+evolved.multi_search_to = __evolved_multi_search_to
 
 evolved.process = __evolved_process
 evolved.process_with = __evolved_process_with

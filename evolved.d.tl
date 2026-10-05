@@ -107,6 +107,7 @@
         tag: function(self: Builder): Builder
         name: function(self: Builder, name: string): Builder
 
+        index: function(self: Builder): Builder
         unique: function(self: Builder): Builder
         explicit: function(self: Builder): Builder
         internal: function(self: Builder): Builder
@@ -144,6 +145,7 @@
     TAG: Fragment
     NAME: Fragment
 
+    INDEX: Fragment
     UNIQUE: Fragment
     EXPLICIT: Fragment
     INTERNAL: Fragment
@@ -271,6 +273,10 @@
     lookup: function(name: string): Entity | nil
     multi_lookup: function(name: string): { Entity }, integer
     multi_lookup_to: function(out_entity_list: { Entity }, out_entity_first: integer, name: string): integer
+
+    search: function<Component>(fragment: Fragment, component: Component): Entity | nil
+    multi_search: function<Component>(fragment: Fragment, component: Component): { Entity }, integer
+    multi_search_to: function<Component>(out_entity_list: { Entity }, out_entity_first: integer, fragment: Fragment, component: Component): integer
 
     process: function(...: System)
     process_with: function(system: System, ...: any)

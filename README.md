@@ -59,6 +59,7 @@
     - [Entity Names](#entity-names)
     - [Fragment Tags](#fragment-tags)
     - [Fragment Hooks](#fragment-hooks)
+    - [Indexed Fragments](#indexed-fragments)
     - [Unique Fragments](#unique-fragments)
     - [Explicit Fragments](#explicit-fragments)
     - [Internal Fragments](#internal-fragments)
@@ -1070,6 +1071,8 @@ local player_list, player_count = evolved.multi_lookup('Player')
 assert(player_count == 2 and player_list[1] == player1 and player_list[2] == player2)
 ```
 
+Under the hood, the [`evolved.NAME`](#evolvedname) fragment is marked with the [`evolved.INDEX`](#evolvedindex) fragment trait, so the [`evolved.lookup`](#evolvedlookup) function is just a shorthand for the [`evolved.search`](#evolvedsearch) function with the [`evolved.NAME`](#evolvedname) fragment. See the [Indexed Fragments](#indexed-fragments) section for more details.
+
 #### Fragment Tags
 
 Sometimes you want to have a fragment without a component. For example, you might want to have some marks that will be used to mark entities for processing. Fragments without components are called `tags`. Such fragments take up less memory, because they do not require any components to be stored. Migration of entities with tags is faster, because the library does not need to migrate components, only the tags themselves. To create a tag, mark the fragment with the [`evolved.TAG`](#evolvedtag) fragment.
@@ -1111,6 +1114,37 @@ Use [`evolved.ON_SET`](#evolvedon_set) for callbacks on fragment insert or overr
 
 > [!NOTE]
 > Because fragments marked with [`evolved.TAG`](#evolvedtag) (also called [Fragment Tags](#fragment-tags)) have no components, their [`evolved.ON_SET`](#evolvedon_set) hooks are invoked only when the tag is inserted, not when it is overridden, as there is nothing to override. Their [`evolved.ON_ASSIGN`](#evolvedon_assign) hooks are never invoked for such tags for the same reason.
+
+#### Indexed Fragments
+
+Sometimes you need to find entities not just by the presence of a fragment, but by the value of its component. For example, you might want to find a player by its network identifier, or all units of a specific team. To do this without iterating over chunks, mark the fragment with the [`evolved.INDEX`](#evolvedindex) fragment trait. The library will maintain an index from component values to entities, and you will be able to find such entities using the [`evolved.search`](#evolvedsearch), [`evolved.multi_search`](#evolvedmulti_search), and [`evolved.multi_search_to`](#evolvedmulti_search_to) functions.
+
+```lua
+local evolved = require 'evolved'
+
+local team = evolved.builder()
+    :index()
+    :build()
+
+local unit1 = evolved.builder():set(team, 'red'):build()
+local unit2 = evolved.builder():set(team, 'blue'):build()
+local unit3 = evolved.builder():set(team, 'red'):build()
+
+assert(evolved.search(team, 'blue') == unit2)
+
+local red_list, red_count = evolved.multi_search(team, 'red')
+assert(red_count == 2 and red_list[1] == unit1 and red_list[2] == unit3)
+```
+
+The [`evolved.search`](#evolvedsearch) function returns the first entity with the specified component, while the [`evolved.multi_search`](#evolvedmulti_search) function returns a list of all such entities. The [`evolved.multi_search_to`](#evolvedmulti_search_to) function does the same, but appends the entities to the provided list starting from the specified index and returns only the number of found entities.
+
+The index is updated automatically by all operations that change components of the indexed fragment, including spawning, cloning, deferred, and batch operations. The trait can be added or removed at any time. When it is added to a fragment that is already used by some entities, the index is built from these entities. The [`evolved.NAME`](#evolvedname) and [`evolved.GROUP`](#evolvedgroup) fragments are indexed too, so you can search for entities by names or for systems by groups.
+
+> [!NOTE]
+> Components are used as keys in the index, so table components are indexed by reference, and modifying such a table in place does not update the index. The same applies to components modified directly in chunk storages during iteration. Also, [Fragment Tags](#fragment-tags) and `NaN` components are not indexed at all.
+
+> [!NOTE]
+> The index is not free. Every change of an indexed component updates the index, and removing an entity from a large group of entities with the same component value takes time proportional to the size of that group. So mark only the fragments you are actually going to search by.
 
 #### Unique Fragments
 
@@ -1516,6 +1550,7 @@ execute_iterator :: {execute_state? -> chunk?, entity[]?, integer?}
 TAG :: fragment
 NAME :: fragment
 
+INDEX :: fragment
 UNIQUE :: fragment
 EXPLICIT :: fragment
 INTERNAL :: fragment
@@ -1609,6 +1644,10 @@ lookup :: string -> entity?
 multi_lookup :: string -> entity[], integer
 multi_lookup_to :: entity[], integer, string -> integer
 
+search :: fragment, component -> entity?
+multi_search :: fragment, component -> entity[], integer
+multi_search_to :: entity[], integer, fragment, component -> integer
+
 process :: system... -> ()
 process_with :: system, ... -> ()
 
@@ -1669,6 +1708,7 @@ builder_mt:clear :: builder
 builder_mt:tag :: builder
 builder_mt:name :: string -> builder
 
+builder_mt:index :: builder
 builder_mt:unique :: builder
 builder_mt:explicit :: builder
 builder_mt:internal :: builder
@@ -1709,6 +1749,7 @@ builder_mt:destruction_policy :: id -> builder
 
 - Lookup can now find internal fragments by their names: [#52](https://github.com/BlackMATov/evolved.lua/issues/52)
 - All internal names now have a double underscore prefix
+- Added the new [`evolved.INDEX`](#evolvedindex) fragment trait and the [`evolved.search`](#evolvedsearch), [`evolved.multi_search`](#evolvedmulti_search) functions that allow finding entities by their component values
 
 ### v1.11.1
 
@@ -1794,6 +1835,8 @@ builder_mt:destruction_policy :: id -> builder
 ### `evolved.TAG`
 
 ### `evolved.NAME`
+
+### `evolved.INDEX`
 
 ### `evolved.UNIQUE`
 
@@ -2217,6 +2260,38 @@ function evolved.multi_lookup(name) end
 function evolved.multi_lookup_to(out_entity_list, out_entity_first, name) end
 ```
 
+### `evolved.search`
+
+```lua
+---@param fragment evolved.fragment
+---@param component evolved.component
+---@return evolved.entity? entity
+---@nodiscard
+function evolved.search(fragment, component) end
+```
+
+### `evolved.multi_search`
+
+```lua
+---@param fragment evolved.fragment
+---@param component evolved.component
+---@return evolved.entity[] entity_list
+---@return integer entity_count
+---@nodiscard
+function evolved.multi_search(fragment, component) end
+```
+
+### `evolved.multi_search_to`
+
+```lua
+---@param out_entity_list evolved.entity[]
+---@param out_entity_first integer
+---@param fragment evolved.fragment
+---@param component evolved.component
+---@return integer entity_count
+function evolved.multi_search_to(out_entity_list, out_entity_first, fragment, component) end
+```
+
 ### `evolved.process`
 
 ```lua
@@ -2544,6 +2619,13 @@ function evolved.builder_mt:tag() end
 ---@param name string
 ---@return evolved.builder builder
 function evolved.builder_mt:name(name) end
+```
+
+#### `evolved.builder_mt:index`
+
+```lua
+---@return evolved.builder builder
+function evolved.builder_mt:index() end
 ```
 
 #### `evolved.builder_mt:unique`

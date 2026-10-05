@@ -15,6 +15,7 @@ require 'develop.testing.name_tests'
 require 'develop.testing.process_with_tests'
 require 'develop.testing.realloc_tests'
 require 'develop.testing.requires_fragment_tests'
+require 'develop.testing.search_tests'
 require 'develop.testing.spawn_tests'
 require 'develop.testing.system_as_query_tests'
 
