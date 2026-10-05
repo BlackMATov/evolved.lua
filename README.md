@@ -1141,6 +1141,9 @@ The [`evolved.search`](#evolvedsearch) function returns the first entity with th
 The index is updated automatically by all operations that change components of the indexed fragment, including spawning, cloning, deferred, and batch operations. The trait can be added or removed at any time. When it is added to a fragment that is already used by some entities, the index is built from these entities. The [`evolved.NAME`](#evolvedname) and [`evolved.GROUP`](#evolvedgroup) fragments are indexed too, so you can search for entities by names or for systems by groups.
 
 > [!NOTE]
+> Searching by a fragment without the [`evolved.INDEX`](#evolvedindex) trait is an error.
+
+> [!NOTE]
 > Components are used as keys in the index, so table components are indexed by reference, and modifying such a table in place does not update the index. The same applies to components modified directly in chunk storages during iteration. Also, [Fragment Tags](#fragment-tags) and `NaN` components are not indexed at all.
 
 > [!NOTE]

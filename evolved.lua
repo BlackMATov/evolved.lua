@@ -2313,15 +2313,15 @@ function __update_search_index(fragment)
         return
     end
 
+    __search_indices[fragment] = nil
+    __update_major_chunks(fragment)
+
     if __evolved_has(fragment, __INDEX) then
         local fragment_search_index = __search_index_fns.new()
         __trace_minor_chunks(fragment, __update_search_index_trace, fragment, fragment_search_index)
         __search_indices[fragment] = fragment_search_index
-    else
-        __search_indices[fragment] = nil
+        __trace_major_chunks(fragment, __update_chunk_caches)
     end
-
-    __update_major_chunks(fragment)
 end
 
 ---@param chunk evolved.chunk
@@ -6766,7 +6766,13 @@ end
 ---@nodiscard
 function __evolved_search(fragment, component)
     local fragment_search_index = __search_indices[fragment]
-    return fragment_search_index and fragment_search_index.__entity_map[component]
+
+    if not fragment_search_index then
+        __error_fmt('the fragment (%s) is not indexed and cannot be searched',
+            __id_name(fragment))
+    end
+
+    return fragment_search_index.__entity_map[component]
 end
 
 ---@param fragment evolved.fragment
@@ -6789,7 +6795,8 @@ function __evolved_multi_search_to(out_entity_list, out_entity_first, fragment, 
     local fragment_search_index = __search_indices[fragment]
 
     if not fragment_search_index then
-        return 0
+        __error_fmt('the fragment (%s) is not indexed and cannot be searched',
+            __id_name(fragment))
     end
 
     do
@@ -7827,8 +7834,8 @@ __evolved_set(__ON_REMOVE, __ON_REMOVE, __update_major_chunks)
 ---
 ---
 
-__evolved_set(__TAG, __ON_INSERT, __update_major_chunks)
-__evolved_set(__TAG, __ON_REMOVE, __update_major_chunks)
+__evolved_set(__TAG, __ON_INSERT, __update_search_index)
+__evolved_set(__TAG, __ON_REMOVE, __update_search_index)
 
 __evolved_set(__INDEX, __ON_INSERT, __update_search_index)
 __evolved_set(__INDEX, __ON_REMOVE, __update_search_index)

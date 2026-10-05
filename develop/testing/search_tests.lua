@@ -56,19 +56,6 @@ local function check_search_unordered(fragment, component, ...)
 end
 
 do
-    local f = evo.id()
-
-    local e1 = evo.spawn { [f] = 'hello' }
-    local e2 = evo.spawn { [f] = 'hello' }
-
-    -- fragments without the INDEX trait are not searchable
-    check_search(f, 'hello')
-
-    assert(evo.get(e1, f) == 'hello')
-    assert(evo.get(e2, f) == 'hello')
-end
-
-do
     local f = evo.builder():index():build()
     assert(evo.has(f, evo.INDEX))
 
@@ -208,8 +195,6 @@ do
     local e1 = evo.spawn { [f] = 'existing' }
     local e2 = evo.spawn { [f] = 'existing' }
 
-    check_search(f, 'existing')
-
     -- the index is built from existing entities when the trait is added
     evo.set(f, evo.INDEX)
     do
@@ -220,12 +205,10 @@ do
         assert(entity_list[1] ~= entity_list[2])
     end
 
-    -- the index is dropped when the trait is removed
+    -- the index is rebuilt with entities spawned while the trait was removed
     evo.remove(f, evo.INDEX)
-    check_search(f, 'existing')
 
     local e3 = evo.spawn { [f] = 'existing' }
-    check_search(f, 'existing')
 
     evo.set(f, evo.INDEX)
     do
@@ -243,9 +226,10 @@ do
     evo.defer()
     do
         evo.set(f, evo.INDEX)
-        check_search(f, 'deferred')
     end
     evo.commit()
+
+    check_search(f, 'deferred')
 
     local e1, e2
 
@@ -333,11 +317,38 @@ end
 do
     local t = evo.builder():tag():index():build()
 
-    -- tags have no components, so they are not indexed
+    -- tags have no components, so their indices are always empty
     local e = evo.spawn { [t] = true }
     check_search(t, true)
 
     evo.destroy(e)
+end
+
+do
+    local f = evo.builder():index():build()
+
+    local e1 = evo.spawn { [f] = 'hello' }
+    local e2 = evo.spawn { [f] = 'hello' }
+    check_search(f, 'hello', e1, e2)
+
+    -- the index becomes empty when an indexed fragment becomes a tag
+    evo.set(f, evo.TAG)
+    check_search(f, 'hello')
+    check_search(f, true)
+
+    evo.remove(e2, f)
+    check_search(f, 'hello')
+
+    -- and it is rebuilt when the fragment is no longer a tag
+    evo.remove(f, evo.TAG)
+    assert(evo.get(e1, f) == true)
+    check_search(f, true, e1)
+    check_search(f, 'hello')
+
+    local e3 = evo.spawn { [f] = 'hello' }
+    check_search(f, 'hello', e3)
+
+    evo.destroy(e1, e2, e3)
 end
 
 do
@@ -368,8 +379,6 @@ do
 
     assert(evo.alive(e1) and not evo.has(e1, f))
     assert(evo.alive(e2) and not evo.has(e2, f))
-
-    check_search(f, 'gone')
 end
 
 do
