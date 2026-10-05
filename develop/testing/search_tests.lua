@@ -409,3 +409,139 @@ do
 
     evo.destroy(e, group, s1, s2)
 end
+
+---@param entity evolved.entity
+---@param fragment evolved.fragment
+---@param component evolved.component
+local function set_directly(entity, fragment, component)
+    local chunk, place = evo.locate(entity)
+    assert(chunk, 'entity should be in a chunk')
+    local storage = chunk:components(fragment)
+    storage[place] = component
+end
+
+do
+    local f = evo.builder():index():build()
+    local q = evo.builder():include(f):build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'red' }
+    local e3 = evo.spawn { [f] = 'blue' }
+
+    -- components can be changed directly in chunk storages during iteration
+    for chunk, entity_list, entity_count in evo.execute(q) do
+        local storage = chunk:components(f)
+        for place = 1, entity_count do
+            if entity_list[place] == e1 then
+                storage[place] = 'blue'
+            end
+        end
+    end
+
+    -- and then the index should be updated manually
+    evo.reindex(f)
+
+    -- only entities with changed components are moved between index groups
+    check_search(f, 'red', e2)
+    check_search(f, 'blue', e3, e1)
+
+    evo.destroy(e1, e2, e3)
+end
+
+do
+    local f = evo.builder():index():build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'red' }
+
+    set_directly(e1, f, 'blue')
+
+    -- removing entities does not leave stale index entries even without reindexing
+    evo.destroy(e1)
+    check_search(f, 'red', e2)
+    check_search(f, 'blue')
+
+    set_directly(e2, f, 'blue')
+
+    evo.remove(e2, f)
+    check_search(f, 'red')
+    check_search(f, 'blue')
+
+    evo.destroy(e2)
+end
+
+do
+    local f = evo.builder():index():build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'red' }
+
+    set_directly(e1, f, 'blue')
+
+    -- setting the same component through the API updates the index too
+    evo.set(e1, f, evo.get(e1, f))
+    check_search(f, 'red', e2)
+    check_search(f, 'blue', e1)
+
+    evo.destroy(e1, e2)
+end
+
+do
+    local f1 = evo.builder():index():build()
+    local f2 = evo.builder():index():build()
+
+    local e1 = evo.spawn { [f1] = 'a', [f2] = 1 }
+    local e2 = evo.spawn { [f1] = 'a', [f2] = 1 }
+
+    set_directly(e1, f1, 'b')
+    set_directly(e2, f2, 2)
+
+    -- reindexing can be deferred
+    evo.defer()
+    do
+        evo.reindex(f1, f2)
+    end
+    evo.commit()
+
+    check_search(f1, 'a', e2)
+    check_search(f1, 'b', e1)
+    check_search(f2, 1, e1)
+    check_search(f2, 2, e2)
+
+    evo.destroy(e1, e2)
+end
+
+do
+    local f = evo.builder():index():build()
+
+    local e = evo.spawn { [f] = 'red' }
+
+    -- NaN components are removed from the index by reindexing
+    set_directly(e, f, 0 / 0)
+    evo.reindex(f)
+    check_search(f, 'red')
+
+    set_directly(e, f, 'green')
+    evo.reindex(f)
+    check_search(f, 'green', e)
+
+    evo.destroy(e)
+end
+
+do
+    local f = evo.id()
+
+    local e = evo.spawn { [f] = 'red' }
+
+    -- the trait can be added and the fragment reindexed in the same deferred block
+    evo.defer()
+    do
+        evo.set(f, evo.INDEX)
+        evo.reindex(f)
+    end
+    evo.commit()
+
+    check_search(f, 'red', e)
+
+    evo.destroy(e)
+end

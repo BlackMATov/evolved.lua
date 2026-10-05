@@ -1126,9 +1126,17 @@ local team = evolved.builder()
     :index()
     :build()
 
-local unit1 = evolved.builder():set(team, 'red'):build()
-local unit2 = evolved.builder():set(team, 'blue'):build()
-local unit3 = evolved.builder():set(team, 'red'):build()
+local unit1 = evolved.builder()
+    :set(team, 'red')
+    :build()
+
+local unit2 = evolved.builder()
+    :set(team, 'blue')
+    :build()
+
+local unit3 = evolved.builder()
+    :set(team, 'red')
+    :build()
 
 assert(evolved.search(team, 'blue') == unit2)
 
@@ -1138,16 +1146,46 @@ assert(red_count == 2 and red_list[1] == unit1 and red_list[2] == unit3)
 
 The [`evolved.search`](#evolvedsearch) function returns the first entity with the specified component, while the [`evolved.multi_search`](#evolvedmulti_search) function returns a list of all such entities. The [`evolved.multi_search_to`](#evolvedmulti_search_to) function does the same, but appends the entities to the provided list starting from the specified index and returns only the number of found entities.
 
-The index is updated automatically by all operations that change components of the indexed fragment, including spawning, cloning, deferred, and batch operations. The trait can be added or removed at any time. When it is added to a fragment that is already used by some entities, the index is built from these entities. The [`evolved.NAME`](#evolvedname) and [`evolved.GROUP`](#evolvedgroup) fragments are indexed too, so you can search for entities by names or for systems by groups.
+Entities are found in the order in which they received their components, but this order is not preserved after removals. When an entity loses the component or changes its value, the last entity with the same value takes its place. So, if the order matters to you, for example, the order of systems in a [evolved.GROUP](#systems), avoid removing such components or changing their values.
+
+The index is updated automatically by all operations that change components of the indexed fragment, including spawning, cloning, and setting. The trait can be added or removed at any time. When it is added to a fragment that is already used by some entities, the index is built from these entities. The [`evolved.NAME`](#evolvedname) and [`evolved.GROUP`](#evolvedgroup) fragments are indexed too, so you can search for entities by names or for systems by groups.
+
+Components changed directly in chunk storages during iteration bypass the index, so after such changes you should update it manually using the [`evolved.reindex`](#evolvedreindex) function. It only updates entities whose components have changed, so it is much cheaper than rebuilding the whole index.
+
+```lua
+local evolved = require 'evolved'
+
+local team = evolved.builder()
+    :index()
+    :build()
+
+local unit = evolved.builder()
+    :set(team, 'red')
+    :build()
+
+local all_units = evolved.builder()
+    :include(team)
+    :build()
+
+for chunk, entity_list, entity_count in evolved.execute(all_units) do
+    local teams = chunk:components(team)
+    for i = 1, entity_count do
+        teams[i] = 'blue'
+    end
+end
+
+evolved.reindex(team)
+assert(evolved.search(team, 'blue') == unit)
+```
 
 > [!NOTE]
 > Searching by a fragment without the [`evolved.INDEX`](#evolvedindex) trait is an error.
 
 > [!NOTE]
-> Components are used as keys in the index, so table components are indexed by reference, and modifying such a table in place does not update the index. The same applies to components modified directly in chunk storages during iteration. Also, [Fragment Tags](#fragment-tags) and `NaN` components are not indexed at all.
+> Components are used as keys in the index, so table components are indexed by reference, and searching by another table with the same content will not find anything. Also, [Fragment Tags](#fragment-tags) and `NaN` components are not indexed at all.
 
 > [!NOTE]
-> The index is not free. Every change of an indexed component updates the index, and removing an entity from a large group of entities with the same component value takes time proportional to the size of that group. So mark only the fragments you are actually going to search by.
+> The index is not free. Every indexed entity takes some additional memory, and all operations that change indexed components, such as spawning, cloning, setting, removing, or destroying, become slower because they have to update the index too. So mark only the fragments you are actually going to search by.
 
 #### Unique Fragments
 
@@ -1651,6 +1689,8 @@ search :: fragment, component -> entity?
 multi_search :: fragment, component -> entity[], integer
 multi_search_to :: entity[], integer, fragment, component -> integer
 
+reindex :: fragment... -> ()
+
 process :: system... -> ()
 process_with :: system, ... -> ()
 
@@ -1752,7 +1792,7 @@ builder_mt:destruction_policy :: id -> builder
 
 - Lookup can now find internal fragments by their names: [#52](https://github.com/BlackMATov/evolved.lua/issues/52)
 - All internal names now have a double underscore prefix
-- Added the new [`evolved.INDEX`](#evolvedindex) fragment trait and the [`evolved.search`](#evolvedsearch), [`evolved.multi_search`](#evolvedmulti_search) functions that allow finding entities by their component values
+- Added the new [`evolved.INDEX`](#evolvedindex) fragment trait and the [`evolved.search`](#evolvedsearch), [`evolved.multi_search`](#evolvedmulti_search), [`evolved.reindex`](#evolvedreindex) functions that allow finding entities by their component values
 
 ### v1.11.1
 
@@ -2293,6 +2333,13 @@ function evolved.multi_search(fragment, component) end
 ---@param component evolved.component
 ---@return integer entity_count
 function evolved.multi_search_to(out_entity_list, out_entity_first, fragment, component) end
+```
+
+### `evolved.reindex`
+
+```lua
+---@param ... evolved.fragment fragments
+function evolved.reindex(...) end
 ```
 
 ### `evolved.process`

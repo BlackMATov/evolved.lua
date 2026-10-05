@@ -278,6 +278,8 @@
     multi_search: function<Component>(fragment: Fragment, component: Component): { Entity }, integer
     multi_search_to: function<Component>(out_entity_list: { Entity }, out_entity_first: integer, fragment: Fragment, component: Component): integer
 
+    reindex: function(...: Fragment)
+
     process: function(...: System)
     process_with: function(system: System, ...: any)
 

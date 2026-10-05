@@ -1109,6 +1109,7 @@ end
 ---@class (exact) evolved.search_index: {
 ---  __entity_map: { [evolved.component]: evolved.entity },
 ---  __entities_map: { [evolved.component]: evolved.assoc_list<evolved.entity> },
+---  __component_map: { [evolved.entity]: evolved.component },
 --- }
 
 local __search_index_fns = {}
@@ -1120,7 +1121,18 @@ function __search_index_fns.new()
     return {
         __entity_map = __lua_table_new(),
         __entities_map = __lua_table_new(),
+        __component_map = __lua_table_new(),
     }
+end
+
+---@param index evolved.search_index
+---@param entity evolved.entity
+---@param component evolved.component
+function __search_index_fns.assign(index, entity, component)
+    if index.__component_map[entity] ~= component then
+        __search_index_fns.remove(index, entity)
+        __search_index_fns.insert(index, entity, component)
+    end
 end
 
 ---@param index evolved.search_index
@@ -1131,6 +1143,8 @@ function __search_index_fns.insert(index, entity, component)
         -- NaN components cannot be indexed
         return
     end
+
+    index.__component_map[entity] = component
 
     ---@type evolved.entity?
     local indexed_entity = index.__entity_map[component]
@@ -1153,13 +1167,21 @@ end
 
 ---@param index evolved.search_index
 ---@param entity evolved.entity
----@param component evolved.component
-function __search_index_fns.remove(index, entity, component)
+function __search_index_fns.remove(index, entity)
+    ---@type evolved.component?
+    local component = index.__component_map[entity]
+
+    if component == nil then
+        return
+    end
+
+    index.__component_map[entity] = nil
+
     ---@type evolved.assoc_list<evolved.entity>?
     local indexed_entities = index.__entities_map[component]
 
     if indexed_entities then
-        if __assoc_list_fns.remove(indexed_entities, entity) == 0 then
+        if __assoc_list_fns.unordered_remove(indexed_entities, entity) == 0 then
             index.__entities_map[component], indexed_entities = nil, nil
         end
     end
@@ -1169,17 +1191,6 @@ function __search_index_fns.remove(index, entity, component)
 
     if indexed_entity == entity then
         index.__entity_map[component] = indexed_entities and indexed_entities.__item_list[1] or nil
-    end
-end
-
----@param index evolved.search_index
----@param entity evolved.entity
----@param new_component evolved.component
----@param old_component evolved.component
-function __search_index_fns.assign(index, entity, new_component, old_component)
-    if new_component ~= old_component then
-        __search_index_fns.remove(index, entity, old_component)
-        __search_index_fns.insert(index, entity, new_component)
     end
 end
 
@@ -1293,6 +1304,8 @@ local __evolved_multi_lookup_to
 local __evolved_search
 local __evolved_multi_search
 local __evolved_multi_search_to
+
+local __evolved_reindex
 
 local __evolved_process
 local __evolved_process_with
@@ -2337,7 +2350,7 @@ function __update_search_index_trace(chunk, fragment, fragment_search_index)
         for place = 1, chunk.__entity_count do
             local entity = chunk_entity_list[place]
             local component = chunk_component_storage[place]
-            __search_index_fns.insert(fragment_search_index, entity, component)
+            __search_index_fns.assign(fragment_search_index, entity, component)
         end
     end
 end
@@ -3717,19 +3730,10 @@ function __clear_entity_one(entity)
             local chunk_index_fragment_list = chunk.__index_fragment_list
 
             if chunk_index_fragment_list then
-                local chunk_component_indices = chunk.__component_indices
-                local chunk_component_storages = chunk.__component_storages
-
                 for chunk_index_fragment_index = 1, chunk.__index_fragment_count do
                     local fragment = chunk_index_fragment_list[chunk_index_fragment_index]
-                    local component_index = chunk_component_indices[fragment]
-
-                    if component_index then
-                        local fragment_search_index = __search_indices[fragment]
-                        local component_storage = chunk_component_storages[component_index]
-                        local old_component = component_storage[place]
-                        __search_index_fns.remove(fragment_search_index, entity, old_component)
-                    end
+                    local fragment_search_index = __search_indices[fragment]
+                    __search_index_fns.remove(fragment_search_index, entity)
                 end
             end
         end
@@ -3805,19 +3809,10 @@ function __destroy_entity_one(entity)
             local chunk_index_fragment_list = chunk.__index_fragment_list
 
             if chunk_index_fragment_list then
-                local chunk_component_indices = chunk.__component_indices
-                local chunk_component_storages = chunk.__component_storages
-
                 for chunk_index_fragment_index = 1, chunk.__index_fragment_count do
                     local fragment = chunk_index_fragment_list[chunk_index_fragment_index]
-                    local component_index = chunk_component_indices[fragment]
-
-                    if component_index then
-                        local fragment_search_index = __search_indices[fragment]
-                        local component_storage = chunk_component_storages[component_index]
-                        local old_component = component_storage[place]
-                        __search_index_fns.remove(fragment_search_index, entity, old_component)
-                    end
+                    local fragment_search_index = __search_indices[fragment]
+                    __search_index_fns.remove(fragment_search_index, entity)
                 end
             end
         end
@@ -4071,7 +4066,7 @@ function __chunk_set(old_chunk, fragment, component)
                         end
 
                         if fragment_search_index then
-                            __search_index_fns.assign(fragment_search_index, entity, new_component, old_component)
+                            __search_index_fns.assign(fragment_search_index, entity, new_component)
                         end
                     end
                 else
@@ -4094,7 +4089,7 @@ function __chunk_set(old_chunk, fragment, component)
                         end
 
                         if fragment_search_index then
-                            __search_index_fns.assign(fragment_search_index, entity, new_component, old_component)
+                            __search_index_fns.assign(fragment_search_index, entity, new_component)
                         end
                     end
                 end
@@ -4517,17 +4512,11 @@ function __chunk_remove(old_chunk, ...)
             local fragment = old_index_fragment_list[old_index_fragment_index]
 
             if not new_fragment_set[fragment] then
-                local old_component_index = old_component_indices[fragment]
+                local fragment_search_index = __search_indices[fragment]
 
-                if old_component_index then
-                    local fragment_search_index = __search_indices[fragment]
-                    local old_component_storage = old_component_storages[old_component_index]
-
-                    for old_place = 1, old_entity_count do
-                        local entity = old_entity_list[old_place]
-                        local old_component = old_component_storage[old_place]
-                        __search_index_fns.remove(fragment_search_index, entity, old_component)
-                    end
+                for old_place = 1, old_entity_count do
+                    local entity = old_entity_list[old_place]
+                    __search_index_fns.remove(fragment_search_index, entity)
                 end
             end
         end
@@ -4670,22 +4659,13 @@ function __chunk_clear(chunk)
     local chunk_index_fragment_list = chunk.__index_fragment_list
 
     if chunk_index_fragment_list then
-        local chunk_component_indices = chunk.__component_indices
-        local chunk_component_storages = chunk.__component_storages
-
         for chunk_index_fragment_index = 1, chunk.__index_fragment_count do
             local fragment = chunk_index_fragment_list[chunk_index_fragment_index]
-            local component_index = chunk_component_indices[fragment]
+            local fragment_search_index = __search_indices[fragment]
 
-            if component_index then
-                local fragment_search_index = __search_indices[fragment]
-                local component_storage = chunk_component_storages[component_index]
-
-                for place = 1, chunk_entity_count do
-                    local entity = chunk_entity_list[place]
-                    local old_component = component_storage[place]
-                    __search_index_fns.remove(fragment_search_index, entity, old_component)
-                end
+            for place = 1, chunk_entity_count do
+                local entity = chunk_entity_list[place]
+                __search_index_fns.remove(fragment_search_index, entity)
             end
         end
     end
@@ -5869,7 +5849,7 @@ function __evolved_set(entity, fragment, component)
             end
 
             if fragment_search_index then
-                __search_index_fns.assign(fragment_search_index, entity, new_component, old_component)
+                __search_index_fns.assign(fragment_search_index, entity, new_component)
             end
         else
             -- nothing
@@ -6125,14 +6105,8 @@ function __evolved_remove(entity, ...)
                 local fragment = old_index_fragment_list[old_index_fragment_index]
 
                 if not new_fragment_set[fragment] then
-                    local old_component_index = old_component_indices[fragment]
-
-                    if old_component_index then
-                        local fragment_search_index = __search_indices[fragment]
-                        local old_component_storage = old_component_storages[old_component_index]
-                        local old_component = old_component_storage[old_place]
-                        __search_index_fns.remove(fragment_search_index, entity, old_component)
-                    end
+                    local fragment_search_index = __search_indices[fragment]
+                    __search_index_fns.remove(fragment_search_index, entity)
                 end
             end
         end
@@ -6822,6 +6796,37 @@ function __evolved_multi_search_to(out_entity_list, out_entity_first, fragment, 
     end
 
     return 0
+end
+
+---@param ... evolved.fragment fragments
+function __evolved_reindex(...)
+    local fragment_count = __lua_select('#', ...)
+
+    if fragment_count == 0 then
+        return
+    end
+
+    if __defer_depth > 0 then
+        __defer_call_hook(__evolved_reindex, ...)
+        return
+    end
+
+    for fragment_index = 1, fragment_count do
+        ---@type evolved.fragment
+        local fragment = __lua_select(fragment_index, ...)
+
+        if not __search_indices[fragment] then
+            __error_fmt('the fragment (%s) is not indexed and cannot be reindexed',
+                __id_name(fragment))
+        end
+    end
+
+    for fragment_index = 1, fragment_count do
+        ---@type evolved.fragment
+        local fragment = __lua_select(fragment_index, ...)
+        local fragment_search_index = __search_indices[fragment]
+        __trace_minor_chunks(fragment, __update_search_index_trace, fragment, fragment_search_index)
+    end
 end
 
 ---@param ... evolved.system systems
@@ -8334,6 +8339,8 @@ evolved.multi_lookup_to = __evolved_multi_lookup_to
 evolved.search = __evolved_search
 evolved.multi_search = __evolved_multi_search
 evolved.multi_search_to = __evolved_multi_search_to
+
+evolved.reindex = __evolved_reindex
 
 evolved.process = __evolved_process
 evolved.process_with = __evolved_process_with
