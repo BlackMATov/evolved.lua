@@ -1144,25 +1144,77 @@ function __search_index_fns.insert(index, entity, component)
         return
     end
 
-    index.__component_map[entity] = component
+    local entity_map = index.__entity_map
+    local entities_map = index.__entities_map
+    local component_map = index.__component_map
+
+    component_map[entity] = component
 
     ---@type evolved.entity?
-    local indexed_entity = index.__entity_map[component]
+    local indexed_entity = entity_map[component]
 
     if not indexed_entity then
-        index.__entity_map[component] = entity
+        entity_map[component] = entity
         return
     end
 
     ---@type evolved.assoc_list<evolved.entity>?
-    local indexed_entities = index.__entities_map[component]
+    local indexed_entities = entities_map[component]
 
     if not indexed_entities then
-        index.__entities_map[component] = __assoc_list_fns.from(indexed_entity, entity)
+        entities_map[component] = __assoc_list_fns.from(indexed_entity, entity)
         return
     end
 
     __assoc_list_fns.insert(indexed_entities, entity)
+end
+
+---@param index evolved.search_index
+---@param entity_list evolved.entity[]
+---@param component_list evolved.component[]
+---@param first integer
+---@param last integer
+function __search_index_fns.multi_insert(index, entity_list, component_list, first, last)
+    local entity_map = index.__entity_map
+    local entities_map = index.__entities_map
+    local component_map = index.__component_map
+
+    local last_entities ---@type evolved.assoc_list<evolved.entity>?
+    local last_component ---@type evolved.component?
+
+    for place = first, last do
+        local entity = entity_list[place]
+        local component = component_list[place]
+
+        if component ~= component then
+            -- NaN components cannot be indexed
+        elseif last_entities and last_component == component then
+            component_map[entity] = component
+            __assoc_list_fns.insert(last_entities, entity)
+        else
+            component_map[entity] = component
+
+            ---@type evolved.entity?
+            local indexed_entity = entity_map[component]
+
+            if not indexed_entity then
+                entity_map[component] = entity
+                last_entities, last_component = nil, nil
+            else
+                ---@type evolved.assoc_list<evolved.entity>?
+                local indexed_entities = entities_map[component]
+
+                if not indexed_entities then
+                    indexed_entities = __assoc_list_fns.from(indexed_entity, entity)
+                    entities_map[component] = indexed_entities
+                else
+                    __assoc_list_fns.insert(indexed_entities, entity)
+                end
+
+                last_entities, last_component = indexed_entities, component
+            end
+        end
+    end
 end
 
 ---@param index evolved.search_index
@@ -1191,6 +1243,51 @@ function __search_index_fns.remove(index, entity)
 
     if indexed_entity == entity then
         index.__entity_map[component] = indexed_entities and indexed_entities.__item_list[1] or nil
+    end
+end
+
+---@param index evolved.search_index
+---@param entity_list evolved.entity[]
+---@param first integer
+---@param last integer
+function __search_index_fns.multi_remove(index, entity_list, first, last)
+    local entity_map = index.__entity_map
+    local entities_map = index.__entities_map
+    local component_map = index.__component_map
+
+    local last_entities ---@type evolved.assoc_list<evolved.entity>?
+    local last_component ---@type evolved.component?
+
+    for place = first, last do
+        local entity = entity_list[place]
+
+        ---@type evolved.component?
+        local component = component_map[entity]
+
+        if component ~= nil then
+            component_map[entity] = nil
+
+            ---@type evolved.assoc_list<evolved.entity>?
+            local indexed_entities
+
+            if last_entities and last_component == component then
+                indexed_entities = last_entities
+            else
+                indexed_entities = entities_map[component]
+                last_entities, last_component = indexed_entities, component
+            end
+
+            if indexed_entities then
+                if __assoc_list_fns.unordered_remove(indexed_entities, entity) == 0 then
+                    entities_map[component], indexed_entities = nil, nil
+                    last_entities, last_component = nil, nil
+                end
+            end
+
+            if entity_map[component] == entity then
+                entity_map[component] = indexed_entities and indexed_entities.__item_list[1] or nil
+            end
+        end
     end
 end
 
@@ -3059,11 +3156,8 @@ function __multi_spawn_entity(chunk, entity_list, entity_first, entity_count, co
                 local fragment_search_index = __search_indices[fragment]
                 local component_storage = chunk_component_storages[component_index]
 
-                for place = b_place, e_place do
-                    local entity = chunk_entity_list[place]
-                    local new_component = component_storage[place]
-                    __search_index_fns.insert(fragment_search_index, entity, new_component)
-                end
+                __search_index_fns.multi_insert(fragment_search_index,
+                    chunk_entity_list, component_storage, b_place, e_place)
             end
         end
     end
@@ -3422,11 +3516,8 @@ function __multi_clone_entity(prefab, entity_list, entity_first, entity_count, c
                 local fragment_search_index = __search_indices[fragment]
                 local component_storage = chunk_component_storages[component_index]
 
-                for place = b_place, e_place do
-                    local entity = chunk_entity_list[place]
-                    local new_component = component_storage[place]
-                    __search_index_fns.insert(fragment_search_index, entity, new_component)
-                end
+                __search_index_fns.multi_insert(fragment_search_index,
+                    chunk_entity_list, component_storage, b_place, e_place)
             end
         end
     end
@@ -4514,10 +4605,8 @@ function __chunk_remove(old_chunk, ...)
             if not new_fragment_set[fragment] then
                 local fragment_search_index = __search_indices[fragment]
 
-                for old_place = 1, old_entity_count do
-                    local entity = old_entity_list[old_place]
-                    __search_index_fns.remove(fragment_search_index, entity)
-                end
+                __search_index_fns.multi_remove(fragment_search_index,
+                    old_entity_list, 1, old_entity_count)
             end
         end
     end
@@ -4663,10 +4752,8 @@ function __chunk_clear(chunk)
             local fragment = chunk_index_fragment_list[chunk_index_fragment_index]
             local fragment_search_index = __search_indices[fragment]
 
-            for place = 1, chunk_entity_count do
-                local entity = chunk_entity_list[place]
-                __search_index_fns.remove(fragment_search_index, entity)
-            end
+            __search_index_fns.multi_remove(fragment_search_index,
+                chunk_entity_list, 1, chunk_entity_count)
         end
     end
 
