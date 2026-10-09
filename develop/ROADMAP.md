@@ -3,7 +3,6 @@
 ## Backlog
 
 - observers and events
-- add INDEX fragment trait
 - use compact prefix-tree for chunks
 
 ## Thoughts

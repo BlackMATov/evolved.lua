@@ -545,3 +545,333 @@ do
 
     evo.destroy(e)
 end
+
+do
+    assert(evo.get(evo.NAME, evo.INDEX_POLICY) == evo.INDEX_POLICY_UNORDERED)
+    assert(evo.get(evo.GROUP, evo.INDEX_POLICY) == evo.INDEX_POLICY_ORDERED)
+
+    assert(evo.lookup('__INDEX_POLICY') == evo.INDEX_POLICY)
+    assert(evo.lookup('__INDEX_POLICY_ORDERED') == evo.INDEX_POLICY_ORDERED)
+    assert(evo.lookup('__INDEX_POLICY_UNORDERED') == evo.INDEX_POLICY_UNORDERED)
+
+    local f = evo.builder():index_policy(evo.INDEX_POLICY_ORDERED):build()
+    assert(evo.get(f, evo.INDEX_POLICY) == evo.INDEX_POLICY_ORDERED)
+end
+
+do
+    local f = evo.builder():index():build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'red' }
+    local e3 = evo.spawn { [f] = 'red' }
+    local e4 = evo.spawn { [f] = 'red' }
+
+    -- the default policy does not preserve the order after removals
+    evo.remove(e1, f)
+    check_search(f, 'red', e4, e2, e3)
+
+    evo.set(e2, f, 'blue')
+    check_search(f, 'red', e4, e3)
+
+    evo.destroy(e1, e2, e3, e4)
+end
+
+do
+    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_UNORDERED):build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'red' }
+    local e3 = evo.spawn { [f] = 'red' }
+
+    evo.destroy(e1)
+    check_search(f, 'red', e3, e2)
+
+    evo.destroy(e2, e3)
+end
+
+do
+    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'red' }
+    local e3 = evo.spawn { [f] = 'red' }
+    local e4 = evo.spawn { [f] = 'red' }
+    local e5 = evo.spawn { [f] = 'red' }
+    local e6 = evo.spawn { [f] = 'red' }
+
+    -- the ordered policy preserves the order after removals
+    evo.remove(e1, f)
+    check_search(f, 'red', e2, e3, e4, e5, e6)
+
+    evo.clear(e3)
+    check_search(f, 'red', e2, e4, e5, e6)
+
+    evo.destroy(e4)
+    check_search(f, 'red', e2, e5, e6)
+
+    -- changing the value moves the entity to the end of the new value group
+    evo.set(e2, f, 'blue')
+    check_search(f, 'red', e5, e6)
+    check_search(f, 'blue', e2)
+
+    evo.set(e2, f, 'red')
+    check_search(f, 'red', e5, e6, e2)
+    check_search(f, 'blue')
+
+    evo.destroy(e1, e2, e3, e4, e5, e6)
+end
+
+do
+    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
+    local t = evo.builder():tag():build()
+
+    local q = evo.builder():include(t):build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'red', [t] = true }
+    local e3 = evo.spawn { [f] = 'red' }
+    local e4 = evo.spawn { [f] = 'red', [t] = true }
+    local e5 = evo.spawn { [f] = 'red' }
+
+    -- batch operations preserve the order too
+    evo.batch_remove(q, f)
+    check_search(f, 'red', e1, e3, e5)
+
+    evo.batch_set(q, f, 'red')
+    check_search(f, 'red', e1, e3, e5, e2, e4)
+
+    evo.batch_clear(q)
+    check_search(f, 'red', e1, e3, e5)
+
+    evo.destroy(e1, e2, e3, e4, e5)
+end
+
+do
+    local f = evo.builder():index():build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'red' }
+    local e3 = evo.spawn { [f] = 'red' }
+    local e4 = evo.spawn { [f] = 'red' }
+
+    -- changing the value moves the entity to the end of the value group in the index,
+    -- but the entity stays in the same place in the chunk (chunk: e1, e2, e3, e4)
+    evo.set(e1, f, 'blue')
+    evo.set(e1, f, 'red')
+    check_search(f, 'red', e4, e2, e3, e1)
+
+    -- changing the policy rebuilds the index in the chunk order
+    evo.set(f, evo.INDEX_POLICY, evo.INDEX_POLICY_ORDERED)
+    check_search(f, 'red', e1, e2, e3, e4)
+
+    -- the ordered policy is applied after rebuilding (chunk: e1, e4, e3)
+    evo.remove(e2, f)
+    check_search(f, 'red', e1, e3, e4)
+
+    evo.set(f, evo.INDEX_POLICY, evo.INDEX_POLICY_UNORDERED)
+    check_search(f, 'red', e1, e4, e3)
+
+    -- the unordered policy is applied after rebuilding
+    evo.set(e1, f, 'blue')
+    evo.set(e1, f, 'red')
+    check_search(f, 'red', e3, e4, e1)
+
+    -- removing the policy rebuilds the index too
+    evo.remove(f, evo.INDEX_POLICY)
+    check_search(f, 'red', e1, e4, e3)
+
+    evo.destroy(e1, e2, e3, e4)
+end
+
+do
+    local f = evo.builder():index_policy(evo.INDEX_POLICY_ORDERED):build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'red' }
+    local e3 = evo.spawn { [f] = 'red' }
+
+    -- the policy is applied when the trait is added later
+    evo.set(f, evo.INDEX)
+    check_search(f, 'red', e1, e2, e3)
+
+    evo.remove(e1, f)
+    check_search(f, 'red', e2, e3)
+
+    evo.destroy(e1, e2, e3)
+end
+
+do
+    local f = evo.builder():index():build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'red' }
+    local e3 = evo.spawn { [f] = 'red' }
+
+    -- the policy can be changed in a deferred block
+    evo.defer()
+    do
+        evo.set(f, evo.INDEX_POLICY, evo.INDEX_POLICY_ORDERED)
+        evo.remove(e1, f)
+    end
+    evo.commit()
+
+    check_search(f, 'red', e2, e3)
+
+    evo.destroy(e1, e2, e3)
+end
+
+do
+    local f = evo.id()
+    local p = evo.id()
+
+    local e = evo.spawn { [f] = 'red' }
+
+    -- policies are checked only for indexed fragments
+    evo.set(f, evo.INDEX_POLICY, p)
+
+    evo.set(f, evo.INDEX_POLICY, evo.INDEX_POLICY_ORDERED)
+    evo.set(f, evo.INDEX)
+    check_search(f, 'red', e)
+
+    evo.destroy(e, p)
+end
+
+do
+    -- the order of systems in a group is preserved after removals
+    local group = evo.id()
+
+    local s1 = evo.builder():group(group):build()
+    local s2 = evo.builder():group(group):build()
+    local s3 = evo.builder():group(group):build()
+    check_search(evo.GROUP, group, s1, s2, s3)
+
+    evo.remove(s1, evo.GROUP)
+    check_search(evo.GROUP, group, s2, s3)
+
+    evo.set(s1, evo.GROUP, group)
+    check_search(evo.GROUP, group, s2, s3, s1)
+
+    evo.destroy(s2)
+    check_search(evo.GROUP, group, s3, s1)
+
+    evo.destroy(group, s1, s2, s3)
+end
+
+do
+    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
+    local t = evo.builder():tag():build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'red' }
+    local e3 = evo.spawn { [f] = 'red' }
+
+    -- moving to another chunk does not change the order in the index
+    evo.set(e1, t)
+    check_search(f, 'red', e1, e2, e3)
+
+    evo.remove(e2, f)
+    check_search(f, 'red', e1, e3)
+
+    evo.destroy(e1, e2, e3)
+end
+
+do
+    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
+    local q = evo.builder():include(f):build()
+
+    local list1 = evo.multi_spawn(4, { [f] = 'red' })
+    local list2 = evo.multi_spawn(4, { [f] = 'blue' })
+
+    -- batch destroying preserves the order of the remaining entities
+    evo.destroy(list1[2], list1[3])
+    check_search(f, 'red', list1[1], list1[4])
+    check_search(f, 'blue', list2[1], list2[2], list2[3], list2[4])
+
+    evo.batch_destroy(q)
+    check_search(f, 'red')
+    check_search(f, 'blue')
+end
+
+do
+    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
+    local w = evo.builder():tag():destruction_policy(evo.DESTRUCTION_POLICY_DESTROY_ENTITY):build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'red', [w] = true }
+    local e3 = evo.spawn { [f] = 'red' }
+    local e4 = evo.spawn { [f] = 'red', [w] = true }
+    local e5 = evo.spawn { [f] = 'red' }
+
+    -- destroying a fragment with the destroy entity policy preserves the order too
+    evo.destroy(w)
+    assert(not evo.alive(e2) and not evo.alive(e4))
+    check_search(f, 'red', e1, e3, e5)
+
+    evo.destroy(e1, e3, e5)
+end
+
+do
+    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
+    local q = evo.builder():include(f):build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'blue' }
+    local e3 = evo.spawn { [f] = 'red' }
+    local e4 = evo.spawn { [f] = 'blue' }
+
+    -- batch setting keeps unchanged entities in place
+    -- and appends changed ones to the end of the new value group in the chunk order
+    evo.batch_set(q, f, 'blue')
+    check_search(f, 'red')
+    check_search(f, 'blue', e2, e4, e1, e3)
+
+    evo.batch_set(q, f, 'green')
+    check_search(f, 'blue')
+    check_search(f, 'green', e1, e2, e3, e4)
+
+    evo.destroy(e1, e2, e3, e4)
+end
+
+do
+    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
+    local q = evo.builder():include(f):build()
+
+    local e1 = evo.spawn { [f] = 'red' }
+    local e2 = evo.spawn { [f] = 'blue' }
+    local e3 = evo.spawn { [f] = 'red' }
+    local e4 = evo.spawn { [f] = 'blue' }
+
+    for chunk, entity_list, entity_count in evo.execute(q) do
+        local storage = chunk:components(f)
+        for place = 1, entity_count do
+            if entity_list[place] == e1 or entity_list[place] == e3 then
+                storage[place] = 'blue'
+            end
+        end
+    end
+
+    -- reindexing works the same way as batch setting
+    evo.reindex(f)
+    check_search(f, 'red')
+    check_search(f, 'blue', e2, e4, e1, e3)
+
+    evo.destroy(e1, e2, e3, e4)
+end
+
+do
+    local f = evo.builder():index():default('def'):build()
+    local r = evo.builder():tag():require(f):build()
+    local t = evo.builder():tag():build()
+
+    local q = evo.builder():include(t):build()
+
+    local e1 = evo.spawn { [f] = 'def' }
+    local e2 = evo.spawn { [t] = true }
+    local e3 = evo.spawn { [t] = true }
+
+    -- required fragments are indexed by batch operations too
+    evo.batch_set(q, r)
+    check_search(f, 'def', e1, e2, e3)
+
+    evo.destroy(e1, e2, e3)
+end
