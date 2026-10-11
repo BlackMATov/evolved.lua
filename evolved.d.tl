@@ -139,7 +139,6 @@
         prologue: function(self: Builder, prologue: function(...: any)): Builder
         epilogue: function(self: Builder, epilogue: function(...: any)): Builder
 
-        index_policy: function(self: Builder, index_policy: Id): Builder
         destruction_policy: function(self: Builder, destruction_policy: Id): Builder
     end
 
@@ -176,10 +175,6 @@
     EXECUTE: Fragment
     PROLOGUE: Fragment
     EPILOGUE: Fragment
-
-    INDEX_POLICY: Fragment
-    INDEX_POLICY_ORDERED: Id
-    INDEX_POLICY_UNORDERED: Id
 
     DESTRUCTION_POLICY: Fragment
     DESTRUCTION_POLICY_DESTROY_ENTITY: Id

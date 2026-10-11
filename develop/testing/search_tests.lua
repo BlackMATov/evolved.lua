@@ -547,50 +547,7 @@ do
 end
 
 do
-    assert(evo.get(evo.NAME, evo.INDEX_POLICY) == evo.INDEX_POLICY_UNORDERED)
-    assert(evo.get(evo.GROUP, evo.INDEX_POLICY) == evo.INDEX_POLICY_ORDERED)
-
-    assert(evo.lookup('__INDEX_POLICY') == evo.INDEX_POLICY)
-    assert(evo.lookup('__INDEX_POLICY_ORDERED') == evo.INDEX_POLICY_ORDERED)
-    assert(evo.lookup('__INDEX_POLICY_UNORDERED') == evo.INDEX_POLICY_UNORDERED)
-
-    local f = evo.builder():index_policy(evo.INDEX_POLICY_ORDERED):build()
-    assert(evo.get(f, evo.INDEX_POLICY) == evo.INDEX_POLICY_ORDERED)
-end
-
-do
     local f = evo.builder():index():build()
-
-    local e1 = evo.spawn { [f] = 'red' }
-    local e2 = evo.spawn { [f] = 'red' }
-    local e3 = evo.spawn { [f] = 'red' }
-    local e4 = evo.spawn { [f] = 'red' }
-
-    -- the default policy does not preserve the order after removals
-    evo.remove(e1, f)
-    check_search(f, 'red', e4, e2, e3)
-
-    evo.set(e2, f, 'blue')
-    check_search(f, 'red', e4, e3)
-
-    evo.destroy(e1, e2, e3, e4)
-end
-
-do
-    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_UNORDERED):build()
-
-    local e1 = evo.spawn { [f] = 'red' }
-    local e2 = evo.spawn { [f] = 'red' }
-    local e3 = evo.spawn { [f] = 'red' }
-
-    evo.destroy(e1)
-    check_search(f, 'red', e3, e2)
-
-    evo.destroy(e2, e3)
-end
-
-do
-    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
 
     local e1 = evo.spawn { [f] = 'red' }
     local e2 = evo.spawn { [f] = 'red' }
@@ -599,7 +556,7 @@ do
     local e5 = evo.spawn { [f] = 'red' }
     local e6 = evo.spawn { [f] = 'red' }
 
-    -- the ordered policy preserves the order after removals
+    -- the order of entities is preserved after removals
     evo.remove(e1, f)
     check_search(f, 'red', e2, e3, e4, e5, e6)
 
@@ -622,7 +579,7 @@ do
 end
 
 do
-    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
+    local f = evo.builder():index():build()
     local t = evo.builder():tag():build()
 
     local q = evo.builder():include(t):build()
@@ -658,46 +615,18 @@ do
     -- but the entity stays in the same place in the chunk (chunk: e1, e2, e3, e4)
     evo.set(e1, f, 'blue')
     evo.set(e1, f, 'red')
-    check_search(f, 'red', e4, e2, e3, e1)
+    check_search(f, 'red', e2, e3, e4, e1)
 
-    -- changing the policy rebuilds the index in the chunk order
-    evo.set(f, evo.INDEX_POLICY, evo.INDEX_POLICY_ORDERED)
+    -- adding the trait again rebuilds the index in the chunk order
+    evo.remove(f, evo.INDEX)
+    evo.set(f, evo.INDEX)
     check_search(f, 'red', e1, e2, e3, e4)
 
-    -- the ordered policy is applied after rebuilding (chunk: e1, e4, e3)
+    -- the order is preserved after rebuilding too (chunk: e1, e4, e3)
     evo.remove(e2, f)
     check_search(f, 'red', e1, e3, e4)
 
-    evo.set(f, evo.INDEX_POLICY, evo.INDEX_POLICY_UNORDERED)
-    check_search(f, 'red', e1, e4, e3)
-
-    -- the unordered policy is applied after rebuilding
-    evo.set(e1, f, 'blue')
-    evo.set(e1, f, 'red')
-    check_search(f, 'red', e3, e4, e1)
-
-    -- removing the policy rebuilds the index too
-    evo.remove(f, evo.INDEX_POLICY)
-    check_search(f, 'red', e1, e4, e3)
-
     evo.destroy(e1, e2, e3, e4)
-end
-
-do
-    local f = evo.builder():index_policy(evo.INDEX_POLICY_ORDERED):build()
-
-    local e1 = evo.spawn { [f] = 'red' }
-    local e2 = evo.spawn { [f] = 'red' }
-    local e3 = evo.spawn { [f] = 'red' }
-
-    -- the policy is applied when the trait is added later
-    evo.set(f, evo.INDEX)
-    check_search(f, 'red', e1, e2, e3)
-
-    evo.remove(e1, f)
-    check_search(f, 'red', e2, e3)
-
-    evo.destroy(e1, e2, e3)
 end
 
 do
@@ -707,10 +636,9 @@ do
     local e2 = evo.spawn { [f] = 'red' }
     local e3 = evo.spawn { [f] = 'red' }
 
-    -- the policy can be changed in a deferred block
+    -- the order is preserved after deferred removals too
     evo.defer()
     do
-        evo.set(f, evo.INDEX_POLICY, evo.INDEX_POLICY_ORDERED)
         evo.remove(e1, f)
     end
     evo.commit()
@@ -718,22 +646,6 @@ do
     check_search(f, 'red', e2, e3)
 
     evo.destroy(e1, e2, e3)
-end
-
-do
-    local f = evo.id()
-    local p = evo.id()
-
-    local e = evo.spawn { [f] = 'red' }
-
-    -- policies are checked only for indexed fragments
-    evo.set(f, evo.INDEX_POLICY, p)
-
-    evo.set(f, evo.INDEX_POLICY, evo.INDEX_POLICY_ORDERED)
-    evo.set(f, evo.INDEX)
-    check_search(f, 'red', e)
-
-    evo.destroy(e, p)
 end
 
 do
@@ -758,7 +670,7 @@ do
 end
 
 do
-    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
+    local f = evo.builder():index():build()
     local t = evo.builder():tag():build()
 
     local e1 = evo.spawn { [f] = 'red' }
@@ -776,7 +688,7 @@ do
 end
 
 do
-    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
+    local f = evo.builder():index():build()
     local q = evo.builder():include(f):build()
 
     local list1 = evo.multi_spawn(4, { [f] = 'red' })
@@ -793,7 +705,7 @@ do
 end
 
 do
-    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
+    local f = evo.builder():index():build()
     local w = evo.builder():tag():destruction_policy(evo.DESTRUCTION_POLICY_DESTROY_ENTITY):build()
 
     local e1 = evo.spawn { [f] = 'red' }
@@ -811,7 +723,7 @@ do
 end
 
 do
-    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
+    local f = evo.builder():index():build()
     local q = evo.builder():include(f):build()
 
     local e1 = evo.spawn { [f] = 'red' }
@@ -833,7 +745,7 @@ do
 end
 
 do
-    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_ORDERED):build()
+    local f = evo.builder():index():build()
     local q = evo.builder():include(f):build()
 
     local e1 = evo.spawn { [f] = 'red' }

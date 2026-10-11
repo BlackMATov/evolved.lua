@@ -1146,18 +1146,13 @@ assert(red_count == 2 and red_list[1] == unit1 and red_list[2] == unit3)
 
 The [`evolved.search`](#evolvedsearch) function returns the first entity with the specified component, while the [`evolved.multi_search`](#evolvedmulti_search) function returns a list of all such entities. The [`evolved.multi_search_to`](#evolvedmulti_search_to) function does the same, but appends the entities to the provided list starting from the specified index and returns only the number of found entities.
 
-Entities are found in the order in which they received their components, but by default this order is not preserved after removals. When an entity loses the component or changes its value, the last entity with the same value takes its place. This makes removals fast, but if the order matters to you, you can change this behavior by using the [`evolved.INDEX_POLICY`](#evolvedindex_policy) fragment trait. This trait expects one of the following predefined identifiers:
-
-- [`evolved.INDEX_POLICY_ORDERED`](#evolvedindex_policy_ordered) will preserve the order of entities after removals. Entities that change their values are moved to the end of the new value group. Removals take time proportional to the number of entities with the same value, so use this policy only when the order really matters. The [`evolved.GROUP`](#evolvedgroup) fragment uses this policy, so the order of [systems](#systems) in a group is preserved.
-
-- [`evolved.INDEX_POLICY_UNORDERED`](#evolvedindex_policy_unordered) will not preserve the order of entities after removals. Removals take constant time regardless of the number of entities with the same value. This is the default behavior, so you don't have to set it explicitly, but you can if you want.
+Entities are found in the order in which they received their components, and this order is preserved after removals. When an entity changes the value of its component, it is moved to the end of the entities with the new value. Insertions and removals take constant time regardless of the number of entities with the same value.
 
 ```lua
 local evolved = require 'evolved'
 
 local team = evolved.builder()
     :index()
-    :index_policy(evolved.INDEX_POLICY_ORDERED)
     :build()
 
 local unit1 = evolved.builder()
@@ -1176,9 +1171,15 @@ evolved.destroy(unit1)
 
 local red_list, red_count = evolved.multi_search(team, 'red')
 assert(red_count == 2 and red_list[1] == unit2 and red_list[2] == unit3)
+
+evolved.set(unit2, team, 'blue')
+evolved.set(unit2, team, 'red')
+
+red_list, red_count = evolved.multi_search(team, 'red')
+assert(red_count == 2 and red_list[1] == unit3 and red_list[2] == unit2)
 ```
 
-The index is updated automatically by all operations that change components of the indexed fragment, including spawning, cloning, and setting. The trait can be added or removed at any time. When it is added to a fragment that is already used by some entities, the index is built from these entities. The [`evolved.NAME`](#evolvedname) and [`evolved.GROUP`](#evolvedgroup) fragments are indexed too, so you can search for entities by names or for systems by groups.
+The index is updated automatically by all operations that change components of the indexed fragment, including spawning, cloning, and setting. The trait can be added or removed at any time. When it is added to a fragment that is already used by some entities, the index is built from these entities in the order they are stored in chunks. The [`evolved.NAME`](#evolvedname) and [`evolved.GROUP`](#evolvedgroup) fragments are indexed too, so you can search for entities by names or for systems by groups, and the order of [systems](#systems) in a group is preserved.
 
 Components changed directly in chunk storages during iteration bypass the index, so after such changes you should update it manually using the [`evolved.reindex`](#evolvedreindex) function. It only updates entities whose components have changed, so it is much cheaper than rebuilding the whole index.
 
@@ -1653,10 +1654,6 @@ EXECUTE :: fragment
 PROLOGUE :: fragment
 EPILOGUE :: fragment
 
-INDEX_POLICY :: fragment
-INDEX_POLICY_ORDERED :: id
-INDEX_POLICY_UNORDERED :: id
-
 DESTRUCTION_POLICY :: fragment
 DESTRUCTION_POLICY_DESTROY_ENTITY :: id
 DESTRUCTION_POLICY_REMOVE_FRAGMENT :: id
@@ -1817,7 +1814,6 @@ builder_mt:execute :: {chunk, entity[], integer, any...} -> builder
 builder_mt:prologue :: {any...} -> builder
 builder_mt:epilogue :: {any...} -> builder
 
-builder_mt:index_policy :: id -> builder
 builder_mt:destruction_policy :: id -> builder
 ```
 
@@ -1827,7 +1823,7 @@ builder_mt:destruction_policy :: id -> builder
 
 - Lookup can now find internal fragments by their names: [#52](https://github.com/BlackMATov/evolved.lua/issues/52)
 - All internal names now have a double underscore prefix
-- Added the new [`evolved.INDEX`](#evolvedindex) and [`evolved.INDEX_POLICY`](#evolvedindex_policy) fragment traits and the [`evolved.(multi_)search(_to)`](#evolvedsearch) and [`evolved.reindex`](#evolvedreindex) functions that allow finding entities by their component values
+- Added the new [`evolved.INDEX`](#evolvedindex) fragment trait and the [`evolved.(multi_)search(_to)`](#evolvedsearch) and [`evolved.reindex`](#evolvedreindex) functions that allow finding entities by their component values
 
 ### v1.11.1
 
@@ -1959,12 +1955,6 @@ builder_mt:destruction_policy :: id -> builder
 ### `evolved.PROLOGUE`
 
 ### `evolved.EPILOGUE`
-
-### `evolved.INDEX_POLICY`
-
-### `evolved.INDEX_POLICY_ORDERED`
-
-### `evolved.INDEX_POLICY_UNORDERED`
 
 ### `evolved.DESTRUCTION_POLICY`
 
@@ -2888,14 +2878,6 @@ function evolved.builder_mt:prologue(prologue) end
 ---@param epilogue evolved.epilogue
 ---@return evolved.builder builder
 function evolved.builder_mt:epilogue(epilogue) end
-```
-
-#### `evolved.builder_mt:index_policy`
-
-```lua
----@param index_policy evolved.id
----@return evolved.builder builder
-function evolved.builder_mt:index_policy(index_policy) end
 ```
 
 #### `evolved.builder_mt:destruction_policy`

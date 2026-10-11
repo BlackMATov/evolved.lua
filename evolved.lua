@@ -1106,68 +1106,24 @@ end
 ---
 ---
 
----@class (exact) evolved.search_index: {
----  __ordered: boolean,
----  __entity_map: { [evolved.component]: evolved.entity },
----  __entities_map: { [evolved.component]: evolved.assoc_list<evolved.entity> },
----  __component_map: { [evolved.entity]: evolved.component },
---- }
+---@class (exact) evolved.search_index
+---@field package __head_entities table<evolved.component, evolved.entity>
+---@field package __prev_entities table<integer, evolved.entity>
+---@field package __next_entities table<integer, evolved.entity>
+---@field package __entity_components table<integer, evolved.component>
 
 local __search_index_fns = {}
 
----@param ordered boolean
 ---@return evolved.search_index
 ---@nodiscard
-function __search_index_fns.new(ordered)
+function __search_index_fns.new()
     ---@type evolved.search_index
     return {
-        __ordered = ordered,
-        __entity_map = __lua_table_new(),
-        __entities_map = __lua_table_new(),
-        __component_map = __lua_table_new(),
+        __head_entities = {},
+        __prev_entities = {},
+        __next_entities = {},
+        __entity_components = {},
     }
-end
-
----@param index evolved.search_index
----@param entity evolved.entity
----@param component evolved.component
-function __search_index_fns.assign(index, entity, component)
-    if index.__component_map[entity] ~= component then
-        __search_index_fns.remove(index, entity)
-        __search_index_fns.insert(index, entity, component)
-    end
-end
-
----@param index evolved.search_index
----@param entity_list evolved.entity[]
----@param component_list evolved.component[]
----@param first integer
----@param last integer
-function __search_index_fns.multi_assign(index, entity_list, component_list, first, last)
-    local component_map = index.__component_map
-
-    local changed_count = 0
-
-    for place = last, first, -1 do
-        local entity = entity_list[place]
-
-        if component_map[entity] ~= component_list[place] then
-            __search_index_fns.remove(index, entity)
-            changed_count = changed_count + 1
-        end
-    end
-
-    if changed_count == 0 then
-        return
-    end
-
-    for place = first, last do
-        local entity = entity_list[place]
-
-        if component_map[entity] == nil then
-            __search_index_fns.insert(index, entity, component_list[place])
-        end
-    end
 end
 
 ---@param index evolved.search_index
@@ -1179,27 +1135,84 @@ function __search_index_fns.insert(index, entity, component)
         return
     end
 
-    local entity_map = index.__entity_map
-    local entities_map = index.__entities_map
-    local component_map = index.__component_map
+    local entity_primary = entity % 2 ^ 20
 
-    component_map[entity] = component
+    local head_entities = index.__head_entities
+    local prev_entities = index.__prev_entities
+    local next_entities = index.__next_entities
 
     ---@type evolved.entity?
-    local indexed_entity = entity_map[component]
+    local head_entity = head_entities[component]
 
-    if not indexed_entity then
-        entity_map[component] = entity
+    if head_entity then
+        local head_entity_primary = head_entity % 2 ^ 20
+
+        local tail_entity = prev_entities[head_entity_primary]
+        local tail_entity_primary = tail_entity % 2 ^ 20
+
+        prev_entities[entity_primary] = tail_entity
+        next_entities[entity_primary] = head_entity
+
+        prev_entities[head_entity_primary] = entity
+        next_entities[tail_entity_primary] = entity
+    else
+        head_entities[component] = entity
+
+        prev_entities[entity_primary] = entity
+        next_entities[entity_primary] = entity
+    end
+
+    index.__entity_components[entity_primary] = component
+end
+
+---@param index evolved.search_index
+---@param entity evolved.entity
+function __search_index_fns.remove(index, entity)
+    local entity_primary = entity % 2 ^ 20
+
+    ---@type evolved.component?
+    local component = index.__entity_components[entity_primary]
+
+    if component == nil then
         return
     end
 
-    ---@type evolved.assoc_list<evolved.entity>?
-    local indexed_entities = entities_map[component]
+    local head_entities = index.__head_entities
+    local prev_entities = index.__prev_entities
+    local next_entities = index.__next_entities
 
-    if not indexed_entities then
-        entities_map[component] = __assoc_list_fns.from(indexed_entity, entity)
+    local prev_entity = prev_entities[entity_primary]
+    local next_entity = next_entities[entity_primary]
+
+    if next_entity == entity then
+        head_entities[component] = nil
     else
-        __assoc_list_fns.insert(indexed_entities, entity)
+        local prev_entity_primary = prev_entity % 2 ^ 20
+        local next_entity_primary = next_entity % 2 ^ 20
+
+        prev_entities[next_entity_primary] = prev_entity
+        next_entities[prev_entity_primary] = next_entity
+
+        if head_entities[component] == entity then
+            head_entities[component] = next_entity
+        end
+    end
+
+    prev_entities[entity_primary] = nil
+    next_entities[entity_primary] = nil
+
+    index.__entity_components[entity_primary] = nil
+end
+
+---@param index evolved.search_index
+---@param entity evolved.entity
+---@param component evolved.component
+function __search_index_fns.assign(index, entity, component)
+    local entity_components = index.__entity_components
+
+    if entity_components[entity % 2 ^ 20] ~= component then
+        __search_index_fns.remove(index, entity)
+        __search_index_fns.insert(index, entity, component)
     end
 end
 
@@ -1209,79 +1222,8 @@ end
 ---@param first integer
 ---@param last integer
 function __search_index_fns.multi_insert(index, entity_list, component_list, first, last)
-    local entity_map = index.__entity_map
-    local entities_map = index.__entities_map
-    local component_map = index.__component_map
-
-    local last_entities ---@type evolved.assoc_list<evolved.entity>?
-    local last_component ---@type evolved.component?
-
     for place = first, last do
-        local entity = entity_list[place]
-        local component = component_list[place]
-
-        if component ~= component then
-            -- NaN components cannot be indexed
-        elseif last_entities and last_component == component then
-            component_map[entity] = component
-            __assoc_list_fns.insert(last_entities, entity)
-        else
-            component_map[entity] = component
-
-            ---@type evolved.entity?
-            local indexed_entity = entity_map[component]
-
-            if not indexed_entity then
-                entity_map[component] = entity
-                last_entities, last_component = nil, nil
-            else
-                ---@type evolved.assoc_list<evolved.entity>?
-                local indexed_entities = entities_map[component]
-
-                if not indexed_entities then
-                    indexed_entities = __assoc_list_fns.from(indexed_entity, entity)
-                    entities_map[component] = indexed_entities
-                else
-                    __assoc_list_fns.insert(indexed_entities, entity)
-                end
-
-                last_entities, last_component = indexed_entities, component
-            end
-        end
-    end
-end
-
----@param index evolved.search_index
----@param entity evolved.entity
-function __search_index_fns.remove(index, entity)
-    local entity_map = index.__entity_map
-    local entities_map = index.__entities_map
-    local component_map = index.__component_map
-
-    ---@type evolved.component?
-    local component = component_map[entity]
-
-    if component == nil then
-        return
-    end
-
-    component_map[entity] = nil
-
-    ---@type evolved.assoc_list<evolved.entity>?
-    local indexed_entities = entities_map[component]
-
-    if indexed_entities then
-        local remove_fn = index.__ordered
-            and __assoc_list_fns.remove
-            or __assoc_list_fns.unordered_remove
-
-        if remove_fn(indexed_entities, entity) == 0 then
-            entities_map[component], indexed_entities = nil, nil
-        end
-    end
-
-    if entity_map[component] == entity then
-        entity_map[component] = indexed_entities and indexed_entities.__item_list[1] or nil
+        __search_index_fns.insert(index, entity_list[place], component_list[place])
     end
 end
 
@@ -1290,46 +1232,26 @@ end
 ---@param first integer
 ---@param last integer
 function __search_index_fns.multi_remove(index, entity_list, first, last)
-    local entity_map = index.__entity_map
-    local entities_map = index.__entities_map
-    local component_map = index.__component_map
+    for place = first, last do
+        __search_index_fns.remove(index, entity_list[place])
+    end
+end
 
-    local remove_fn = index.__ordered
-        and __assoc_list_fns.remove
-        or __assoc_list_fns.unordered_remove
+---@param index evolved.search_index
+---@param entity_list evolved.entity[]
+---@param component_list evolved.component[]
+---@param first integer
+---@param last integer
+function __search_index_fns.multi_assign(index, entity_list, component_list, first, last)
+    local entity_components = index.__entity_components
 
-    local last_entities ---@type evolved.assoc_list<evolved.entity>?
-    local last_component ---@type evolved.component?
-
-    for place = last, first, -1 do
+    for place = first, last do
         local entity = entity_list[place]
+        local component = component_list[place]
 
-        ---@type evolved.component?
-        local component = component_map[entity]
-
-        if component ~= nil then
-            component_map[entity] = nil
-
-            ---@type evolved.assoc_list<evolved.entity>?
-            local indexed_entities
-
-            if last_entities and last_component == component then
-                indexed_entities = last_entities
-            else
-                indexed_entities = entities_map[component]
-                last_entities, last_component = indexed_entities, component
-            end
-
-            if indexed_entities then
-                if remove_fn(indexed_entities, entity) == 0 then
-                    entities_map[component], indexed_entities = nil, nil
-                    last_entities, last_component = nil, nil
-                end
-            end
-
-            if entity_map[component] == entity then
-                entity_map[component] = indexed_entities and indexed_entities.__item_list[1] or nil
-            end
+        if entity_components[entity % 2 ^ 20] ~= component then
+            __search_index_fns.remove(index, entity)
+            __search_index_fns.insert(index, entity, component)
         end
     end
 end
@@ -1374,10 +1296,6 @@ local __EXECUTE = __acquire_id()
 
 local __PROLOGUE = __acquire_id()
 local __EPILOGUE = __acquire_id()
-
-local __INDEX_POLICY = __acquire_id()
-local __INDEX_POLICY_ORDERED = __acquire_id()
-local __INDEX_POLICY_UNORDERED = __acquire_id()
 
 local __DESTRUCTION_POLICY = __acquire_id()
 local __DESTRUCTION_POLICY_DESTROY_ENTITY = __acquire_id()
@@ -2474,21 +2392,7 @@ function __update_search_index(fragment)
     __update_major_chunks(fragment)
 
     if __evolved_has(fragment, __INDEX) then
-        local fragment_index_policy = __evolved_get(fragment, __INDEX_POLICY)
-            or __INDEX_POLICY_UNORDERED
-
-        ---@type evolved.search_index?
-        local fragment_search_index
-
-        if fragment_index_policy == __INDEX_POLICY_ORDERED then
-            fragment_search_index = __search_index_fns.new(true)
-        elseif fragment_index_policy == __INDEX_POLICY_UNORDERED then
-            fragment_search_index = __search_index_fns.new(false)
-        else
-            __error_fmt('unknown INDEX_POLICY (%s) on (%s)',
-                __id_name(fragment_index_policy), __id_name(fragment))
-        end
-
+        local fragment_search_index = __search_index_fns.new()
         __search_indices[fragment] = fragment_search_index
         __trace_minor_chunks(fragment, __update_search_index_trace, fragment, fragment_search_index)
         __trace_major_chunks(fragment, __update_chunk_caches)
@@ -6888,7 +6792,7 @@ function __evolved_search(fragment, component)
             __id_name(fragment))
     end
 
-    return fragment_search_index.__entity_map[component]
+    return fragment_search_index.__head_entities[component]
 end
 
 ---@param fragment evolved.fragment
@@ -6915,29 +6819,25 @@ function __evolved_multi_search_to(out_entity_list, out_entity_first, fragment, 
             __id_name(fragment))
     end
 
-    do
-        local indexed_entities = fragment_search_index.__entities_map[component]
-        local indexed_entity_list = indexed_entities and indexed_entities.__item_list
-        local indexed_entity_count = indexed_entities and indexed_entities.__item_count or 0
+    local entity_count = 0
 
-        if indexed_entity_count > 0 then
-            __lua_table_move(
-                indexed_entity_list, 1, indexed_entity_count,
-                out_entity_first, out_entity_list)
-            return indexed_entity_count
-        end
+    local head_entities = fragment_search_index.__head_entities
+    local next_entities = fragment_search_index.__next_entities
+
+    ---@type evolved.entity?
+    local head_entity = head_entities[component]
+
+    if head_entity then
+        local entity = head_entity
+
+        repeat
+            out_entity_list[out_entity_first + entity_count] = entity
+            entity = next_entities[entity % 2 ^ 20]
+            entity_count = entity_count + 1
+        until entity == head_entity
     end
 
-    do
-        local indexed_entity = fragment_search_index.__entity_map[component]
-
-        if indexed_entity then
-            out_entity_list[out_entity_first] = indexed_entity
-            return 1
-        end
-    end
-
-    return 0
+    return entity_count
 end
 
 ---@param ... evolved.fragment fragments
@@ -7951,12 +7851,6 @@ function __builder_mt:epilogue(epilogue)
     return self:set(__EPILOGUE, epilogue)
 end
 
----@param index_policy evolved.id
----@return evolved.builder builder
-function __builder_mt:index_policy(index_policy)
-    return self:set(__INDEX_POLICY, index_policy)
-end
-
 ---@param destruction_policy evolved.id
 ---@return evolved.builder builder
 function __builder_mt:destruction_policy(destruction_policy)
@@ -8014,9 +7908,6 @@ __evolved_set(__REALLOC, __ON_REMOVE, __update_major_chunks)
 __evolved_set(__COMPMOVE, __ON_SET, __update_major_chunks)
 __evolved_set(__COMPMOVE, __ON_REMOVE, __update_major_chunks)
 
-__evolved_set(__INDEX_POLICY, __ON_SET, __update_search_index)
-__evolved_set(__INDEX_POLICY, __ON_REMOVE, __update_search_index)
-
 ---
 ---
 ---
@@ -8026,7 +7917,6 @@ __evolved_set(__INDEX_POLICY, __ON_REMOVE, __update_search_index)
 __evolved_set(__TAG, __TAG)
 
 __evolved_set(__NAME, __INDEX)
-__evolved_set(__NAME, __INDEX_POLICY, __INDEX_POLICY_UNORDERED)
 
 __evolved_set(__INDEX, __TAG)
 __evolved_set(__INDEX, __UNIQUE)
@@ -8065,7 +7955,6 @@ __evolved_set(__ON_INSERT, __UNIQUE)
 __evolved_set(__ON_REMOVE, __UNIQUE)
 
 __evolved_set(__GROUP, __INDEX)
-__evolved_set(__GROUP, __INDEX_POLICY, __INDEX_POLICY_ORDERED)
 
 ---
 ---
@@ -8335,10 +8224,6 @@ __evolved_set(__EXECUTE, __NAME, '__EXECUTE')
 __evolved_set(__PROLOGUE, __NAME, '__PROLOGUE')
 __evolved_set(__EPILOGUE, __NAME, '__EPILOGUE')
 
-__evolved_set(__INDEX_POLICY, __NAME, '__INDEX_POLICY')
-__evolved_set(__INDEX_POLICY_ORDERED, __NAME, '__INDEX_POLICY_ORDERED')
-__evolved_set(__INDEX_POLICY_UNORDERED, __NAME, '__INDEX_POLICY_UNORDERED')
-
 __evolved_set(__DESTRUCTION_POLICY, __NAME, '__DESTRUCTION_POLICY')
 __evolved_set(__DESTRUCTION_POLICY_DESTROY_ENTITY, __NAME, '__DESTRUCTION_POLICY_DESTROY_ENTITY')
 __evolved_set(__DESTRUCTION_POLICY_REMOVE_FRAGMENT, __NAME, '__DESTRUCTION_POLICY_REMOVE_FRAGMENT')
@@ -8384,10 +8269,6 @@ __evolved_set(__EXECUTE, __INTERNAL)
 __evolved_set(__PROLOGUE, __INTERNAL)
 __evolved_set(__EPILOGUE, __INTERNAL)
 
-__evolved_set(__INDEX_POLICY, __INTERNAL)
-__evolved_set(__INDEX_POLICY_ORDERED, __INTERNAL)
-__evolved_set(__INDEX_POLICY_UNORDERED, __INTERNAL)
-
 __evolved_set(__DESTRUCTION_POLICY, __INTERNAL)
 __evolved_set(__DESTRUCTION_POLICY_DESTROY_ENTITY, __INTERNAL)
 __evolved_set(__DESTRUCTION_POLICY_REMOVE_FRAGMENT, __INTERNAL)
@@ -8432,10 +8313,6 @@ evolved.EXECUTE = __EXECUTE
 
 evolved.PROLOGUE = __PROLOGUE
 evolved.EPILOGUE = __EPILOGUE
-
-evolved.INDEX_POLICY = __INDEX_POLICY
-evolved.INDEX_POLICY_ORDERED = __INDEX_POLICY_ORDERED
-evolved.INDEX_POLICY_UNORDERED = __INDEX_POLICY_UNORDERED
 
 evolved.DESTRUCTION_POLICY = __DESTRUCTION_POLICY
 evolved.DESTRUCTION_POLICY_DESTROY_ENTITY = __DESTRUCTION_POLICY_DESTROY_ENTITY
