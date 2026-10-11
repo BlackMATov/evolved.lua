@@ -77,7 +77,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
-  - [vX.Y.Z](#vxyz)
+  - [v1.12.0](#v1120)
   - [v1.11.1](#v1111)
   - [v1.11.0](#v1110)
   - [v1.10.0](#v1100)
@@ -1819,7 +1819,7 @@ builder_mt:destruction_policy :: id -> builder
 
 ## Changelog
 
-### vX.Y.Z
+### v1.12.0
 
 - Lookup can now find internal fragments by their names: [#52](https://github.com/BlackMATov/evolved.lua/issues/52)
 - All internal names now have a double underscore prefix
