@@ -1,3 +1,5 @@
+require 'develop.issues.issue_52'
+
 require 'develop.testing.build_tests'
 require 'develop.testing.cached_hooks_tests'
 require 'develop.testing.cancel_tests'
@@ -13,6 +15,7 @@ require 'develop.testing.name_tests'
 require 'develop.testing.process_with_tests'
 require 'develop.testing.realloc_tests'
 require 'develop.testing.requires_fragment_tests'
+require 'develop.testing.search_tests'
 require 'develop.testing.spawn_tests'
 require 'develop.testing.system_as_query_tests'
 
