@@ -136,6 +136,9 @@
         query: function(self: Builder, query: Query): Builder
         execute: function(self: Builder, execute: function(Chunk, {Entity}, integer, ...: any)): Builder
 
+        enter: function(self: Builder, enter: function(Entity, System)): Builder
+        leave: function(self: Builder, leave: function(Entity, System)): Builder
+
         prologue: function(self: Builder, prologue: function(...: any)): Builder
         epilogue: function(self: Builder, epilogue: function(...: any)): Builder
 
@@ -173,6 +176,10 @@
 
     QUERY: Fragment
     EXECUTE: Fragment
+
+    ENTER: Fragment
+    LEAVE: Fragment
+
     PROLOGUE: Fragment
     EPILOGUE: Fragment
 

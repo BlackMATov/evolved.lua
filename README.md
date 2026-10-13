@@ -1601,6 +1601,10 @@ realloc :: {storage?, integer, integer -> storage?}
 compmove :: {storage, integer, integer, integer, storage}
 
 execute :: {chunk, entity[], integer, any...}
+
+enter :: {entity, system}
+leave :: {entity, system}
+
 prologue :: {any...}
 epilogue :: {any...}
 
@@ -1650,6 +1654,9 @@ GROUP :: fragment
 
 QUERY :: fragment
 EXECUTE :: fragment
+
+ENTER :: fragment
+LEAVE :: fragment
 
 PROLOGUE :: fragment
 EPILOGUE :: fragment
@@ -1811,6 +1818,9 @@ builder_mt:group :: system -> builder
 builder_mt:query :: query -> builder
 builder_mt:execute :: {chunk, entity[], integer, any...} -> builder
 
+builder_mt:enter :: {entity, system} -> builder
+builder_mt:leave :: {entity, system} -> builder
+
 builder_mt:prologue :: {any...} -> builder
 builder_mt:epilogue :: {any...} -> builder
 
@@ -1951,6 +1961,10 @@ builder_mt:destruction_policy :: id -> builder
 ### `evolved.QUERY`
 
 ### `evolved.EXECUTE`
+
+### `evolved.ENTER`
+
+### `evolved.LEAVE`
 
 ### `evolved.PROLOGUE`
 
@@ -2862,6 +2876,22 @@ function evolved.builder_mt:query(query) end
 ---@param execute evolved.execute
 ---@return evolved.builder builder
 function evolved.builder_mt:execute(execute) end
+```
+
+#### `evolved.builder_mt:enter`
+
+```lua
+---@param enter evolved.enter
+---@return evolved.builder builder
+function evolved.builder_mt:enter(enter) end
+```
+
+#### `evolved.builder_mt:leave`
+
+```lua
+---@param leave evolved.leave
+---@return evolved.builder builder
+function evolved.builder_mt:leave(leave) end
 ```
 
 #### `evolved.builder_mt:prologue`

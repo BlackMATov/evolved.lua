@@ -52,6 +52,9 @@ local evolved = {
 ---  entity_count: integer,
 ---  ...: any)
 
+---@alias evolved.enter fun(entity: evolved.entity, system: evolved.system)
+---@alias evolved.leave fun(entity: evolved.entity, system: evolved.system)
+
 ---@alias evolved.prologue fun(...: any)
 ---@alias evolved.epilogue fun(...: any)
 
@@ -1293,6 +1296,9 @@ local __GROUP = __acquire_id()
 
 local __QUERY = __acquire_id()
 local __EXECUTE = __acquire_id()
+
+local __ENTER = __acquire_id()
+local __LEAVE = __acquire_id()
 
 local __PROLOGUE = __acquire_id()
 local __EPILOGUE = __acquire_id()
@@ -7839,6 +7845,18 @@ function __builder_mt:execute(execute)
     return self:set(__EXECUTE, execute)
 end
 
+---@param enter evolved.enter
+---@return evolved.builder builder
+function __builder_mt:enter(enter)
+    return self:set(__ENTER, enter)
+end
+
+---@param leave evolved.leave
+---@return evolved.builder builder
+function __builder_mt:leave(leave)
+    return self:set(__LEAVE, leave)
+end
+
 ---@param prologue evolved.prologue
 ---@return evolved.builder builder
 function __builder_mt:prologue(prologue)
@@ -8221,6 +8239,9 @@ __evolved_set(__GROUP, __NAME, '__GROUP')
 __evolved_set(__QUERY, __NAME, '__QUERY')
 __evolved_set(__EXECUTE, __NAME, '__EXECUTE')
 
+__evolved_set(__ENTER, __NAME, '__ENTER')
+__evolved_set(__LEAVE, __NAME, '__LEAVE')
+
 __evolved_set(__PROLOGUE, __NAME, '__PROLOGUE')
 __evolved_set(__EPILOGUE, __NAME, '__EPILOGUE')
 
@@ -8266,6 +8287,9 @@ __evolved_set(__GROUP, __INTERNAL)
 __evolved_set(__QUERY, __INTERNAL)
 __evolved_set(__EXECUTE, __INTERNAL)
 
+__evolved_set(__ENTER, __INTERNAL)
+__evolved_set(__LEAVE, __INTERNAL)
+
 __evolved_set(__PROLOGUE, __INTERNAL)
 __evolved_set(__EPILOGUE, __INTERNAL)
 
@@ -8310,6 +8334,9 @@ evolved.GROUP = __GROUP
 
 evolved.QUERY = __QUERY
 evolved.EXECUTE = __EXECUTE
+
+evolved.ENTER = __ENTER
+evolved.LEAVE = __LEAVE
 
 evolved.PROLOGUE = __PROLOGUE
 evolved.EPILOGUE = __EPILOGUE
