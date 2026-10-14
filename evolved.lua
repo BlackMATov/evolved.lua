@@ -143,6 +143,9 @@ local evolved = {
 ---@field package __component_duplicates evolved.duplicate[]
 ---@field package __component_reallocs evolved.realloc[]
 ---@field package __component_compmoves evolved.compmove[]
+---@field package __monitor_set table<evolved.system, integer>
+---@field package __monitor_list evolved.system[]
+---@field package __monitor_count integer
 ---@field package __with_fragment_edges table<evolved.fragment, evolved.chunk>
 ---@field package __without_fragment_edges table<evolved.fragment, evolved.chunk>
 ---@field package __with_required_fragments? evolved.chunk
@@ -624,6 +627,10 @@ local __root_count = 0 ---@type integer
 
 local __major_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
 local __minor_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
+
+local __monitor_set = {} ---@type table<evolved.system, integer>
+local __monitor_list = {} ---@type evolved.system[]
+local __monitor_count = 0 ---@type integer
 
 local __query_chunks = {} ---@type table<evolved.query, evolved.assoc_list<evolved.chunk>>
 local __major_queries = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.query>>
@@ -1477,6 +1484,11 @@ local __defer_multi_clone_entity
 ---
 
 local __safe_tbls = {
+    __EMPTY_ENTITY_SET = setmetatable({}, {
+        __tostring = function() return 'empty entity set' end,
+        __newindex = function() __error_fmt 'attempt to modify empty entity set' end
+    }) --[[@as table<evolved.entity, integer>]],
+
     __EMPTY_FRAGMENT_SET = setmetatable({}, {
         __tostring = function() return 'empty fragment set' end,
         __newindex = function() __error_fmt 'attempt to modify empty fragment set' end
@@ -1561,6 +1573,9 @@ function __new_chunk(chunk_parent, chunk_fragment)
         __component_duplicates = {},
         __component_reallocs = {},
         __component_compmoves = {},
+        __monitor_set = {},
+        __monitor_list = {},
+        __monitor_count = 0,
         __with_fragment_edges = {},
         __without_fragment_edges = {},
         __with_required_fragments = nil,
@@ -3012,6 +3027,23 @@ function __spawn_entity(chunk, entity, component_table, component_mapper)
             end
         end
     end
+
+    local chunk_monitor_count = chunk.__monitor_count
+
+    if chunk_monitor_count > 0 then
+        local chunk_monitor_list = chunk.__monitor_list
+
+        for chunk_monitor_index = 1, chunk_monitor_count do
+            local monitor = chunk_monitor_list[chunk_monitor_index]
+
+            ---@type evolved.enter?
+            local monitor_enter = __evolved_get(monitor, __ENTER)
+
+            if monitor_enter and not __evolved_has(monitor, __DISABLED) then
+                monitor_enter(entity, monitor)
+            end
+        end
+    end
 end
 
 ---@param chunk? evolved.chunk
@@ -3171,6 +3203,26 @@ function __multi_spawn_entity(chunk, entity_list, entity_first, entity_count, co
                             fragment_on_insert(entity, fragment)
                         end
                     end
+                end
+            end
+        end
+    end
+
+    local chunk_monitor_count = chunk.__monitor_count
+
+    if chunk_monitor_count > 0 then
+        local chunk_monitor_list = chunk.__monitor_list
+
+        for chunk_monitor_index = 1, chunk_monitor_count do
+            local monitor = chunk_monitor_list[chunk_monitor_index]
+
+            ---@type evolved.enter?
+            local monitor_enter = __evolved_get(monitor, __ENTER)
+
+            if monitor_enter and not __evolved_has(monitor, __DISABLED) then
+                for place = b_place, e_place do
+                    local entity = chunk_entity_list[place]
+                    monitor_enter(entity, monitor)
                 end
             end
         end
@@ -3340,6 +3392,23 @@ function __clone_entity(prefab, entity, component_table, component_mapper)
                         fragment_on_insert(entity, fragment)
                     end
                 end
+            end
+        end
+    end
+
+    local chunk_monitor_count = chunk.__monitor_count
+
+    if chunk_monitor_count > 0 then
+        local chunk_monitor_list = chunk.__monitor_list
+
+        for chunk_monitor_index = 1, chunk_monitor_count do
+            local monitor = chunk_monitor_list[chunk_monitor_index]
+
+            ---@type evolved.enter?
+            local monitor_enter = __evolved_get(monitor, __ENTER)
+
+            if monitor_enter and not __evolved_has(monitor, __DISABLED) then
+                monitor_enter(entity, monitor)
             end
         end
     end
@@ -3531,6 +3600,26 @@ function __multi_clone_entity(prefab, entity_list, entity_first, entity_count, c
                             fragment_on_insert(entity, fragment)
                         end
                     end
+                end
+            end
+        end
+    end
+
+    local chunk_monitor_count = chunk.__monitor_count
+
+    if chunk_monitor_count > 0 then
+        local chunk_monitor_list = chunk.__monitor_list
+
+        for chunk_monitor_index = 1, chunk_monitor_count do
+            local monitor = chunk_monitor_list[chunk_monitor_index]
+
+            ---@type evolved.enter?
+            local monitor_enter = __evolved_get(monitor, __ENTER)
+
+            if monitor_enter and not __evolved_has(monitor, __DISABLED) then
+                for place = b_place, e_place do
+                    local entity = chunk_entity_list[place]
+                    monitor_enter(entity, monitor)
                 end
             end
         end
@@ -3760,6 +3849,23 @@ function __clear_entity_one(entity)
         local place = entity_places[entity_primary]
 
         if chunk then
+            local chunk_monitor_count = chunk.__monitor_count
+
+            if chunk_monitor_count > 0 then
+                local chunk_monitor_list = chunk.__monitor_list
+
+                for chunk_monitor_index = 1, chunk_monitor_count do
+                    local monitor = chunk_monitor_list[chunk_monitor_index]
+
+                    ---@type evolved.leave?
+                    local monitor_leave = __evolved_get(monitor, __LEAVE)
+
+                    if monitor_leave and not __evolved_has(monitor, __DISABLED) then
+                        monitor_leave(entity, monitor)
+                    end
+                end
+            end
+
             local chunk_remove_fragment_list = chunk.__remove_fragment_list
 
             if chunk_remove_fragment_list then
@@ -3839,6 +3945,23 @@ function __destroy_entity_one(entity)
         local place = entity_places[entity_primary]
 
         if chunk then
+            local chunk_monitor_count = chunk.__monitor_count
+
+            if chunk_monitor_count > 0 then
+                local chunk_monitor_list = chunk.__monitor_list
+
+                for chunk_monitor_index = 1, chunk_monitor_count do
+                    local monitor = chunk_monitor_list[chunk_monitor_index]
+
+                    ---@type evolved.leave?
+                    local monitor_leave = __evolved_get(monitor, __LEAVE)
+
+                    if monitor_leave and not __evolved_has(monitor, __DISABLED) then
+                        monitor_leave(entity, monitor)
+                    end
+                end
+            end
+
             local chunk_remove_fragment_list = chunk.__remove_fragment_list
 
             if chunk_remove_fragment_list then
@@ -4197,6 +4320,29 @@ function __chunk_set(old_chunk, fragment, component)
             end
         end
 
+        if old_chunk.__monitor_count > 0 then
+            local old_monitor_list = old_chunk.__monitor_list
+            local old_monitor_count = old_chunk.__monitor_count
+
+            local new_monitor_set = new_chunk.__monitor_set
+
+            for old_monitor_index = 1, old_monitor_count do
+                local monitor = old_monitor_list[old_monitor_index]
+
+                if not new_monitor_set[monitor] then
+                    ---@type evolved.leave?
+                    local monitor_leave = __evolved_get(monitor, __LEAVE)
+
+                    if monitor_leave and not __evolved_has(monitor, __DISABLED) then
+                        for old_place = 1, old_entity_count do
+                            local entity = old_entity_list[old_place]
+                            monitor_leave(entity, monitor)
+                        end
+                    end
+                end
+            end
+        end
+
         local new_component_indices = new_chunk.__component_indices
         local new_component_storages = new_chunk.__component_storages
         local new_component_reallocs = new_chunk.__component_reallocs
@@ -4496,6 +4642,29 @@ function __chunk_set(old_chunk, fragment, component)
             end
         end
 
+        if new_chunk.__monitor_count > 0 then
+            local new_monitor_list = new_chunk.__monitor_list
+            local new_monitor_count = new_chunk.__monitor_count
+
+            local old_monitor_set = old_chunk.__monitor_set
+
+            for new_monitor_index = 1, new_monitor_count do
+                local monitor = new_monitor_list[new_monitor_index]
+
+                if not old_monitor_set[monitor] then
+                    ---@type evolved.enter?
+                    local monitor_enter = __evolved_get(monitor, __ENTER)
+
+                    if monitor_enter and not __evolved_has(monitor, __DISABLED) then
+                        for new_place = new_entity_count + 1, sum_entity_count do
+                            local entity = new_entity_list[new_place]
+                            __defer_call_hook(monitor_enter, entity, monitor)
+                        end
+                    end
+                end
+            end
+        end
+
         __structural_changes = __structural_changes + 1
     end
 end
@@ -4527,6 +4696,30 @@ function __chunk_remove(old_chunk, ...)
 
     if old_chunk == new_chunk then
         return
+    end
+
+    if old_chunk.__monitor_count > 0 then
+        local old_monitor_list = old_chunk.__monitor_list
+        local old_monitor_count = old_chunk.__monitor_count
+
+        local new_monitor_set = new_chunk and new_chunk.__monitor_set
+            or __safe_tbls.__EMPTY_ENTITY_SET
+
+        for old_monitor_index = 1, old_monitor_count do
+            local monitor = old_monitor_list[old_monitor_index]
+
+            if not new_monitor_set[monitor] then
+                ---@type evolved.leave?
+                local monitor_leave = __evolved_get(monitor, __LEAVE)
+
+                if monitor_leave and not __evolved_has(monitor, __DISABLED) then
+                    for old_place = 1, old_entity_count do
+                        local entity = old_entity_list[old_place]
+                        monitor_leave(entity, monitor)
+                    end
+                end
+            end
+        end
     end
 
     local old_remove_fragment_list = old_chunk.__remove_fragment_list
@@ -4653,6 +4846,29 @@ function __chunk_remove(old_chunk, ...)
 
             __detach_all_entities(old_chunk)
         end
+
+        if new_chunk.__monitor_count > 0 then
+            local new_monitor_list = new_chunk.__monitor_list
+            local new_monitor_count = new_chunk.__monitor_count
+
+            local old_monitor_set = old_chunk.__monitor_set
+
+            for new_monitor_index = 1, new_monitor_count do
+                local monitor = new_monitor_list[new_monitor_index]
+
+                if not old_monitor_set[monitor] then
+                    ---@type evolved.enter?
+                    local monitor_enter = __evolved_get(monitor, __ENTER)
+
+                    if monitor_enter and not __evolved_has(monitor, __DISABLED) then
+                        for new_place = new_entity_count + 1, sum_entity_count do
+                            local entity = new_entity_list[new_place]
+                            __defer_call_hook(monitor_enter, entity, monitor)
+                        end
+                    end
+                end
+            end
+        end
     else
         local entity_chunks = __entity_chunks
         local entity_places = __entity_places
@@ -4681,6 +4897,26 @@ function __chunk_clear(chunk)
 
     if chunk_entity_count == 0 then
         return
+    end
+
+    local chunk_monitor_count = chunk.__monitor_count
+
+    if chunk_monitor_count > 0 then
+        local chunk_monitor_list = chunk.__monitor_list
+
+        for chunk_monitor_index = 1, chunk_monitor_count do
+            local monitor = chunk_monitor_list[chunk_monitor_index]
+
+            ---@type evolved.leave?
+            local monitor_leave = __evolved_get(monitor, __LEAVE)
+
+            if monitor_leave and not __evolved_has(monitor, __DISABLED) then
+                for place = 1, chunk_entity_count do
+                    local entity = chunk_entity_list[place]
+                    monitor_leave(entity, monitor)
+                end
+            end
+        end
     end
 
     local chunk_remove_fragment_list = chunk.__remove_fragment_list
@@ -5925,6 +6161,26 @@ function __evolved_set(entity, fragment, component)
             end
         end
 
+        if old_chunk and old_chunk.__monitor_count > 0 then
+            local old_monitor_list = old_chunk.__monitor_list
+            local old_monitor_count = old_chunk.__monitor_count
+
+            local new_monitor_set = new_chunk.__monitor_set
+
+            for old_monitor_index = 1, old_monitor_count do
+                local monitor = old_monitor_list[old_monitor_index]
+
+                if not new_monitor_set[monitor] then
+                    ---@type evolved.leave?
+                    local monitor_leave = __evolved_get(monitor, __LEAVE)
+
+                    if monitor_leave and not __evolved_has(monitor, __DISABLED) then
+                        monitor_leave(entity, monitor)
+                    end
+                end
+            end
+        end
+
         local new_component_indices = new_chunk.__component_indices
         local new_component_storages = new_chunk.__component_storages
 
@@ -6079,6 +6335,27 @@ function __evolved_set(entity, fragment, component)
                 end
             end
         end
+
+        if new_chunk.__monitor_count > 0 then
+            local new_monitor_list = new_chunk.__monitor_list
+            local new_monitor_count = new_chunk.__monitor_count
+
+            local old_monitor_set = old_chunk and old_chunk.__monitor_set
+                or __safe_tbls.__EMPTY_ENTITY_SET
+
+            for new_monitor_index = 1, new_monitor_count do
+                local monitor = new_monitor_list[new_monitor_index]
+
+                if not old_monitor_set[monitor] then
+                    ---@type evolved.enter?
+                    local monitor_enter = __evolved_get(monitor, __ENTER)
+
+                    if monitor_enter and not __evolved_has(monitor, __DISABLED) then
+                        __defer_call_hook(monitor_enter, entity, monitor)
+                    end
+                end
+            end
+        end
     end
 
     __evolved_commit()
@@ -6118,6 +6395,27 @@ function __evolved_remove(entity, ...)
     if old_chunk and old_chunk ~= new_chunk then
         local old_component_indices = old_chunk.__component_indices
         local old_component_storages = old_chunk.__component_storages
+
+        if old_chunk.__monitor_count > 0 then
+            local old_monitor_list = old_chunk.__monitor_list
+            local old_monitor_count = old_chunk.__monitor_count
+
+            local new_monitor_set = new_chunk and new_chunk.__monitor_set
+                or __safe_tbls.__EMPTY_ENTITY_SET
+
+            for old_monitor_index = 1, old_monitor_count do
+                local monitor = old_monitor_list[old_monitor_index]
+
+                if not new_monitor_set[monitor] then
+                    ---@type evolved.leave?
+                    local monitor_leave = __evolved_get(monitor, __LEAVE)
+
+                    if monitor_leave and not __evolved_has(monitor, __DISABLED) then
+                        monitor_leave(entity, monitor)
+                    end
+                end
+            end
+        end
 
         local old_remove_fragment_list = old_chunk.__remove_fragment_list
 
@@ -6187,6 +6485,26 @@ function __evolved_remove(entity, ...)
                 local old_cs = old_component_storages[old_ci]
 
                 new_cs[new_place] = old_cs[old_place]
+            end
+
+            if new_chunk.__monitor_count > 0 then
+                local new_monitor_list = new_chunk.__monitor_list
+                local new_monitor_count = new_chunk.__monitor_count
+
+                local old_monitor_set = old_chunk.__monitor_set
+
+                for new_monitor_index = 1, new_monitor_count do
+                    local monitor = new_monitor_list[new_monitor_index]
+
+                    if not old_monitor_set[monitor] then
+                        ---@type evolved.enter?
+                        local monitor_enter = __evolved_get(monitor, __ENTER)
+
+                        if monitor_enter and not __evolved_has(monitor, __DISABLED) then
+                            __defer_call_hook(monitor_enter, entity, monitor)
+                        end
+                    end
+                end
             end
         end
 
