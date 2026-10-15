@@ -1414,6 +1414,7 @@ local __update_chunk_queries
 local __update_chunk_monitors
 local __update_chunk_storages
 
+local __trace_all_chunks
 local __trace_major_chunks
 local __trace_minor_chunks
 
@@ -2179,6 +2180,55 @@ function __update_chunk_storages(chunk)
             component_reallocs[component_index] = fragment_realloc
             component_compmoves[component_index] = fragment_compmove
         end
+    end
+end
+
+---@param trace fun(chunk: evolved.chunk, ...: any)
+---@param ... any additional trace arguments
+function __trace_all_chunks(trace, ...)
+    local chunk_stack ---@type evolved.chunk[]?
+    local chunk_stack_size = 0 ---@type integer
+
+    do
+        local root_list = __root_list
+        local root_count = __root_count
+
+        if root_count > 0 then
+            ---@type evolved.chunk[]
+            chunk_stack = __acquire_table(__table_pool_tag.chunk_list)
+
+            __lua_table_move(
+                root_list, 1, root_count,
+                chunk_stack_size + 1, chunk_stack)
+
+            chunk_stack_size = chunk_stack_size + root_count
+        end
+    end
+
+    while chunk_stack_size > 0 do
+        ---@cast chunk_stack -?
+        local chunk = chunk_stack[chunk_stack_size]
+
+        trace(chunk, ...)
+
+        chunk_stack[chunk_stack_size] = nil
+        chunk_stack_size = chunk_stack_size - 1
+
+        do
+            local chunk_child_list = chunk.__child_list
+            local chunk_child_count = chunk.__child_count
+
+            __lua_table_move(
+                chunk_child_list, 1, chunk_child_count,
+                chunk_stack_size + 1, chunk_stack)
+
+            chunk_stack_size = chunk_stack_size + chunk_child_count
+        end
+    end
+
+    if chunk_stack then
+        __release_table(__table_pool_tag.chunk_list, chunk_stack,
+            chunk_stack_size == 0, true)
     end
 end
 
