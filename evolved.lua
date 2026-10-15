@@ -734,29 +734,30 @@ local __table_pool_tag = {
     __count = 9,
 }
 
----@type table<evolved.table_pool_tag, integer>
-local __table_pool_reserve = {
-    [__table_pool_tag.bytecode] = 16,
-    [__table_pool_tag.chunk_list] = 16,
-    [__table_pool_tag.system_list] = 16,
-    [__table_pool_tag.each_state] = 16,
-    [__table_pool_tag.execute_state] = 16,
-    [__table_pool_tag.entity_list] = 16,
-    [__table_pool_tag.fragment_set] = 16,
-    [__table_pool_tag.fragment_list] = 16,
-    [__table_pool_tag.component_table] = 16,
-}
-
 ---@class (exact) evolved.table_pool
 ---@field package __size integer
+---@field package __reserve integer
 ---@field package [integer] table
 
 ---@type table<evolved.table_pool_tag, evolved.table_pool>
 local __tagged_table_pools = (function()
+    ---@type table<evolved.table_pool_tag, integer>
+    local table_pool_reserves = {
+        [__table_pool_tag.bytecode] = 16,
+        [__table_pool_tag.chunk_list] = 16,
+        [__table_pool_tag.system_list] = 16,
+        [__table_pool_tag.each_state] = 16,
+        [__table_pool_tag.execute_state] = 16,
+        [__table_pool_tag.entity_list] = 16,
+        [__table_pool_tag.fragment_set] = 16,
+        [__table_pool_tag.fragment_list] = 16,
+        [__table_pool_tag.component_table] = 16,
+    }
+
     local table_pools = __lua_table_new(__table_pool_tag.__count)
 
     for table_pool_tag = 1, __table_pool_tag.__count do
-        local table_pool_reserve = __table_pool_reserve[table_pool_tag]
+        local table_pool_reserve = table_pool_reserves[table_pool_tag]
 
         ---@type evolved.table_pool
         local table_pool = __lua_table_new(table_pool_reserve)
@@ -766,6 +767,7 @@ local __tagged_table_pools = (function()
         end
 
         table_pool.__size = table_pool_reserve
+        table_pool.__reserve = table_pool_reserve
 
         table_pools[table_pool_tag] = table_pool
     end
@@ -7357,7 +7359,7 @@ function __evolved_collect_garbage(no_shrink)
 
     if not no_shrink then
         for table_pool_tag = 1, __table_pool_tag.__count do
-            local table_pool_reserve = __table_pool_reserve[table_pool_tag]
+            local table_pool_reserve = __tagged_table_pools[table_pool_tag].__reserve
 
             ---@type evolved.table_pool
             local new_table_pool = __lua_table_new(table_pool_reserve)
@@ -7367,6 +7369,7 @@ function __evolved_collect_garbage(no_shrink)
             end
 
             new_table_pool.__size = table_pool_reserve
+            new_table_pool.__reserve = table_pool_reserve
 
             __tagged_table_pools[table_pool_tag] = new_table_pool
         end
