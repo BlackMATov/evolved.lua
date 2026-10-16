@@ -589,16 +589,18 @@ end)()
 ---
 ---
 
+local __debug_fns = {}
+
 ---@param fmt string
 ---@param ... any
-local function __error_fmt(fmt, ...)
+function __debug_fns.error_fmt(fmt, ...)
     error(string.format('| evolved.lua (e) | %s',
         string.format(fmt, ...)))
 end
 
 ---@param fmt string
 ---@param ... any
-local function __warning_fmt(fmt, ...)
+function __debug_fns.warning_fmt(fmt, ...)
     print(__lua_debug_traceback(string.format('| evolved.lua (w) | %s',
         string.format(fmt, ...))))
 end
@@ -677,7 +679,7 @@ local function __acquire_id()
         local acquired_count = __acquired_count
 
         if acquired_count == 2 ^ 20 - 1 then
-            __error_fmt('id index overflow')
+            __debug_fns.error_fmt('id index overflow')
         end
 
         acquired_count = acquired_count + 1
@@ -704,7 +706,7 @@ local function __release_id(id)
     local freelist_ids = __freelist_ids
 
     if freelist_ids[acquired_primary] ~= id then
-        __error_fmt('the id (%d) is not acquired or already released', id)
+        __debug_fns.error_fmt('the id (%d) is not acquired or already released', id)
     end
 
     shifted_secondary = shifted_secondary == 2 ^ 40 - 2 ^ 20
@@ -1491,17 +1493,17 @@ local __defer_multi_clone_entity
 local __safe_tbls = {
     __EMPTY_ENTITY_SET = setmetatable({}, {
         __tostring = function() return 'empty entity set' end,
-        __newindex = function() __error_fmt 'attempt to modify empty entity set' end
+        __newindex = function() __debug_fns.error_fmt 'attempt to modify empty entity set' end
     }) --[[@as table<evolved.entity, integer>]],
 
     __EMPTY_FRAGMENT_SET = setmetatable({}, {
         __tostring = function() return 'empty fragment set' end,
-        __newindex = function() __error_fmt 'attempt to modify empty fragment set' end
+        __newindex = function() __debug_fns.error_fmt 'attempt to modify empty fragment set' end
     }) --[[@as table<evolved.fragment, integer>]],
 
     __EMPTY_COMPONENT_STORAGE = setmetatable({}, {
         __tostring = function() return 'empty component storage' end,
-        __newindex = function() __error_fmt 'attempt to modify empty component storage' end
+        __newindex = function() __debug_fns.error_fmt 'attempt to modify empty component storage' end
     }) --[=[@as evolved.component[]]=],
 }
 
@@ -1534,7 +1536,7 @@ function __new_chunk(chunk_parent, chunk_fragment)
     local chunk_fragment_primary = chunk_fragment % 2 ^ 20
 
     if __freelist_ids[chunk_fragment_primary] ~= chunk_fragment then
-        __error_fmt('the fragment (%s) is not alive and cannot be used for a new chunk',
+        __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be used for a new chunk',
             __id_name(chunk_fragment))
     end
 
@@ -1704,7 +1706,7 @@ end
 ---@param root evolved.chunk
 function __remove_root_chunk(root)
     if root.__parent then
-        __error_fmt('unexpected root chunk: (%s)',
+        __debug_fns.error_fmt('unexpected root chunk: (%s)',
             tostring(root))
         return
     end
@@ -1712,7 +1714,7 @@ function __remove_root_chunk(root)
     local root_index = __root_set[root.__fragment]
 
     if not root_index or __root_list[root_index] ~= root then
-        __error_fmt('unexpected root chunk: (%s)',
+        __debug_fns.error_fmt('unexpected root chunk: (%s)',
             tostring(root))
         return
     end
@@ -1756,7 +1758,7 @@ function __remove_child_chunk(child)
     local parent = child.__parent
 
     if not parent then
-        __error_fmt('unexpected child chunk: (%s)',
+        __debug_fns.error_fmt('unexpected child chunk: (%s)',
             tostring(child))
         return
     end
@@ -1764,7 +1766,7 @@ function __remove_child_chunk(child)
     local child_index = parent.__child_set[child]
 
     if not child_index or parent.__child_list[child_index] ~= child then
-        __error_fmt('unexpected child chunk: (%s)',
+        __debug_fns.error_fmt('unexpected child chunk: (%s)',
             tostring(child))
         return
     end
@@ -2113,7 +2115,7 @@ function __update_chunk_storages(chunk)
                 end
 
                 if not new_component_storage then
-                    __error_fmt('component storage allocation failed: chunk (%s), fragment (%s)',
+                    __debug_fns.error_fmt('component storage allocation failed: chunk (%s), fragment (%s)',
                         tostring(chunk), __id_name(fragment))
                 end
 
@@ -2146,7 +2148,7 @@ function __update_chunk_storages(chunk)
                 end
 
                 if not new_component_storage then
-                    __error_fmt('component storage allocation failed: chunk (%s), fragment (%s)',
+                    __debug_fns.error_fmt('component storage allocation failed: chunk (%s), fragment (%s)',
                         tostring(chunk), __id_name(fragment))
                 end
 
@@ -2972,7 +2974,7 @@ end
 ---@param component_mapper? evolved.component_mapper
 function __spawn_entity(chunk, entity, component_table, component_mapper)
     if __defer_depth <= 0 then
-        __error_fmt('spawn entity operations should be deferred')
+        __debug_fns.error_fmt('spawn entity operations should be deferred')
     end
 
     if not chunk or chunk.__unreachable_or_collected then
@@ -3132,7 +3134,7 @@ end
 ---@param component_mapper? evolved.component_mapper
 function __multi_spawn_entity(chunk, entity_list, entity_first, entity_count, component_table, component_mapper)
     if __defer_depth <= 0 then
-        __error_fmt('spawn entity operations should be deferred')
+        __debug_fns.error_fmt('spawn entity operations should be deferred')
     end
 
     if not chunk or chunk.__unreachable_or_collected then
@@ -3313,7 +3315,7 @@ end
 ---@param component_mapper? evolved.component_mapper
 function __clone_entity(prefab, entity, component_table, component_mapper)
     if __defer_depth <= 0 then
-        __error_fmt('clone entity operations should be deferred')
+        __debug_fns.error_fmt('clone entity operations should be deferred')
     end
 
     local prefab_chunk, prefab_place = __evolved_locate(prefab)
@@ -3500,7 +3502,7 @@ end
 ---@param component_mapper? evolved.component_mapper
 function __multi_clone_entity(prefab, entity_list, entity_first, entity_count, component_table, component_mapper)
     if __defer_depth <= 0 then
-        __error_fmt('clone entity operations should be deferred')
+        __debug_fns.error_fmt('clone entity operations should be deferred')
     end
 
     local prefab_chunk, prefab_place = __evolved_locate(prefab)
@@ -3707,11 +3709,11 @@ end
 ---@param chunk evolved.chunk
 function __purge_chunk(chunk)
     if __defer_depth <= 0 then
-        __error_fmt('this operation should be deferred')
+        __debug_fns.error_fmt('this operation should be deferred')
     end
 
     if chunk.__child_count > 0 or chunk.__entity_count > 0 then
-        __error_fmt('chunk should be empty before purging')
+        __debug_fns.error_fmt('chunk should be empty before purging')
     end
 
     if chunk.__entity_capacity > 0 then
@@ -3759,7 +3761,7 @@ end
 ---@param min_capacity integer
 function __expand_chunk(chunk, min_capacity)
     if __defer_depth <= 0 then
-        __error_fmt('this operation should be deferred')
+        __debug_fns.error_fmt('this operation should be deferred')
     end
 
     local entity_count = chunk.__entity_count
@@ -3804,11 +3806,11 @@ function __expand_chunk(chunk, min_capacity)
             end
 
             if min_capacity > 0 and not new_component_storage then
-                __error_fmt(
+                __debug_fns.error_fmt(
                     'component storage reallocation failed: chunk (%s), fragment (%s)',
                     tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
             elseif min_capacity == 0 and new_component_storage then
-                __warning_fmt(
+                __debug_fns.warning_fmt(
                     'component storage reallocation for zero capacity should return nil: chunk (%s), fragment (%s)',
                     tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
                 new_component_storage = nil
@@ -3825,7 +3827,7 @@ end
 ---@param min_capacity integer
 function __shrink_chunk(chunk, min_capacity)
     if __defer_depth <= 0 then
-        __error_fmt('this operation should be deferred')
+        __debug_fns.error_fmt('this operation should be deferred')
     end
 
     local entity_count = chunk.__entity_count
@@ -3875,11 +3877,11 @@ function __shrink_chunk(chunk, min_capacity)
             end
 
             if min_capacity > 0 and not new_component_storage then
-                __error_fmt(
+                __debug_fns.error_fmt(
                     'component storage reallocation failed: chunk (%s), fragment (%s)',
                     tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
             elseif min_capacity == 0 and new_component_storage then
-                __warning_fmt(
+                __debug_fns.warning_fmt(
                     'component storage reallocation for zero capacity should return nil: chunk (%s), fragment (%s)',
                     tostring(chunk), __id_name(chunk.__component_fragments[component_index]))
                 new_component_storage = nil
@@ -3896,7 +3898,7 @@ end
 ---@param chunk_count integer
 function __clear_chunk_list(chunk_list, chunk_count)
     if __defer_depth <= 0 then
-        __error_fmt('this operation should be deferred')
+        __debug_fns.error_fmt('this operation should be deferred')
     end
 
     if chunk_count == 0 then
@@ -3912,7 +3914,7 @@ end
 ---@param entity evolved.entity
 function __clear_entity_one(entity)
     if __defer_depth <= 0 then
-        __error_fmt('this operation should be deferred')
+        __debug_fns.error_fmt('this operation should be deferred')
     end
 
     local entity_chunks = __entity_chunks
@@ -3996,7 +3998,7 @@ end
 ---@param entity_count integer
 function __clear_entity_list(entity_list, entity_count)
     if __defer_depth <= 0 then
-        __error_fmt('this operation should be deferred')
+        __debug_fns.error_fmt('this operation should be deferred')
     end
 
     for entity_index = 1, entity_count do
@@ -4008,7 +4010,7 @@ end
 ---@param entity evolved.entity
 function __destroy_entity_one(entity)
     if __defer_depth <= 0 then
-        __error_fmt('this operation should be deferred')
+        __debug_fns.error_fmt('this operation should be deferred')
     end
 
     local entity_chunks = __entity_chunks
@@ -4094,7 +4096,7 @@ end
 ---@param entity_count integer
 function __destroy_entity_list(entity_list, entity_count)
     if __defer_depth <= 0 then
-        __error_fmt('this operation should be deferred')
+        __debug_fns.error_fmt('this operation should be deferred')
     end
 
     for entity_index = 1, entity_count do
@@ -4106,7 +4108,7 @@ end
 ---@param fragment evolved.fragment
 function __destroy_fragment_one(fragment)
     if __defer_depth <= 0 then
-        __error_fmt('this operation should be deferred')
+        __debug_fns.error_fmt('this operation should be deferred')
     end
 
     ---@type evolved.fragment[]
@@ -4130,7 +4132,7 @@ end
 ---@param fragment_count integer
 function __destroy_fragment_list(fragment_list, fragment_count)
     if __defer_depth <= 0 then
-        __error_fmt('this operation should be deferred')
+        __debug_fns.error_fmt('this operation should be deferred')
     end
 
     ---@type evolved.fragment[]
@@ -4157,7 +4159,7 @@ end
 ---@param processing_fragment_stack_size integer
 function __destroy_fragment_stack(processing_fragment_stack, processing_fragment_stack_size)
     if __defer_depth <= 0 then
-        __error_fmt('this operation should be deferred')
+        __debug_fns.error_fmt('this operation should be deferred')
     end
 
     ---@type table<evolved.fragment, boolean>
@@ -4220,7 +4222,7 @@ function __destroy_fragment_stack(processing_fragment_stack, processing_fragment
                 remove_fragment_policy_fragment_count = remove_fragment_policy_fragment_count + 1
                 remove_fragment_policy_fragment_list[remove_fragment_policy_fragment_count] = processing_fragment
             else
-                __error_fmt('unknown DESTRUCTION_POLICY (%s) on (%s)',
+                __debug_fns.error_fmt('unknown DESTRUCTION_POLICY (%s) on (%s)',
                     __id_name(processing_fragment_destruction_policy), __id_name(processing_fragment))
             end
         end
@@ -4262,7 +4264,7 @@ end
 ---@param component evolved.component
 function __chunk_set(old_chunk, fragment, component)
     if __defer_depth <= 0 then
-        __error_fmt('batched chunk operations should be deferred')
+        __debug_fns.error_fmt('batched chunk operations should be deferred')
     end
 
     local old_entity_list = old_chunk.__entity_list
@@ -4316,7 +4318,7 @@ function __chunk_set(old_chunk, fragment, component)
                 end
 
                 if not old_component_storage2 then
-                    __error_fmt('component storage allocation failed: chunk (%s), fragment (%s)',
+                    __debug_fns.error_fmt('component storage allocation failed: chunk (%s), fragment (%s)',
                         tostring(old_chunk), __id_name(fragment))
                 end
 
@@ -4667,7 +4669,7 @@ end
 ---@param ... evolved.fragment fragments
 function __chunk_remove(old_chunk, ...)
     if __defer_depth <= 0 then
-        __error_fmt('batched chunk operations should be deferred')
+        __debug_fns.error_fmt('batched chunk operations should be deferred')
     end
 
     local fragment_count = __lua_select('#', ...)
@@ -4883,7 +4885,7 @@ end
 ---@param chunk evolved.chunk
 function __chunk_clear(chunk)
     if __defer_depth <= 0 then
-        __error_fmt('batched chunk operations should be deferred')
+        __debug_fns.error_fmt('batched chunk operations should be deferred')
     end
 
     local chunk_entity_list = chunk.__entity_list
@@ -5310,7 +5312,7 @@ function __iterator_fns.__each_iterator(each_state)
     local chunk_fragment_index = each_state[4]
 
     if structural_changes ~= __structural_changes then
-        __error_fmt('structural changes are prohibited during iteration')
+        __debug_fns.error_fmt('structural changes are prohibited during iteration')
     end
 
     local chunk_fragment_list = entity_chunk.__fragment_list
@@ -5341,7 +5343,7 @@ function __iterator_fns.__execute_iterator(execute_state)
     local variant_set = execute_state[6]
 
     if structural_changes ~= __structural_changes then
-        __error_fmt('structural changes are prohibited during iteration')
+        __debug_fns.error_fmt('structural changes are prohibited during iteration')
     end
 
     while chunk_stack_size > 0 do
@@ -5402,7 +5404,7 @@ local function __system_process(system, ...)
         local success, result = __lua_xpcall(prologue, __error_handler, ...)
 
         if not success then
-            __error_fmt('system prologue failed: %s', result)
+            __debug_fns.error_fmt('system prologue failed: %s', result)
         end
     end
 
@@ -5413,7 +5415,7 @@ local function __system_process(system, ...)
 
             if not success then
                 __evolved_cancel()
-                __error_fmt('system execution failed: %s', result)
+                __debug_fns.error_fmt('system execution failed: %s', result)
             end
         end
         __evolved_commit()
@@ -5439,7 +5441,7 @@ local function __system_process(system, ...)
         local success, result = __lua_xpcall(epilogue, __error_handler, ...)
 
         if not success then
-            __error_fmt('system epilogue failed: %s', result)
+            __debug_fns.error_fmt('system epilogue failed: %s', result)
         end
     end
 end
@@ -5525,11 +5527,11 @@ end
 ---@nodiscard
 function __evolved_pack(primary, secondary)
     if primary < 1 or primary > 2 ^ 20 - 1 then
-        __error_fmt('the primary (%d) is out of range [1, 2 ^ 20 - 1]', primary)
+        __debug_fns.error_fmt('the primary (%d) is out of range [1, 2 ^ 20 - 1]', primary)
     end
 
     if secondary < 1 or secondary > 2 ^ 20 - 1 then
-        __error_fmt('the secondary (%d) is out of range [1, 2 ^ 20 - 1]', secondary)
+        __debug_fns.error_fmt('the secondary (%d) is out of range [1, 2 ^ 20 - 1]', secondary)
     end
 
     return primary + secondary * 2 ^ 20 --[[@as evolved.id]]
@@ -5560,7 +5562,7 @@ end
 ---@return boolean committed
 function __evolved_commit()
     if __defer_depth <= 0 then
-        __error_fmt('unbalanced defer/commit/cancel')
+        __debug_fns.error_fmt('unbalanced defer/commit/cancel')
     end
 
     __defer_depth = __defer_depth - 1
@@ -5592,7 +5594,7 @@ end
 ---@return boolean cancelled
 function __evolved_cancel()
     if __defer_depth <= 0 then
-        __error_fmt('unbalanced defer/commit/cancel')
+        __debug_fns.error_fmt('unbalanced defer/commit/cancel')
     end
 
     __defer_length = __defer_points[__defer_depth]
@@ -5608,7 +5610,7 @@ function __evolved_spawn(component_table, component_mapper)
         if component_table then
             for fragment in __lua_next, component_table do
                 if not __evolved_alive(fragment) then
-                    __error_fmt('the fragment (%s) is not alive and cannot be used',
+                    __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be used',
                         __id_name(fragment))
                 end
             end
@@ -5686,7 +5688,7 @@ function __evolved_multi_spawn_to(out_entity_list, out_entity_first,
         if component_table then
             for fragment in __lua_next, component_table do
                 if not __evolved_alive(fragment) then
-                    __error_fmt('the fragment (%s) is not alive and cannot be used',
+                    __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be used',
                         __id_name(fragment))
                 end
             end
@@ -5723,14 +5725,14 @@ end
 function __evolved_clone(prefab, component_table, component_mapper)
     if __debug_mode then
         if not __evolved_alive(prefab) then
-            __error_fmt('the prefab (%s) is not alive and cannot be used',
+            __debug_fns.error_fmt('the prefab (%s) is not alive and cannot be used',
                 __id_name(prefab))
         end
 
         if component_table then
             for fragment in __lua_next, component_table do
                 if not __evolved_alive(fragment) then
-                    __error_fmt('the fragment (%s) is not alive and cannot be used',
+                    __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be used',
                         __id_name(fragment))
                 end
             end
@@ -5805,14 +5807,14 @@ function __evolved_multi_clone_to(out_entity_list, out_entity_first,
 
     if __debug_mode then
         if not __evolved_alive(prefab) then
-            __error_fmt('the prefab (%s) is not alive and cannot be used',
+            __debug_fns.error_fmt('the prefab (%s) is not alive and cannot be used',
                 __id_name(prefab))
         end
 
         if component_table then
             for fragment in __lua_next, component_table do
                 if not __evolved_alive(fragment) then
-                    __error_fmt('the fragment (%s) is not alive and cannot be used',
+                    __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be used',
                         __id_name(fragment))
                 end
             end
@@ -6064,7 +6066,7 @@ function __evolved_set(entity, fragment, component)
     local entity_primary = entity % 2 ^ 20
 
     if __freelist_ids[entity_primary] ~= entity then
-        __error_fmt('the entity (%s) is not alive and cannot be changed',
+        __debug_fns.error_fmt('the entity (%s) is not alive and cannot be changed',
             __id_name(entity))
     end
 
@@ -6072,7 +6074,7 @@ function __evolved_set(entity, fragment, component)
         local fragment_primary = fragment % 2 ^ 20
 
         if __freelist_ids[fragment_primary] ~= fragment then
-            __error_fmt('the fragment (%s) is not alive and cannot be set',
+            __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be set',
                 __id_name(fragment))
         end
     end
@@ -6707,7 +6709,7 @@ function __evolved_batch_set(query, fragment, component)
     local query_primary = query % 2 ^ 20
 
     if __freelist_ids[query_primary] ~= query then
-        __error_fmt('the query (%s) is not alive and cannot be executed',
+        __debug_fns.error_fmt('the query (%s) is not alive and cannot be executed',
             __id_name(query))
     end
 
@@ -6715,7 +6717,7 @@ function __evolved_batch_set(query, fragment, component)
         local fragment_primary = fragment % 2 ^ 20
 
         if __freelist_ids[fragment_primary] ~= fragment then
-            __error_fmt('the fragment (%s) is not alive and cannot be set',
+            __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be set',
                 __id_name(fragment))
         end
     end
@@ -6792,7 +6794,7 @@ function __evolved_batch_remove(query, ...)
     local query_primary = query % 2 ^ 20
 
     if __freelist_ids[query_primary] ~= query then
-        __error_fmt('the query (%s) is not alive and cannot be executed',
+        __debug_fns.error_fmt('the query (%s) is not alive and cannot be executed',
             __id_name(query))
     end
 
@@ -6857,7 +6859,7 @@ function __evolved_batch_clear(...)
             local query_primary = query % 2 ^ 20
 
             if __freelist_ids[query_primary] ~= query then
-                __warning_fmt('the query (%s) is not alive and cannot be executed',
+                __debug_fns.warning_fmt('the query (%s) is not alive and cannot be executed',
                     __id_name(query))
             else
                 for chunk in __evolved_execute(query) do
@@ -6915,7 +6917,7 @@ function __evolved_batch_destroy(...)
             local query_primary = query % 2 ^ 20
 
             if __freelist_ids[query_primary] ~= query then
-                __warning_fmt('the query (%s) is not alive and cannot be executed',
+                __debug_fns.warning_fmt('the query (%s) is not alive and cannot be executed',
                     __id_name(query))
             else
                 for chunk, entity_list, entity_count in __evolved_execute(query) do
@@ -6986,7 +6988,7 @@ function __evolved_each(entity)
     local entity_primary = entity % 2 ^ 20
 
     if __freelist_ids[entity_primary] ~= entity then
-        __error_fmt('the entity (%s) is not alive and cannot be iterated',
+        __debug_fns.error_fmt('the entity (%s) is not alive and cannot be iterated',
             __id_name(entity))
     end
 
@@ -7015,7 +7017,7 @@ function __evolved_execute(query)
     local query_primary = query % 2 ^ 20
 
     if __freelist_ids[query_primary] ~= query then
-        __error_fmt('the query (%s) is not alive and cannot be executed',
+        __debug_fns.error_fmt('the query (%s) is not alive and cannot be executed',
             __id_name(query))
     end
 
@@ -7140,7 +7142,7 @@ function __evolved_search(fragment, component)
     local fragment_search_index = __search_indices[fragment]
 
     if not fragment_search_index then
-        __error_fmt('the fragment (%s) is not indexed and cannot be searched',
+        __debug_fns.error_fmt('the fragment (%s) is not indexed and cannot be searched',
             __id_name(fragment))
     end
 
@@ -7167,7 +7169,7 @@ function __evolved_multi_search_to(out_entity_list, out_entity_first, fragment, 
     local fragment_search_index = __search_indices[fragment]
 
     if not fragment_search_index then
-        __error_fmt('the fragment (%s) is not indexed and cannot be searched',
+        __debug_fns.error_fmt('the fragment (%s) is not indexed and cannot be searched',
             __id_name(fragment))
     end
 
@@ -7210,7 +7212,7 @@ function __evolved_reindex(...)
         local fragment = __lua_select(fragment_index, ...)
 
         if not __search_indices[fragment] then
-            __error_fmt('the fragment (%s) is not indexed and cannot be reindexed',
+            __debug_fns.error_fmt('the fragment (%s) is not indexed and cannot be reindexed',
                 __id_name(fragment))
         end
     end
@@ -7237,7 +7239,7 @@ function __evolved_process(...)
         local system_primary = system % 2 ^ 20
 
         if __freelist_ids[system_primary] ~= system then
-            __warning_fmt('the system (%s) is not alive and cannot be processed',
+            __debug_fns.warning_fmt('the system (%s) is not alive and cannot be processed',
                 __id_name(system))
         else
             __system_process(system)
@@ -7251,7 +7253,7 @@ function __evolved_process_with(system, ...)
     local system_primary = system % 2 ^ 20
 
     if __freelist_ids[system_primary] ~= system then
-        __error_fmt('the system (%s) is not alive and cannot be processed',
+        __debug_fns.error_fmt('the system (%s) is not alive and cannot be processed',
             __id_name(system))
     end
 
@@ -7618,7 +7620,7 @@ function __builder_mt:spawn(component_mapper)
         if component_table then
             for fragment in __lua_next, component_table do
                 if not __evolved_alive(fragment) then
-                    __error_fmt('the fragment (%s) is not alive and cannot be used',
+                    __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be used',
                         __id_name(fragment))
                 end
             end
@@ -7692,7 +7694,7 @@ function __builder_mt:multi_spawn_to(out_entity_list, out_entity_first,
         if component_table then
             for fragment in __lua_next, component_table do
                 if not __evolved_alive(fragment) then
-                    __error_fmt('the fragment (%s) is not alive and cannot be used',
+                    __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be used',
                         __id_name(fragment))
                 end
             end
@@ -7730,14 +7732,14 @@ function __builder_mt:clone(prefab, component_mapper)
 
     if __debug_mode then
         if not __evolved_alive(prefab) then
-            __error_fmt('the prefab (%s) is not alive and cannot be used',
+            __debug_fns.error_fmt('the prefab (%s) is not alive and cannot be used',
                 __id_name(prefab))
         end
 
         if component_table then
             for fragment in __lua_next, component_table do
                 if not __evolved_alive(fragment) then
-                    __error_fmt('the fragment (%s) is not alive and cannot be used',
+                    __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be used',
                         __id_name(fragment))
                 end
             end
@@ -7807,14 +7809,14 @@ function __builder_mt:multi_clone_to(out_entity_list, out_entity_first,
 
     if __debug_mode then
         if not __evolved_alive(prefab) then
-            __error_fmt('the prefab (%s) is not alive and cannot be used',
+            __debug_fns.error_fmt('the prefab (%s) is not alive and cannot be used',
                 __id_name(prefab))
         end
 
         if component_table then
             for fragment in __lua_next, component_table do
                 if not __evolved_alive(fragment) then
-                    __error_fmt('the fragment (%s) is not alive and cannot be used',
+                    __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be used',
                         __id_name(fragment))
                 end
             end
@@ -7926,7 +7928,7 @@ function __builder_mt:set(fragment, component)
 
     if __debug_mode then
         if __freelist_ids[fragment_primary] ~= fragment then
-            __error_fmt('the fragment (%s) is not alive and cannot be set',
+            __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be set',
                 __id_name(fragment))
         end
     end
