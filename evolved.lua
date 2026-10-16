@@ -634,6 +634,7 @@ local __monitor_count = 0 ---@type integer
 
 local __query_chunks = {} ---@type table<evolved.query, evolved.assoc_list<evolved.chunk>>
 local __major_queries = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.query>>
+local __monitor_majors = {} ---@type table<evolved.system, evolved.assoc_list<evolved.fragment>>
 
 local __entity_chunks = {} ---@type (evolved.chunk|false)[]
 local __entity_places = {} ---@type integer[]
@@ -8370,6 +8371,8 @@ __evolved_set(__ON_REMOVE, __UNIQUE)
 
 __evolved_set(__GROUP, __INDEX)
 
+__evolved_set(__QUERY, __INDEX)
+
 ---
 ---
 ---
@@ -8417,13 +8420,25 @@ function __hook_fns.insert_query(query)
         end
     end
 
-    for monitor_index = 1, __monitor_count do
-        local monitor = __monitor_list[monitor_index]
-        local monitor_query = __evolved_get(monitor, __QUERY) or monitor
+    if __monitor_set[query] and not __evolved_has(query, __QUERY) then
+        __hook_fns.attach_monitor(query)
+    end
 
-        if monitor_query == query then
-            __hook_fns.update_monitor(monitor)
+    if __evolved_search(__QUERY, query) then
+        ---@type evolved.system[]
+        local query_system_list = __acquire_table(__table_pool_tag.system_list)
+        local query_system_count = __evolved_multi_search_to(query_system_list, 1, __QUERY, query)
+
+        for query_system_index = 1, query_system_count do
+            local query_system = query_system_list[query_system_index]
+
+            if __monitor_set[query_system] then
+                __hook_fns.attach_monitor(query_system)
+            end
         end
+
+        __release_table(__table_pool_tag.system_list, query_system_list,
+            query_system_count == 0, true)
     end
 end
 
@@ -8458,6 +8473,27 @@ function __hook_fns.remove_query(query)
         end
     end
 
+    if __monitor_set[query] and not __evolved_has(query, __QUERY) then
+        __hook_fns.detach_monitor(query)
+    end
+
+    if __evolved_search(__QUERY, query) then
+        ---@type evolved.system[]
+        local query_system_list = __acquire_table(__table_pool_tag.system_list)
+        local query_system_count = __evolved_multi_search_to(query_system_list, 1, __QUERY, query)
+
+        for query_system_index = 1, query_system_count do
+            local query_system = query_system_list[query_system_index]
+
+            if __monitor_set[query_system] then
+                __hook_fns.detach_monitor(query_system)
+            end
+        end
+
+        __release_table(__table_pool_tag.system_list, query_system_list,
+            query_system_count == 0, true)
+    end
+
     __reset_query_chunks(query)
 end
 
@@ -8468,14 +8504,14 @@ function __hook_fns.insert_monitor(monitor)
         return
     end
 
-    if __monitor_set[monitor] or not __evolved_has_any(monitor, __ENTER, __LEAVE) then
+    if not __evolved_has_any(monitor, __ENTER, __LEAVE) then
         return
     end
 
     __monitor_count = __assoc_list_fns.insert_ex(
         __monitor_set, __monitor_list, __monitor_count, monitor)
 
-    __hook_fns.update_monitor(monitor)
+    __hook_fns.attach_monitor(monitor)
 end
 
 ---@param monitor evolved.system
@@ -8485,31 +8521,20 @@ function __hook_fns.remove_monitor(monitor)
         return
     end
 
-    if not __monitor_set[monitor] or __evolved_has_any(monitor, __ENTER, __LEAVE) then
+    if not __monitor_set[monitor] then
         return
     end
 
+    __hook_fns.detach_monitor(monitor)
+
     __monitor_count = __assoc_list_fns.remove_ex(
         __monitor_set, __monitor_list, __monitor_count, monitor)
-
-    for _, major_chunks in __lua_next, __major_chunks do
-        local major_chunk_list = major_chunks.__item_list
-        local major_chunk_count = major_chunks.__item_count
-
-        for major_chunk_index = 1, major_chunk_count do
-            local major_chunk = major_chunk_list[major_chunk_index]
-
-            major_chunk.__monitor_count = __assoc_list_fns.remove_ex(
-                major_chunk.__monitor_set, major_chunk.__monitor_list,
-                major_chunk.__monitor_count, monitor)
-        end
-    end
 end
 
 ---@param monitor evolved.system
-function __hook_fns.update_monitor(monitor)
+function __hook_fns.attach_monitor(monitor)
     if __defer_depth > 0 then
-        __defer_call_hook(__hook_fns.update_monitor, monitor)
+        __defer_call_hook(__hook_fns.attach_monitor, monitor)
         return
     end
 
@@ -8519,26 +8544,103 @@ function __hook_fns.update_monitor(monitor)
 
     ---@type evolved.query
     local monitor_query = __evolved_get(monitor, __QUERY) or monitor
-    local is_monitor_query_alive = __evolved_alive(monitor_query)
 
-    for _, major_chunks in __lua_next, __major_chunks do
-        local major_chunk_list = major_chunks.__item_list
-        local major_chunk_count = major_chunks.__item_count
+    if not __evolved_alive(monitor_query) then
+        return
+    end
 
-        for major_chunk_index = 1, major_chunk_count do
-            local major_chunk = major_chunk_list[major_chunk_index]
+    ---@type evolved.assoc_list<evolved.fragment>
+    local monitor_majors = __assoc_list_fns.new(4)
 
-            if is_monitor_query_alive and __query_minor_matches(major_chunk, monitor_query) then
-                major_chunk.__monitor_count = __assoc_list_fns.insert_ex(
-                    major_chunk.__monitor_set, major_chunk.__monitor_list,
-                    major_chunk.__monitor_count, monitor)
-            else
-                major_chunk.__monitor_count = __assoc_list_fns.remove_ex(
-                    major_chunk.__monitor_set, major_chunk.__monitor_list,
-                    major_chunk.__monitor_count, monitor)
+    do
+        local query_includes = __sorted_includes[monitor_query]
+        local query_include_list = query_includes and query_includes.__item_list
+        local query_include_count = query_includes and query_includes.__item_count or 0
+
+        local query_variants = __sorted_variants[monitor_query]
+        local query_variant_list = query_variants and query_variants.__item_list
+        local query_variant_count = query_variants and query_variants.__item_count or 0
+
+        if query_include_count > 0 then
+            local query_major = query_include_list[query_include_count]
+            __assoc_list_fns.insert(monitor_majors, query_major)
+        end
+
+        for query_variant_index = 1, query_variant_count do
+            local query_variant = query_variant_list[query_variant_index]
+
+            if query_include_count == 0 or query_variant > query_include_list[query_include_count] then
+                __assoc_list_fns.insert(monitor_majors, query_variant)
             end
         end
     end
+
+    __monitor_majors[monitor] = monitor_majors
+
+    local monitor_major_list = monitor_majors.__item_list
+    local monitor_major_count = monitor_majors.__item_count
+
+    if monitor_major_count == 0 then
+        __trace_all_chunks(
+            __hook_fns.insert_monitor_trace, monitor, monitor_query)
+    end
+
+    for monitor_major_index = 1, monitor_major_count do
+        local monitor_major = monitor_major_list[monitor_major_index]
+
+        __trace_major_chunks(monitor_major,
+            __hook_fns.insert_monitor_trace, monitor, monitor_query)
+    end
+end
+
+---@param monitor evolved.system
+function __hook_fns.detach_monitor(monitor)
+    if __defer_depth > 0 then
+        __defer_call_hook(__hook_fns.detach_monitor, monitor)
+        return
+    end
+
+    local monitor_majors = __monitor_majors[monitor]
+
+    if not monitor_majors then
+        return
+    end
+
+    __monitor_majors[monitor] = nil
+
+    local monitor_major_list = monitor_majors.__item_list
+    local monitor_major_count = monitor_majors.__item_count
+
+    if monitor_major_count == 0 then
+        __trace_all_chunks(
+            __hook_fns.remove_monitor_trace, monitor)
+    end
+
+    for monitor_major_index = 1, monitor_major_count do
+        local monitor_major = monitor_major_list[monitor_major_index]
+
+        __trace_major_chunks(monitor_major,
+            __hook_fns.remove_monitor_trace, monitor)
+    end
+end
+
+---@param chunk evolved.chunk
+---@param monitor evolved.system
+---@param monitor_query evolved.query
+function __hook_fns.insert_monitor_trace(chunk, monitor, monitor_query)
+    if __query_minor_matches(chunk, monitor_query) then
+        chunk.__monitor_count = __assoc_list_fns.insert_ex(
+            chunk.__monitor_set, chunk.__monitor_list,
+            chunk.__monitor_count, monitor)
+    end
+end
+
+---@param chunk evolved.chunk
+---@param monitor evolved.system
+function __hook_fns.remove_monitor_trace(chunk, monitor)
+    chunk.__monitor_count = __assoc_list_fns.remove_ex(
+        chunk.__monitor_set, chunk.__monitor_list,
+        chunk.__monitor_count, monitor)
 end
 
 ---
@@ -8692,14 +8794,35 @@ end)
 ---
 ---
 
-__evolved_set(__QUERY, __ON_SET, __hook_fns.update_monitor)
-__evolved_set(__QUERY, __ON_REMOVE, __hook_fns.update_monitor)
+__evolved_set(__QUERY, __ON_SET, function(monitor)
+    __hook_fns.detach_monitor(monitor)
+    __hook_fns.attach_monitor(monitor)
+end)
 
-__evolved_set(__ENTER, __ON_INSERT, __hook_fns.insert_monitor)
-__evolved_set(__ENTER, __ON_REMOVE, __hook_fns.remove_monitor)
+__evolved_set(__QUERY, __ON_REMOVE, function(monitor)
+    __hook_fns.detach_monitor(monitor)
+    __hook_fns.attach_monitor(monitor)
+end)
 
-__evolved_set(__LEAVE, __ON_INSERT, __hook_fns.insert_monitor)
-__evolved_set(__LEAVE, __ON_REMOVE, __hook_fns.remove_monitor)
+__evolved_set(__ENTER, __ON_INSERT, function(monitor)
+    __hook_fns.remove_monitor(monitor)
+    __hook_fns.insert_monitor(monitor)
+end)
+
+__evolved_set(__ENTER, __ON_REMOVE, function(monitor)
+    __hook_fns.remove_monitor(monitor)
+    __hook_fns.insert_monitor(monitor)
+end)
+
+__evolved_set(__LEAVE, __ON_INSERT, function(monitor)
+    __hook_fns.remove_monitor(monitor)
+    __hook_fns.insert_monitor(monitor)
+end)
+
+__evolved_set(__LEAVE, __ON_REMOVE, function(monitor)
+    __hook_fns.remove_monitor(monitor)
+    __hook_fns.insert_monitor(monitor)
+end)
 
 ---
 ---
