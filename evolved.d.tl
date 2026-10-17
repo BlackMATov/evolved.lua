@@ -5,7 +5,6 @@
     type Fragment = Id
     type Query = Id
     type System = Id
-    type Event = Id
 
     interface EachState end
     interface ExecuteState end
@@ -137,9 +136,6 @@
         query: function(self: Builder, query: Query): Builder
         execute: function(self: Builder, execute: function(Chunk, {Entity}, integer, ...: any)): Builder
 
-        observe: function(self: Builder, ...: Event): Builder
-        callback: function(self: Builder, callback: function(Event, Entity, ...: any)): Builder
-
         prologue: function(self: Builder, prologue: function(...: any)): Builder
         epilogue: function(self: Builder, epilogue: function(...: any)): Builder
 
@@ -177,13 +173,6 @@
 
     QUERY: Fragment
     EXECUTE: Fragment
-
-    OBSERVES: Fragment
-    CALLBACK: Fragment
-
-    ENTER: Event
-    LEAVE: Event
-
     PROLOGUE: Fragment
     EPILOGUE: Fragment
 
@@ -290,8 +279,6 @@
     multi_search_to: function<Component>(out_entity_list: { Entity }, out_entity_first: integer, fragment: Fragment, component: Component): integer
 
     reindex: function(...: Fragment)
-
-    emit: function(event: Event, entity: Entity, ...: any)
 
     process: function(...: System)
     process_with: function(system: System, ...: any)

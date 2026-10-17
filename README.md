@@ -1587,7 +1587,6 @@ entity :: id
 fragment :: id
 query :: id
 system :: id
-event :: id
 
 component :: any
 storage :: component[]
@@ -1602,9 +1601,6 @@ realloc :: {storage?, integer, integer -> storage?}
 compmove :: {storage, integer, integer, integer, storage}
 
 execute :: {chunk, entity[], integer, any...}
-
-callback :: {event, entity, any...}
-
 prologue :: {any...}
 epilogue :: {any...}
 
@@ -1654,12 +1650,6 @@ GROUP :: fragment
 
 QUERY :: fragment
 EXECUTE :: fragment
-
-OBSERVES :: fragment
-CALLBACK :: fragment
-
-ENTER :: event
-LEAVE :: event
 
 PROLOGUE :: fragment
 EPILOGUE :: fragment
@@ -1731,8 +1721,6 @@ multi_search :: fragment, component -> entity[], integer
 multi_search_to :: entity[], integer, fragment, component -> integer
 
 reindex :: fragment... -> ()
-
-emit :: event, entity, any... -> ()
 
 process :: system... -> ()
 process_with :: system, ... -> ()
@@ -1822,9 +1810,6 @@ builder_mt:group :: system -> builder
 
 builder_mt:query :: query -> builder
 builder_mt:execute :: {chunk, entity[], integer, any...} -> builder
-
-builder_mt:observe :: event... -> builder
-builder_mt:callback :: {event, entity, any...} -> builder
 
 builder_mt:prologue :: {any...} -> builder
 builder_mt:epilogue :: {any...} -> builder
@@ -1966,14 +1951,6 @@ builder_mt:destruction_policy :: id -> builder
 ### `evolved.QUERY`
 
 ### `evolved.EXECUTE`
-
-### `evolved.OBSERVES`
-
-### `evolved.CALLBACK`
-
-### `evolved.ENTER`
-
-### `evolved.LEAVE`
 
 ### `evolved.PROLOGUE`
 
@@ -2394,15 +2371,6 @@ function evolved.multi_search_to(out_entity_list, out_entity_first, fragment, co
 ```lua
 ---@param ... evolved.fragment fragments
 function evolved.reindex(...) end
-```
-
-### `evolved.emit`
-
-```lua
----@param event evolved.event
----@param entity evolved.entity
----@param ... any event payload
-function evolved.emit(event, entity, ...) end
 ```
 
 ### `evolved.process`
@@ -2894,22 +2862,6 @@ function evolved.builder_mt:query(query) end
 ---@param execute evolved.execute
 ---@return evolved.builder builder
 function evolved.builder_mt:execute(execute) end
-```
-
-#### `evolved.builder_mt:observe`
-
-```lua
----@param ... evolved.event events
----@return evolved.builder builder
-function evolved.builder_mt:observe(...) end
-```
-
-#### `evolved.builder_mt:callback`
-
-```lua
----@param callback evolved.callback
----@return evolved.builder builder
-function evolved.builder_mt:callback(callback) end
 ```
 
 #### `evolved.builder_mt:prologue`
