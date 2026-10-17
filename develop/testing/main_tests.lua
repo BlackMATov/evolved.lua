@@ -7134,3 +7134,23 @@ do
         assert(tostring(b) == '<f1, f2>')
     end
 end
+
+do
+    local o = ''
+
+    local g = evo.builder():build()
+    local f = evo.builder()
+        :on_insert(function(_, _, nc) o = o .. 'i' .. nc end)
+        :on_assign(function(_, _, nc, oc) o = o .. 'a' .. oc .. nc end)
+        :build()
+
+    local q = evo.builder():include(g):build()
+
+    local e1 = evo.spawn({ [g] = true })
+    local e2 = evo.spawn({ [g] = true, [f] = 1 })
+
+    o = ''
+    evo.batch_set(q, f, 2)
+    assert(o == 'a12i2')
+    assert(evo.get(e1, f) == 2 and evo.get(e2, f) == 2)
+end
