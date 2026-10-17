@@ -33,6 +33,7 @@ local evolved = {
 ---@alias evolved.fragment evolved.id
 ---@alias evolved.query evolved.id
 ---@alias evolved.system evolved.id
+---@alias evolved.event evolved.id
 
 ---@alias evolved.component any
 ---@alias evolved.storage evolved.component[]
@@ -52,8 +53,10 @@ local evolved = {
 ---  entity_count: integer,
 ---  ...: any)
 
----@alias evolved.enter fun(entity: evolved.entity, system: evolved.system)
----@alias evolved.leave fun(entity: evolved.entity, system: evolved.system)
+---@alias evolved.callback fun(
+---  event: evolved.event,
+---  entity: evolved.entity,
+---  ...: any)
 
 ---@alias evolved.prologue fun(...: any)
 ---@alias evolved.epilogue fun(...: any)
@@ -630,9 +633,7 @@ local __root_count = 0 ---@type integer
 local __major_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
 local __minor_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
 
-local __monitor_set = {} ---@type table<evolved.system, integer>
-local __monitor_list = {} ---@type evolved.system[]
-local __monitor_count = 0 ---@type integer
+local __monitors = { __item_set = {}, __item_list = {}, __item_count = 0 } ---@type evolved.assoc_list<evolved.system>
 
 local __query_chunks = {} ---@type table<evolved.query, evolved.assoc_list<evolved.chunk>>
 local __major_queries = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.query>>
@@ -647,6 +648,7 @@ local __sorted_includes = {} ---@type table<evolved.query, evolved.assoc_list<ev
 local __sorted_excludes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
 local __sorted_variants = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
 local __sorted_requires = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.fragment>>
+local __sorted_observes = {} ---@type table<evolved.system, evolved.assoc_list<evolved.event>>
 
 local __structural_changes = 0 ---@type integer
 
@@ -1311,6 +1313,9 @@ local __GROUP = __acquire_id()
 local __QUERY = __acquire_id()
 local __EXECUTE = __acquire_id()
 
+local __OBSERVES = __acquire_id()
+local __CALLBACK = __acquire_id()
+
 local __ENTER = __acquire_id()
 local __LEAVE = __acquire_id()
 
@@ -1388,6 +1393,8 @@ local __evolved_multi_search
 local __evolved_multi_search_to
 
 local __evolved_reindex
+
+local __evolved_emit
 
 local __evolved_process
 local __evolved_process_with
@@ -1481,11 +1488,9 @@ local __chunk_clear
 
 local __defer_call_hook
 
-local __defer_spawn_entity
-local __defer_multi_spawn_entity
+local __defer_fns = {}
 
-local __defer_clone_entity
-local __defer_multi_clone_entity
+local __event_fns = {}
 
 ---
 ---
@@ -2012,8 +2017,11 @@ function __update_chunk_monitors(chunk)
     __lua_table_clear(chunk_monitor_set, true, false)
     __lua_table_clear(chunk_monitor_list, false, true)
 
-    for monitor_index = 1, __monitor_count do
-        local monitor = __monitor_list[monitor_index]
+    local monitor_list = __monitors.__item_list
+    local monitor_count = __monitors.__item_count
+
+    for monitor_index = 1, monitor_count do
+        local monitor = monitor_list[monitor_index]
         local monitor_query = __evolved_get(monitor, __QUERY) or monitor
 
         if __evolved_alive(monitor_query) and __query_minor_matches(chunk, monitor_query) then
@@ -2971,6 +2979,72 @@ function __detach_all_entities(chunk)
     chunk.__entity_count = 0
 end
 
+---@param event evolved.event
+---@param chunk evolved.chunk
+---@param skip_monitor_set? table<evolved.system, integer>
+---@param entity evolved.entity
+---@param ... any event payload
+function __event_fns.emit_one(event, chunk, skip_monitor_set, entity, ...)
+    if __defer_depth <= 0 then
+        __debug_fns.error_fmt('event emitting should be deferred')
+    end
+
+    local chunk_monitor_list = chunk.__monitor_list
+    local chunk_monitor_count = chunk.__monitor_count
+
+    for chunk_monitor_index = 1, chunk_monitor_count do
+        local monitor = chunk_monitor_list[chunk_monitor_index]
+
+        if not skip_monitor_set or not skip_monitor_set[monitor] then
+            local monitor_observes = __sorted_observes[monitor]
+
+            ---@type evolved.callback?
+            local monitor_callback = monitor_observes and monitor_observes.__item_set[event]
+                and __evolved_get(monitor, __CALLBACK)
+
+            if monitor_callback and not __evolved_has(monitor, __DISABLED) then
+                monitor_callback(event, entity, ...)
+            end
+        end
+    end
+end
+
+---@param event evolved.event
+---@param chunk evolved.chunk
+---@param skip_monitor_set? table<evolved.system, integer>
+---@param entity_list evolved.entity[]
+---@param entity_first integer
+---@param entity_count integer
+---@param ... any event payload
+function __event_fns.emit_list(event, chunk, skip_monitor_set, entity_list, entity_first, entity_count, ...)
+    if __defer_depth <= 0 then
+        __debug_fns.error_fmt('event emitting should be deferred')
+    end
+
+    local chunk_monitor_list = chunk.__monitor_list
+    local chunk_monitor_count = chunk.__monitor_count
+
+    local entity_last = entity_first + entity_count - 1
+
+    for chunk_monitor_index = 1, chunk_monitor_count do
+        local monitor = chunk_monitor_list[chunk_monitor_index]
+
+        if not skip_monitor_set or not skip_monitor_set[monitor] then
+            local monitor_observes = __sorted_observes[monitor]
+
+            ---@type evolved.callback?
+            local monitor_callback = monitor_observes and monitor_observes.__item_set[event]
+                and __evolved_get(monitor, __CALLBACK)
+
+            if monitor_callback and not __evolved_has(monitor, __DISABLED) then
+                for entity_index = entity_first, entity_last do
+                    monitor_callback(event, entity_list[entity_index], ...)
+                end
+            end
+        end
+    end
+end
+
 ---@param chunk? evolved.chunk
 ---@param entity evolved.entity
 ---@param component_table? evolved.component_table
@@ -3111,21 +3185,8 @@ function __spawn_entity(chunk, entity, component_table, component_mapper)
         end
     end
 
-    local chunk_monitor_count = chunk.__monitor_count
-
-    if chunk_monitor_count > 0 then
-        local chunk_monitor_list = chunk.__monitor_list
-
-        for chunk_monitor_index = 1, chunk_monitor_count do
-            local monitor = chunk_monitor_list[chunk_monitor_index]
-
-            ---@type evolved.enter?
-            local monitor_enter = __evolved_get(monitor, __ENTER)
-
-            if monitor_enter and not __evolved_has(monitor, __DISABLED) then
-                monitor_enter(entity, monitor)
-            end
-        end
+    if chunk.__monitor_count > 0 then
+        __event_fns.emit_one(__ENTER, chunk, nil, entity)
     end
 end
 
@@ -3291,24 +3352,9 @@ function __multi_spawn_entity(chunk, entity_list, entity_first, entity_count, co
         end
     end
 
-    local chunk_monitor_count = chunk.__monitor_count
-
-    if chunk_monitor_count > 0 then
-        local chunk_monitor_list = chunk.__monitor_list
-
-        for chunk_monitor_index = 1, chunk_monitor_count do
-            local monitor = chunk_monitor_list[chunk_monitor_index]
-
-            ---@type evolved.enter?
-            local monitor_enter = __evolved_get(monitor, __ENTER)
-
-            if monitor_enter and not __evolved_has(monitor, __DISABLED) then
-                for place = b_place, e_place do
-                    local entity = chunk_entity_list[place]
-                    monitor_enter(entity, monitor)
-                end
-            end
-        end
+    if chunk.__monitor_count > 0 then
+        __event_fns.emit_list(__ENTER, chunk, nil,
+            chunk_entity_list, b_place, entity_count)
     end
 end
 
@@ -3479,21 +3525,8 @@ function __clone_entity(prefab, entity, component_table, component_mapper)
         end
     end
 
-    local chunk_monitor_count = chunk.__monitor_count
-
-    if chunk_monitor_count > 0 then
-        local chunk_monitor_list = chunk.__monitor_list
-
-        for chunk_monitor_index = 1, chunk_monitor_count do
-            local monitor = chunk_monitor_list[chunk_monitor_index]
-
-            ---@type evolved.enter?
-            local monitor_enter = __evolved_get(monitor, __ENTER)
-
-            if monitor_enter and not __evolved_has(monitor, __DISABLED) then
-                monitor_enter(entity, monitor)
-            end
-        end
+    if chunk.__monitor_count > 0 then
+        __event_fns.emit_one(__ENTER, chunk, nil, entity)
     end
 end
 
@@ -3688,24 +3721,9 @@ function __multi_clone_entity(prefab, entity_list, entity_first, entity_count, c
         end
     end
 
-    local chunk_monitor_count = chunk.__monitor_count
-
-    if chunk_monitor_count > 0 then
-        local chunk_monitor_list = chunk.__monitor_list
-
-        for chunk_monitor_index = 1, chunk_monitor_count do
-            local monitor = chunk_monitor_list[chunk_monitor_index]
-
-            ---@type evolved.enter?
-            local monitor_enter = __evolved_get(monitor, __ENTER)
-
-            if monitor_enter and not __evolved_has(monitor, __DISABLED) then
-                for place = b_place, e_place do
-                    local entity = chunk_entity_list[place]
-                    monitor_enter(entity, monitor)
-                end
-            end
-        end
+    if chunk.__monitor_count > 0 then
+        __event_fns.emit_list(__ENTER, chunk, nil,
+            chunk_entity_list, b_place, entity_count)
     end
 end
 
@@ -3932,21 +3950,8 @@ function __clear_entity_one(entity)
         local place = entity_places[entity_primary]
 
         if chunk then
-            local chunk_monitor_count = chunk.__monitor_count
-
-            if chunk_monitor_count > 0 then
-                local chunk_monitor_list = chunk.__monitor_list
-
-                for chunk_monitor_index = 1, chunk_monitor_count do
-                    local monitor = chunk_monitor_list[chunk_monitor_index]
-
-                    ---@type evolved.leave?
-                    local monitor_leave = __evolved_get(monitor, __LEAVE)
-
-                    if monitor_leave and not __evolved_has(monitor, __DISABLED) then
-                        monitor_leave(entity, monitor)
-                    end
-                end
+            if chunk.__monitor_count > 0 then
+                __event_fns.emit_one(__LEAVE, chunk, nil, entity)
             end
 
             local chunk_remove_fragment_list = chunk.__remove_fragment_list
@@ -4028,21 +4033,8 @@ function __destroy_entity_one(entity)
         local place = entity_places[entity_primary]
 
         if chunk then
-            local chunk_monitor_count = chunk.__monitor_count
-
-            if chunk_monitor_count > 0 then
-                local chunk_monitor_list = chunk.__monitor_list
-
-                for chunk_monitor_index = 1, chunk_monitor_count do
-                    local monitor = chunk_monitor_list[chunk_monitor_index]
-
-                    ---@type evolved.leave?
-                    local monitor_leave = __evolved_get(monitor, __LEAVE)
-
-                    if monitor_leave and not __evolved_has(monitor, __DISABLED) then
-                        monitor_leave(entity, monitor)
-                    end
-                end
+            if chunk.__monitor_count > 0 then
+                __event_fns.emit_one(__LEAVE, chunk, nil, entity)
             end
 
             local chunk_remove_fragment_list = chunk.__remove_fragment_list
@@ -4419,26 +4411,8 @@ function __chunk_insert(old_chunk, fragment, component)
     end
 
     if old_chunk.__monitor_count > 0 then
-        local old_monitor_list = old_chunk.__monitor_list
-        local old_monitor_count = old_chunk.__monitor_count
-
-        local new_monitor_set = new_chunk.__monitor_set
-
-        for old_monitor_index = 1, old_monitor_count do
-            local monitor = old_monitor_list[old_monitor_index]
-
-            if not new_monitor_set[monitor] then
-                ---@type evolved.leave?
-                local monitor_leave = __evolved_get(monitor, __LEAVE)
-
-                if monitor_leave and not __evolved_has(monitor, __DISABLED) then
-                    for old_place = 1, old_entity_count do
-                        local entity = old_entity_list[old_place]
-                        monitor_leave(entity, monitor)
-                    end
-                end
-            end
-        end
+        __event_fns.emit_list(__LEAVE, old_chunk, new_chunk.__monitor_set,
+            old_entity_list, 1, old_entity_count)
     end
 
     local new_component_indices = new_chunk.__component_indices
@@ -4660,26 +4634,8 @@ function __chunk_insert(old_chunk, fragment, component)
     end
 
     if new_chunk.__monitor_count > 0 then
-        local new_monitor_list = new_chunk.__monitor_list
-        local new_monitor_count = new_chunk.__monitor_count
-
-        local old_monitor_set = old_chunk.__monitor_set
-
-        for new_monitor_index = 1, new_monitor_count do
-            local monitor = new_monitor_list[new_monitor_index]
-
-            if not old_monitor_set[monitor] then
-                ---@type evolved.enter?
-                local monitor_enter = __evolved_get(monitor, __ENTER)
-
-                if monitor_enter and not __evolved_has(monitor, __DISABLED) then
-                    for new_place = new_entity_count + 1, sum_entity_count do
-                        local entity = new_entity_list[new_place]
-                        monitor_enter(entity, monitor)
-                    end
-                end
-            end
-        end
+        __event_fns.emit_list(__ENTER, new_chunk, old_chunk.__monitor_set,
+            new_entity_list, new_entity_count + 1, old_entity_count)
     end
 
     __structural_changes = __structural_changes + 1
@@ -4715,27 +4671,8 @@ function __chunk_remove(old_chunk, ...)
     end
 
     if old_chunk.__monitor_count > 0 then
-        local old_monitor_list = old_chunk.__monitor_list
-        local old_monitor_count = old_chunk.__monitor_count
-
-        local new_monitor_set = new_chunk and new_chunk.__monitor_set
-            or __safe_tbls.__EMPTY_ENTITY_SET
-
-        for old_monitor_index = 1, old_monitor_count do
-            local monitor = old_monitor_list[old_monitor_index]
-
-            if not new_monitor_set[monitor] then
-                ---@type evolved.leave?
-                local monitor_leave = __evolved_get(monitor, __LEAVE)
-
-                if monitor_leave and not __evolved_has(monitor, __DISABLED) then
-                    for old_place = 1, old_entity_count do
-                        local entity = old_entity_list[old_place]
-                        monitor_leave(entity, monitor)
-                    end
-                end
-            end
-        end
+        __event_fns.emit_list(__LEAVE, old_chunk, new_chunk and new_chunk.__monitor_set,
+            old_entity_list, 1, old_entity_count)
     end
 
     local old_remove_fragment_list = old_chunk.__remove_fragment_list
@@ -4864,26 +4801,8 @@ function __chunk_remove(old_chunk, ...)
         end
 
         if new_chunk.__monitor_count > 0 then
-            local new_monitor_list = new_chunk.__monitor_list
-            local new_monitor_count = new_chunk.__monitor_count
-
-            local old_monitor_set = old_chunk.__monitor_set
-
-            for new_monitor_index = 1, new_monitor_count do
-                local monitor = new_monitor_list[new_monitor_index]
-
-                if not old_monitor_set[monitor] then
-                    ---@type evolved.enter?
-                    local monitor_enter = __evolved_get(monitor, __ENTER)
-
-                    if monitor_enter and not __evolved_has(monitor, __DISABLED) then
-                        for new_place = new_entity_count + 1, sum_entity_count do
-                            local entity = new_entity_list[new_place]
-                            monitor_enter(entity, monitor)
-                        end
-                    end
-                end
-            end
+            __event_fns.emit_list(__ENTER, new_chunk, old_chunk.__monitor_set,
+                new_entity_list, new_entity_count + 1, old_entity_count)
         end
     else
         local entity_chunks = __entity_chunks
@@ -4915,24 +4834,9 @@ function __chunk_clear(chunk)
         return
     end
 
-    local chunk_monitor_count = chunk.__monitor_count
-
-    if chunk_monitor_count > 0 then
-        local chunk_monitor_list = chunk.__monitor_list
-
-        for chunk_monitor_index = 1, chunk_monitor_count do
-            local monitor = chunk_monitor_list[chunk_monitor_index]
-
-            ---@type evolved.leave?
-            local monitor_leave = __evolved_get(monitor, __LEAVE)
-
-            if monitor_leave and not __evolved_has(monitor, __DISABLED) then
-                for place = 1, chunk_entity_count do
-                    local entity = chunk_entity_list[place]
-                    monitor_leave(entity, monitor)
-                end
-            end
-        end
+    if chunk.__monitor_count > 0 then
+        __event_fns.emit_list(__LEAVE, chunk, nil,
+            chunk_entity_list, 1, chunk_entity_count)
     end
 
     local chunk_remove_fragment_list = chunk.__remove_fragment_list
@@ -5096,7 +5000,7 @@ end
 ---@param entity evolved.entity
 ---@param component_table? evolved.component_table
 ---@param component_mapper? evolved.component_mapper
-function __defer_spawn_entity(chunk, entity, component_table, component_mapper)
+function __defer_fns.spawn_entity(chunk, entity, component_table, component_mapper)
     ---@type evolved.component_table?
     local component_table2
 
@@ -5145,7 +5049,7 @@ end
 ---@param entity_count integer
 ---@param component_table? evolved.component_table
 ---@param component_mapper? evolved.component_mapper
-function __defer_multi_spawn_entity(chunk, entity_list, entity_first, entity_count, component_table, component_mapper)
+function __defer_fns.multi_spawn_entity(chunk, entity_list, entity_first, entity_count, component_table, component_mapper)
     ---@type evolved.entity[]
     local entity_list2 = __acquire_table(__table_pool_tag.entity_list)
 
@@ -5207,7 +5111,7 @@ end
 ---@param entity evolved.entity
 ---@param component_table? evolved.component_table
 ---@param component_mapper? evolved.component_mapper
-function __defer_clone_entity(prefab, entity, component_table, component_mapper)
+function __defer_fns.clone_entity(prefab, entity, component_table, component_mapper)
     ---@type evolved.component_table?
     local component_table2
 
@@ -5256,7 +5160,7 @@ end
 ---@param entity_count integer
 ---@param component_table? evolved.component_table
 ---@param component_mapper? evolved.component_mapper
-function __defer_multi_clone_entity(prefab, entity_list, entity_first, entity_count, component_table, component_mapper)
+function __defer_fns.multi_clone_entity(prefab, entity_list, entity_first, entity_count, component_table, component_mapper)
     ---@type evolved.entity[]
     local entity_list2 = __acquire_table(__table_pool_tag.entity_list)
 
@@ -5644,7 +5548,7 @@ function __evolved_spawn(component_table, component_mapper)
     end
 
     if __defer_depth > 0 then
-        __defer_spawn_entity(nil, entity, component_table, component_mapper)
+        __defer_fns.spawn_entity(nil, entity, component_table, component_mapper)
     else
         __evolved_defer()
         do
@@ -5724,7 +5628,7 @@ function __evolved_multi_spawn_to(out_entity_list, out_entity_first,
     end
 
     if __defer_depth > 0 then
-        __defer_multi_spawn_entity(nil,
+        __defer_fns.multi_spawn_entity(nil,
             out_entity_list, out_entity_first, entity_count,
             component_table, component_mapper)
     else
@@ -5762,7 +5666,7 @@ function __evolved_clone(prefab, component_table, component_mapper)
     local entity = __acquire_id()
 
     if __defer_depth > 0 then
-        __defer_clone_entity(prefab, entity, component_table, component_mapper)
+        __defer_fns.clone_entity(prefab, entity, component_table, component_mapper)
     else
         __evolved_defer()
         do
@@ -5846,7 +5750,7 @@ function __evolved_multi_clone_to(out_entity_list, out_entity_first,
     end
 
     if __defer_depth > 0 then
-        __defer_multi_clone_entity(prefab,
+        __defer_fns.multi_clone_entity(prefab,
             out_entity_list, out_entity_first, entity_count,
             component_table, component_mapper)
     else
@@ -6178,23 +6082,7 @@ function __evolved_set(entity, fragment, component)
         end
 
         if old_chunk and old_chunk.__monitor_count > 0 then
-            local old_monitor_list = old_chunk.__monitor_list
-            local old_monitor_count = old_chunk.__monitor_count
-
-            local new_monitor_set = new_chunk.__monitor_set
-
-            for old_monitor_index = 1, old_monitor_count do
-                local monitor = old_monitor_list[old_monitor_index]
-
-                if not new_monitor_set[monitor] then
-                    ---@type evolved.leave?
-                    local monitor_leave = __evolved_get(monitor, __LEAVE)
-
-                    if monitor_leave and not __evolved_has(monitor, __DISABLED) then
-                        monitor_leave(entity, monitor)
-                    end
-                end
-            end
+            __event_fns.emit_one(__LEAVE, old_chunk, new_chunk.__monitor_set, entity)
         end
 
         local new_component_indices = new_chunk.__component_indices
@@ -6363,24 +6251,7 @@ function __evolved_set(entity, fragment, component)
         end
 
         if new_chunk.__monitor_count > 0 then
-            local new_monitor_list = new_chunk.__monitor_list
-            local new_monitor_count = new_chunk.__monitor_count
-
-            local old_monitor_set = old_chunk and old_chunk.__monitor_set
-                or __safe_tbls.__EMPTY_ENTITY_SET
-
-            for new_monitor_index = 1, new_monitor_count do
-                local monitor = new_monitor_list[new_monitor_index]
-
-                if not old_monitor_set[monitor] then
-                    ---@type evolved.enter?
-                    local monitor_enter = __evolved_get(monitor, __ENTER)
-
-                    if monitor_enter and not __evolved_has(monitor, __DISABLED) then
-                        monitor_enter(entity, monitor)
-                    end
-                end
-            end
+            __event_fns.emit_one(__ENTER, new_chunk, old_chunk and old_chunk.__monitor_set, entity)
         end
     end
 
@@ -6423,24 +6294,7 @@ function __evolved_remove(entity, ...)
         local old_component_storages = old_chunk.__component_storages
 
         if old_chunk.__monitor_count > 0 then
-            local old_monitor_list = old_chunk.__monitor_list
-            local old_monitor_count = old_chunk.__monitor_count
-
-            local new_monitor_set = new_chunk and new_chunk.__monitor_set
-                or __safe_tbls.__EMPTY_ENTITY_SET
-
-            for old_monitor_index = 1, old_monitor_count do
-                local monitor = old_monitor_list[old_monitor_index]
-
-                if not new_monitor_set[monitor] then
-                    ---@type evolved.leave?
-                    local monitor_leave = __evolved_get(monitor, __LEAVE)
-
-                    if monitor_leave and not __evolved_has(monitor, __DISABLED) then
-                        monitor_leave(entity, monitor)
-                    end
-                end
-            end
+            __event_fns.emit_one(__LEAVE, old_chunk, new_chunk and new_chunk.__monitor_set, entity)
         end
 
         local old_remove_fragment_list = old_chunk.__remove_fragment_list
@@ -6524,23 +6378,7 @@ function __evolved_remove(entity, ...)
         end
 
         if new_chunk and new_chunk.__monitor_count > 0 then
-            local new_monitor_list = new_chunk.__monitor_list
-            local new_monitor_count = new_chunk.__monitor_count
-
-            local old_monitor_set = old_chunk.__monitor_set
-
-            for new_monitor_index = 1, new_monitor_count do
-                local monitor = new_monitor_list[new_monitor_index]
-
-                if not old_monitor_set[monitor] then
-                    ---@type evolved.enter?
-                    local monitor_enter = __evolved_get(monitor, __ENTER)
-
-                    if monitor_enter and not __evolved_has(monitor, __DISABLED) then
-                        monitor_enter(entity, monitor)
-                    end
-                end
-            end
+            __event_fns.emit_one(__ENTER, new_chunk, old_chunk.__monitor_set, entity)
         end
     end
 
@@ -7245,6 +7083,42 @@ function __evolved_reindex(...)
     end
 end
 
+---@param event evolved.event
+---@param entity evolved.entity
+---@param ... any event payload
+function __evolved_emit(event, entity, ...)
+    local entity_primary = entity % 2 ^ 20
+
+    if __freelist_ids[entity_primary] ~= entity then
+        -- nothing to emit to non-alive entities
+        return
+    end
+
+    if __debug_mode then
+        local event_primary = event % 2 ^ 20
+
+        if __freelist_ids[event_primary] ~= event then
+            __debug_fns.error_fmt('the event (%s) is not alive and cannot be emitted',
+                __id_name(event))
+        end
+    end
+
+    if __defer_depth > 0 then
+        __defer_call_hook(__evolved_emit, event, entity, ...)
+        return
+    end
+
+    local chunk = __entity_chunks[entity_primary]
+
+    if not chunk or chunk.__monitor_count == 0 then
+        return
+    end
+
+    __evolved_defer()
+    __event_fns.emit_one(event, chunk, nil, entity, ...)
+    __evolved_commit()
+end
+
 ---@param ... evolved.system systems
 function __evolved_process(...)
     local argument_count = __lua_select('#', ...)
@@ -7654,7 +7528,7 @@ function __builder_mt:spawn(component_mapper)
     end
 
     if __defer_depth > 0 then
-        __defer_spawn_entity(chunk, entity, component_table, component_mapper)
+        __defer_fns.spawn_entity(chunk, entity, component_table, component_mapper)
     else
         __evolved_defer()
         do
@@ -7730,7 +7604,7 @@ function __builder_mt:multi_spawn_to(out_entity_list, out_entity_first,
     end
 
     if __defer_depth > 0 then
-        __defer_multi_spawn_entity(chunk,
+        __defer_fns.multi_spawn_entity(chunk,
             out_entity_list, out_entity_first, entity_count,
             component_table, component_mapper)
     else
@@ -7769,7 +7643,7 @@ function __builder_mt:clone(prefab, component_mapper)
     local entity = __acquire_id()
 
     if __defer_depth > 0 then
-        __defer_clone_entity(prefab, entity, component_table, component_mapper)
+        __defer_fns.clone_entity(prefab, entity, component_table, component_mapper)
     else
         __evolved_defer()
         do
@@ -7848,7 +7722,7 @@ function __builder_mt:multi_clone_to(out_entity_list, out_entity_first,
     end
 
     if __defer_depth > 0 then
-        __defer_multi_clone_entity(prefab,
+        __defer_fns.multi_clone_entity(prefab,
             out_entity_list, out_entity_first, entity_count,
             component_table, component_mapper)
     else
@@ -8214,16 +8088,35 @@ function __builder_mt:execute(execute)
     return self:set(__EXECUTE, execute)
 end
 
----@param enter evolved.enter
+---@param ... evolved.event events
 ---@return evolved.builder builder
-function __builder_mt:enter(enter)
-    return self:set(__ENTER, enter)
+function __builder_mt:observe(...)
+    local argument_count = __lua_select('#', ...)
+
+    if argument_count == 0 then
+        return self
+    end
+
+    local observe_list = self:get(__OBSERVES)
+    local observe_count = observe_list and #observe_list or 0
+
+    if observe_count == 0 then
+        observe_list = __list_fns.new(argument_count)
+    end
+
+    for argument_index = 1, argument_count do
+        ---@type evolved.event
+        local event = __lua_select(argument_index, ...)
+        observe_list[observe_count + argument_index] = event
+    end
+
+    return self:set(__OBSERVES, observe_list)
 end
 
----@param leave evolved.leave
+---@param callback evolved.callback
 ---@return evolved.builder builder
-function __builder_mt:leave(leave)
-    return self:set(__LEAVE, leave)
+function __builder_mt:callback(callback)
+    return self:set(__CALLBACK, callback)
 end
 
 ---@param prologue evolved.prologue
@@ -8336,6 +8229,9 @@ __evolved_set(__VARIANTS, __DUPLICATE, __list_fns.dup)
 __evolved_set(__REQUIRES, __DEFAULT, __list_fns.new())
 __evolved_set(__REQUIRES, __DUPLICATE, __list_fns.dup)
 
+__evolved_set(__OBSERVES, __DEFAULT, __list_fns.new())
+__evolved_set(__OBSERVES, __DUPLICATE, __list_fns.dup)
+
 __evolved_set(__ON_SET, __UNIQUE)
 __evolved_set(__ON_ASSIGN, __UNIQUE)
 __evolved_set(__ON_INSERT, __UNIQUE)
@@ -8392,7 +8288,7 @@ function __hook_fns.insert_query(query)
         end
     end
 
-    if __monitor_set[query] and not __evolved_has(query, __QUERY) then
+    if __monitors.__item_set[query] and not __evolved_has(query, __QUERY) then
         __hook_fns.attach_monitor(query)
     end
 
@@ -8404,7 +8300,7 @@ function __hook_fns.insert_query(query)
         for query_system_index = 1, query_system_count do
             local query_system = query_system_list[query_system_index]
 
-            if __monitor_set[query_system] then
+            if __monitors.__item_set[query_system] then
                 __hook_fns.attach_monitor(query_system)
             end
         end
@@ -8445,7 +8341,7 @@ function __hook_fns.remove_query(query)
         end
     end
 
-    if __monitor_set[query] and not __evolved_has(query, __QUERY) then
+    if __monitors.__item_set[query] and not __evolved_has(query, __QUERY) then
         __hook_fns.detach_monitor(query)
     end
 
@@ -8457,7 +8353,7 @@ function __hook_fns.remove_query(query)
         for query_system_index = 1, query_system_count do
             local query_system = query_system_list[query_system_index]
 
-            if __monitor_set[query_system] then
+            if __monitors.__item_set[query_system] then
                 __hook_fns.detach_monitor(query_system)
             end
         end
@@ -8476,12 +8372,11 @@ function __hook_fns.insert_monitor(monitor)
         return
     end
 
-    if not __evolved_has_any(monitor, __ENTER, __LEAVE) then
+    if not __sorted_observes[monitor] or not __evolved_has(monitor, __CALLBACK) then
         return
     end
 
-    __monitor_count = __assoc_list_fns.insert_ex(
-        __monitor_set, __monitor_list, __monitor_count, monitor)
+    __assoc_list_fns.insert(__monitors, monitor)
 
     __hook_fns.attach_monitor(monitor)
 end
@@ -8493,14 +8388,13 @@ function __hook_fns.remove_monitor(monitor)
         return
     end
 
-    if not __monitor_set[monitor] then
+    if not __monitors.__item_set[monitor] then
         return
     end
 
     __hook_fns.detach_monitor(monitor)
 
-    __monitor_count = __assoc_list_fns.remove_ex(
-        __monitor_set, __monitor_list, __monitor_count, monitor)
+    __assoc_list_fns.remove(__monitors, monitor)
 end
 
 ---@param monitor evolved.system
@@ -8510,7 +8404,7 @@ function __hook_fns.attach_monitor(monitor)
         return
     end
 
-    if not __monitor_set[monitor] then
+    if not __monitors.__item_set[monitor] then
         return
     end
 
@@ -8776,22 +8670,38 @@ __evolved_set(__QUERY, __ON_REMOVE, function(monitor)
     __hook_fns.attach_monitor(monitor)
 end)
 
-__evolved_set(__ENTER, __ON_INSERT, function(monitor)
+__evolved_set(__OBSERVES, __ON_SET, function(monitor, _, observe_list)
+    local observe_count = #observe_list
+
+    if observe_count > 0 then
+        ---@type evolved.assoc_list<evolved.event>
+        local sorted_observes = __assoc_list_fns.new(observe_count)
+
+        __assoc_list_fns.move(observe_list, 1, observe_count, sorted_observes)
+        __assoc_list_fns.sort(sorted_observes)
+
+        __sorted_observes[monitor] = sorted_observes
+    else
+        __sorted_observes[monitor] = nil
+    end
+
     __hook_fns.remove_monitor(monitor)
     __hook_fns.insert_monitor(monitor)
 end)
 
-__evolved_set(__ENTER, __ON_REMOVE, function(monitor)
+__evolved_set(__OBSERVES, __ON_REMOVE, function(monitor)
+    __sorted_observes[monitor] = nil
+
     __hook_fns.remove_monitor(monitor)
     __hook_fns.insert_monitor(monitor)
 end)
 
-__evolved_set(__LEAVE, __ON_INSERT, function(monitor)
+__evolved_set(__CALLBACK, __ON_INSERT, function(monitor)
     __hook_fns.remove_monitor(monitor)
     __hook_fns.insert_monitor(monitor)
 end)
 
-__evolved_set(__LEAVE, __ON_REMOVE, function(monitor)
+__evolved_set(__CALLBACK, __ON_REMOVE, function(monitor)
     __hook_fns.remove_monitor(monitor)
     __hook_fns.insert_monitor(monitor)
 end)
@@ -8833,6 +8743,9 @@ __evolved_set(__GROUP, __NAME, '__GROUP')
 
 __evolved_set(__QUERY, __NAME, '__QUERY')
 __evolved_set(__EXECUTE, __NAME, '__EXECUTE')
+
+__evolved_set(__OBSERVES, __NAME, '__OBSERVES')
+__evolved_set(__CALLBACK, __NAME, '__CALLBACK')
 
 __evolved_set(__ENTER, __NAME, '__ENTER')
 __evolved_set(__LEAVE, __NAME, '__LEAVE')
@@ -8882,6 +8795,9 @@ __evolved_set(__GROUP, __INTERNAL)
 __evolved_set(__QUERY, __INTERNAL)
 __evolved_set(__EXECUTE, __INTERNAL)
 
+__evolved_set(__OBSERVES, __INTERNAL)
+__evolved_set(__CALLBACK, __INTERNAL)
+
 __evolved_set(__ENTER, __INTERNAL)
 __evolved_set(__LEAVE, __INTERNAL)
 
@@ -8929,6 +8845,9 @@ evolved.GROUP = __GROUP
 
 evolved.QUERY = __QUERY
 evolved.EXECUTE = __EXECUTE
+
+evolved.OBSERVES = __OBSERVES
+evolved.CALLBACK = __CALLBACK
 
 evolved.ENTER = __ENTER
 evolved.LEAVE = __LEAVE
@@ -9005,6 +8924,8 @@ evolved.multi_search = __evolved_multi_search
 evolved.multi_search_to = __evolved_multi_search_to
 
 evolved.reindex = __evolved_reindex
+
+evolved.emit = __evolved_emit
 
 evolved.process = __evolved_process
 evolved.process_with = __evolved_process_with
