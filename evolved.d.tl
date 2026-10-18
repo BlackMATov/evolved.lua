@@ -108,6 +108,7 @@
         name: function(self: Builder, name: string): Builder
 
         index: function(self: Builder): Builder
+        link: function(self: Builder): Builder
         unique: function(self: Builder): Builder
         explicit: function(self: Builder): Builder
         internal: function(self: Builder): Builder
@@ -139,6 +140,7 @@
         prologue: function(self: Builder, prologue: function(...: any)): Builder
         epilogue: function(self: Builder, epilogue: function(...: any)): Builder
 
+        link_policy: function(self: Builder, link_policy: Id): Builder
         destruction_policy: function(self: Builder, destruction_policy: Id): Builder
     end
 
@@ -146,6 +148,7 @@
     NAME: Fragment
 
     INDEX: Fragment
+    LINK: Fragment
     UNIQUE: Fragment
     EXPLICIT: Fragment
     INTERNAL: Fragment
@@ -175,6 +178,10 @@
     EXECUTE: Fragment
     PROLOGUE: Fragment
     EPILOGUE: Fragment
+
+    LINK_POLICY: Fragment
+    LINK_POLICY_DESTROY_ENTITY: Id
+    LINK_POLICY_REMOVE_FRAGMENT: Id
 
     DESTRUCTION_POLICY: Fragment
     DESTRUCTION_POLICY_DESTROY_ENTITY: Id
