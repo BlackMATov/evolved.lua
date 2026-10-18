@@ -1269,6 +1269,7 @@ local __TAG = __acquire_id()
 local __NAME = __acquire_id()
 
 local __INDEX = __acquire_id()
+local __LINK = __acquire_id()
 local __UNIQUE = __acquire_id()
 local __EXPLICIT = __acquire_id()
 local __INTERNAL = __acquire_id()
@@ -1299,6 +1300,10 @@ local __EXECUTE = __acquire_id()
 
 local __PROLOGUE = __acquire_id()
 local __EPILOGUE = __acquire_id()
+
+local __LINK_POLICY = __acquire_id()
+local __LINK_POLICY_DESTROY_ENTITY = __acquire_id()
+local __LINK_POLICY_REMOVE_FRAGMENT = __acquire_id()
 
 local __DESTRUCTION_POLICY = __acquire_id()
 local __DESTRUCTION_POLICY_DESTROY_ENTITY = __acquire_id()
@@ -7560,6 +7565,11 @@ function __builder_mt:index()
 end
 
 ---@return evolved.builder builder
+function __builder_mt:link()
+    return self:set(__LINK)
+end
+
+---@return evolved.builder builder
 function __builder_mt:unique()
     return self:set(__UNIQUE)
 end
@@ -7762,6 +7772,12 @@ function __builder_mt:epilogue(epilogue)
     return self:set(__EPILOGUE, epilogue)
 end
 
+---@param link_policy evolved.id
+---@return evolved.builder builder
+function __builder_mt:link_policy(link_policy)
+    return self:set(__LINK_POLICY, link_policy)
+end
+
 ---@param destruction_policy evolved.id
 ---@return evolved.builder builder
 function __builder_mt:destruction_policy(destruction_policy)
@@ -7798,6 +7814,9 @@ __evolved_set(__TAG, __ON_REMOVE, __update_search_index)
 __evolved_set(__INDEX, __ON_INSERT, __update_search_index)
 __evolved_set(__INDEX, __ON_REMOVE, __update_search_index)
 
+__evolved_set(__LINK, __ON_INSERT, __update_search_index)
+__evolved_set(__LINK, __ON_REMOVE, __update_search_index)
+
 __evolved_set(__UNIQUE, __ON_INSERT, __update_major_chunks)
 __evolved_set(__UNIQUE, __ON_REMOVE, __update_major_chunks)
 
@@ -7831,6 +7850,9 @@ __evolved_set(__NAME, __INDEX)
 
 __evolved_set(__INDEX, __TAG)
 __evolved_set(__INDEX, __UNIQUE)
+
+__evolved_set(__LINK, __TAG)
+__evolved_set(__LINK, __UNIQUE)
 
 __evolved_set(__UNIQUE, __TAG)
 
@@ -7866,6 +7888,12 @@ __evolved_set(__ON_INSERT, __UNIQUE)
 __evolved_set(__ON_REMOVE, __UNIQUE)
 
 __evolved_set(__GROUP, __INDEX)
+__evolved_set(__GROUP, __LINK)
+__evolved_set(__GROUP, __LINK_POLICY, __LINK_POLICY_DESTROY_ENTITY)
+
+__evolved_set(__QUERY, __INDEX)
+__evolved_set(__QUERY, __LINK)
+__evolved_set(__QUERY, __LINK_POLICY, __LINK_POLICY_DESTROY_ENTITY)
 
 ---
 ---
@@ -7992,6 +8020,7 @@ __evolved_set(__TAG, __NAME, '__TAG')
 __evolved_set(__NAME, __NAME, '__NAME')
 
 __evolved_set(__INDEX, __NAME, '__INDEX')
+__evolved_set(__LINK, __NAME, '__LINK')
 __evolved_set(__UNIQUE, __NAME, '__UNIQUE')
 __evolved_set(__EXPLICIT, __NAME, '__EXPLICIT')
 __evolved_set(__INTERNAL, __NAME, '__INTERNAL')
@@ -8023,6 +8052,10 @@ __evolved_set(__EXECUTE, __NAME, '__EXECUTE')
 __evolved_set(__PROLOGUE, __NAME, '__PROLOGUE')
 __evolved_set(__EPILOGUE, __NAME, '__EPILOGUE')
 
+__evolved_set(__LINK_POLICY, __NAME, '__LINK_POLICY')
+__evolved_set(__LINK_POLICY_DESTROY_ENTITY, __NAME, '__LINK_POLICY_DESTROY_ENTITY')
+__evolved_set(__LINK_POLICY_REMOVE_FRAGMENT, __NAME, '__LINK_POLICY_REMOVE_FRAGMENT')
+
 __evolved_set(__DESTRUCTION_POLICY, __NAME, '__DESTRUCTION_POLICY')
 __evolved_set(__DESTRUCTION_POLICY_DESTROY_ENTITY, __NAME, '__DESTRUCTION_POLICY_DESTROY_ENTITY')
 __evolved_set(__DESTRUCTION_POLICY_REMOVE_FRAGMENT, __NAME, '__DESTRUCTION_POLICY_REMOVE_FRAGMENT')
@@ -8037,6 +8070,7 @@ __evolved_set(__TAG, __INTERNAL)
 __evolved_set(__NAME, __INTERNAL)
 
 __evolved_set(__INDEX, __INTERNAL)
+__evolved_set(__LINK, __INTERNAL)
 __evolved_set(__UNIQUE, __INTERNAL)
 __evolved_set(__EXPLICIT, __INTERNAL)
 __evolved_set(__INTERNAL, __INTERNAL)
@@ -8068,6 +8102,10 @@ __evolved_set(__EXECUTE, __INTERNAL)
 __evolved_set(__PROLOGUE, __INTERNAL)
 __evolved_set(__EPILOGUE, __INTERNAL)
 
+__evolved_set(__LINK_POLICY, __INTERNAL)
+__evolved_set(__LINK_POLICY_DESTROY_ENTITY, __INTERNAL)
+__evolved_set(__LINK_POLICY_REMOVE_FRAGMENT, __INTERNAL)
+
 __evolved_set(__DESTRUCTION_POLICY, __INTERNAL)
 __evolved_set(__DESTRUCTION_POLICY_DESTROY_ENTITY, __INTERNAL)
 __evolved_set(__DESTRUCTION_POLICY_REMOVE_FRAGMENT, __INTERNAL)
@@ -8082,6 +8120,7 @@ evolved.TAG = __TAG
 evolved.NAME = __NAME
 
 evolved.INDEX = __INDEX
+evolved.LINK = __LINK
 evolved.UNIQUE = __UNIQUE
 evolved.EXPLICIT = __EXPLICIT
 evolved.INTERNAL = __INTERNAL
@@ -8112,6 +8151,10 @@ evolved.EXECUTE = __EXECUTE
 
 evolved.PROLOGUE = __PROLOGUE
 evolved.EPILOGUE = __EPILOGUE
+
+evolved.LINK_POLICY = __LINK_POLICY
+evolved.LINK_POLICY_DESTROY_ENTITY = __LINK_POLICY_DESTROY_ENTITY
+evolved.LINK_POLICY_REMOVE_FRAGMENT = __LINK_POLICY_REMOVE_FRAGMENT
 
 evolved.DESTRUCTION_POLICY = __DESTRUCTION_POLICY
 evolved.DESTRUCTION_POLICY_DESTROY_ENTITY = __DESTRUCTION_POLICY_DESTROY_ENTITY
