@@ -628,6 +628,7 @@ local __entity_chunks = {} ---@type (evolved.chunk|false)[]
 local __entity_places = {} ---@type integer[]
 
 local __search_indices = {} ---@type table<evolved.fragment, evolved.search_index>
+local __target_fragments = {} ---@type table<evolved.entity, evolved.assoc_list<evolved.fragment>>
 
 local __sorted_includes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
 local __sorted_excludes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
@@ -1114,19 +1115,59 @@ end
 ---@field package __prev_entities table<integer, evolved.entity>
 ---@field package __next_entities table<integer, evolved.entity>
 ---@field package __entity_components table<integer, evolved.component>
+---@field package __target_fragment? evolved.fragment
 
 local __search_index_fns = {}
 
+---@param target_fragment? evolved.fragment
 ---@return evolved.search_index
 ---@nodiscard
-function __search_index_fns.new()
+function __search_index_fns.new(target_fragment)
     ---@type evolved.search_index
     return {
         __head_entities = {},
         __prev_entities = {},
         __next_entities = {},
         __entity_components = {},
+        __target_fragment = target_fragment,
     }
+end
+
+---@param target evolved.entity
+---@param fragment evolved.fragment
+function __search_index_fns.link(target, fragment)
+    if __debug_mode then
+        local target_primary = target % 2 ^ 20
+
+        if __freelist_ids[target_primary] ~= target then
+            __debug_fns.error_fmt('the target (%s) of the fragment (%s) is not alive',
+                tostring(target), tostring(fragment))
+        end
+    end
+
+    local target_fragments = __target_fragments[target]
+
+    if not target_fragments then
+        ---@type evolved.assoc_list<evolved.fragment>
+        target_fragments = __assoc_list_fns.new(1)
+        __target_fragments[target] = target_fragments
+    end
+
+    __assoc_list_fns.insert(target_fragments, fragment)
+end
+
+---@param target evolved.entity
+---@param fragment evolved.fragment
+function __search_index_fns.unlink(target, fragment)
+    local target_fragments = __target_fragments[target]
+
+    if not target_fragments then
+        return
+    end
+
+    if __assoc_list_fns.unordered_remove(target_fragments, fragment) == 0 then
+        __target_fragments[target] = nil
+    end
 end
 
 ---@param index evolved.search_index
@@ -1163,6 +1204,12 @@ function __search_index_fns.insert(index, entity, component)
 
         prev_entities[entity_primary] = entity
         next_entities[entity_primary] = entity
+
+        local target_fragment = index.__target_fragment
+
+        if target_fragment then
+            __search_index_fns.link(component, target_fragment)
+        end
     end
 
     index.__entity_components[entity_primary] = component
@@ -1189,6 +1236,12 @@ function __search_index_fns.remove(index, entity)
 
     if next_entity == entity then
         head_entities[component] = nil
+
+        local target_fragment = index.__target_fragment
+
+        if target_fragment then
+            __search_index_fns.unlink(component, target_fragment)
+        end
     else
         local prev_entity_primary = prev_entity % 2 ^ 20
         local next_entity_primary = next_entity % 2 ^ 20
@@ -1452,6 +1505,7 @@ local __destroy_entity_list
 local __destroy_fragment_one
 local __destroy_fragment_list
 local __destroy_fragment_stack
+local __remove_entity_fragments
 
 local __chunk_assign
 local __chunk_insert
@@ -2238,8 +2292,9 @@ function __update_search_index(fragment)
     __search_indices[fragment] = nil
     __update_major_chunks(fragment)
 
-    if __evolved_has(fragment, __INDEX) then
-        local fragment_search_index = __search_index_fns.new()
+    if __evolved_has_any(fragment, __INDEX, __LINK) then
+        local target_fragment = __evolved_has(fragment, __LINK) and fragment or nil
+        local fragment_search_index = __search_index_fns.new(target_fragment)
         __search_indices[fragment] = fragment_search_index
         __trace_minor_chunks(fragment, __update_search_index_trace, fragment, fragment_search_index)
         __trace_major_chunks(fragment, __update_chunk_caches)
@@ -3813,6 +3868,10 @@ function __destroy_fragment_stack(processing_fragment_stack, processing_fragment
     local remove_fragment_policy_fragment_list ---@type evolved.fragment[]?
     local remove_fragment_policy_fragment_count = 0 ---@type integer
 
+    local remove_fragment_link_fragment_list ---@type evolved.fragment[]?
+    local remove_fragment_link_target_list ---@type evolved.entity[]?
+    local remove_fragment_link_count = 0 ---@type integer
+
     while processing_fragment_stack_size > 0 do
         local processing_fragment = processing_fragment_stack[processing_fragment_stack_size]
 
@@ -3829,61 +3888,139 @@ function __destroy_fragment_stack(processing_fragment_stack, processing_fragment
                 releasing_fragment_list[releasing_fragment_count] = processing_fragment
             end
 
-            local processing_fragment_destruction_policy = __evolved_get(processing_fragment, __DESTRUCTION_POLICY)
-                or __DESTRUCTION_POLICY_REMOVE_FRAGMENT
+            if __minor_chunks[processing_fragment] then
+                local processing_fragment_destruction_policy = __evolved_get(processing_fragment, __DESTRUCTION_POLICY)
+                    or __DESTRUCTION_POLICY_REMOVE_FRAGMENT
 
-            if processing_fragment_destruction_policy == __DESTRUCTION_POLICY_DESTROY_ENTITY then
-                if not destroy_entity_policy_fragment_list then
-                    ---@type evolved.fragment[]
-                    destroy_entity_policy_fragment_list = __acquire_table(__table_pool_tag.fragment_list)
+                if processing_fragment_destruction_policy == __DESTRUCTION_POLICY_DESTROY_ENTITY then
+                    if not destroy_entity_policy_fragment_list then
+                        ---@type evolved.fragment[]
+                        destroy_entity_policy_fragment_list = __acquire_table(__table_pool_tag.fragment_list)
+                    end
+
+                    destroy_entity_policy_fragment_count = destroy_entity_policy_fragment_count + 1
+                    destroy_entity_policy_fragment_list[destroy_entity_policy_fragment_count] = processing_fragment
+
+                    __trace_minor_chunks(processing_fragment, function(chunk)
+                        local chunk_entity_list = chunk.__entity_list
+                        local chunk_entity_count = chunk.__entity_count
+
+                        __lua_table_move(
+                            chunk_entity_list, 1, chunk_entity_count,
+                            processing_fragment_stack_size + 1, processing_fragment_stack)
+
+                        processing_fragment_stack_size = processing_fragment_stack_size + chunk_entity_count
+                    end)
+                elseif processing_fragment_destruction_policy == __DESTRUCTION_POLICY_REMOVE_FRAGMENT then
+                    if not remove_fragment_policy_fragment_list then
+                        ---@type evolved.fragment[]
+                        remove_fragment_policy_fragment_list = __acquire_table(__table_pool_tag.fragment_list)
+                    end
+
+                    remove_fragment_policy_fragment_count = remove_fragment_policy_fragment_count + 1
+                    remove_fragment_policy_fragment_list[remove_fragment_policy_fragment_count] = processing_fragment
+                else
+                    __debug_fns.error_fmt('unknown DESTRUCTION_POLICY (%s) on (%s)',
+                        __id_name(processing_fragment_destruction_policy), __id_name(processing_fragment))
                 end
+            end
 
-                destroy_entity_policy_fragment_count = destroy_entity_policy_fragment_count + 1
-                destroy_entity_policy_fragment_list[destroy_entity_policy_fragment_count] = processing_fragment
+            local target_fragments = __target_fragments[processing_fragment]
 
-                __trace_minor_chunks(processing_fragment, function(chunk)
-                    local chunk_entity_list = chunk.__entity_list
-                    local chunk_entity_count = chunk.__entity_count
+            if target_fragments then
+                __target_fragments[processing_fragment] = nil
 
-                    __lua_table_move(
-                        chunk_entity_list, 1, chunk_entity_count,
-                        processing_fragment_stack_size + 1, processing_fragment_stack)
+                local target_fragment_list = target_fragments.__item_list
+                local target_fragment_count = target_fragments.__item_count
 
-                    processing_fragment_stack_size = processing_fragment_stack_size + chunk_entity_count
-                end)
-            elseif processing_fragment_destruction_policy == __DESTRUCTION_POLICY_REMOVE_FRAGMENT then
-                if not remove_fragment_policy_fragment_list then
-                    ---@type evolved.fragment[]
-                    remove_fragment_policy_fragment_list = __acquire_table(__table_pool_tag.fragment_list)
+                for target_fragment_index = 1, target_fragment_count do
+                    local target_fragment = target_fragment_list[target_fragment_index]
+                    local target_fragment_search_index = __search_indices[target_fragment]
+
+                    if target_fragment_search_index
+                        and target_fragment_search_index.__target_fragment == target_fragment
+                        and target_fragment_search_index.__head_entities[processing_fragment]
+                    then
+                        local target_fragment_link_policy = __evolved_get(target_fragment, __LINK_POLICY)
+                            or __LINK_POLICY_REMOVE_FRAGMENT
+
+                        if target_fragment_link_policy == __LINK_POLICY_DESTROY_ENTITY then
+                            processing_fragment_stack_size = processing_fragment_stack_size + __evolved_multi_search_to(
+                                processing_fragment_stack, processing_fragment_stack_size + 1,
+                                target_fragment, processing_fragment)
+                        elseif target_fragment_link_policy == __LINK_POLICY_REMOVE_FRAGMENT then
+                            if not remove_fragment_link_target_list then
+                                ---@type evolved.entity[]
+                                remove_fragment_link_target_list = __acquire_table(__table_pool_tag.entity_list)
+                            end
+
+                            if not remove_fragment_link_fragment_list then
+                                ---@type evolved.fragment[]
+                                remove_fragment_link_fragment_list = __acquire_table(__table_pool_tag.fragment_list)
+                            end
+
+                            remove_fragment_link_count = remove_fragment_link_count + 1
+                            remove_fragment_link_target_list[remove_fragment_link_count] = processing_fragment
+                            remove_fragment_link_fragment_list[remove_fragment_link_count] = target_fragment
+                        else
+                            __debug_fns.error_fmt('unknown LINK_POLICY (%s) on (%s)',
+                                __id_name(target_fragment_link_policy), __id_name(target_fragment))
+                        end
+                    end
                 end
-
-                remove_fragment_policy_fragment_count = remove_fragment_policy_fragment_count + 1
-                remove_fragment_policy_fragment_list[remove_fragment_policy_fragment_count] = processing_fragment
-            else
-                __debug_fns.error_fmt('unknown DESTRUCTION_POLICY (%s) on (%s)',
-                    __id_name(processing_fragment_destruction_policy), __id_name(processing_fragment))
             end
         end
     end
 
-    if destroy_entity_policy_fragment_list then
+    if destroy_entity_policy_fragment_count > 0 then
+        ---@cast destroy_entity_policy_fragment_list -?
+
         for i = 1, destroy_entity_policy_fragment_count do
             local minor = destroy_entity_policy_fragment_list[i]
             __trace_minor_chunks(minor, __chunk_clear)
         end
 
-        __release_table(__table_pool_tag.fragment_list, destroy_entity_policy_fragment_list,
-            destroy_entity_policy_fragment_count == 0, true)
+        __release_table(__table_pool_tag.fragment_list, destroy_entity_policy_fragment_list, false, true)
     end
 
-    if remove_fragment_policy_fragment_list then
+    if remove_fragment_policy_fragment_count > 0 then
+        ---@cast remove_fragment_policy_fragment_list -?
+
         for i = 1, remove_fragment_policy_fragment_count do
             local minor = remove_fragment_policy_fragment_list[i]
             __trace_minor_chunks(minor, __chunk_remove, minor)
         end
 
-        __release_table(__table_pool_tag.fragment_list, remove_fragment_policy_fragment_list,
-            remove_fragment_policy_fragment_count == 0, true)
+        __release_table(__table_pool_tag.fragment_list, remove_fragment_policy_fragment_list, false, true)
+    end
+
+    if remove_fragment_link_count > 0 then
+        ---@cast remove_fragment_link_fragment_list -?
+        ---@cast remove_fragment_link_target_list -?
+
+        ---@type evolved.entity[]
+        local referrer_list = __acquire_table(__table_pool_tag.entity_list)
+
+        for i = 1, remove_fragment_link_count do
+            local link_fragment = remove_fragment_link_fragment_list[i]
+            local link_target = remove_fragment_link_target_list[i]
+
+            local referrer_count = __search_indices[link_fragment]
+                and __evolved_multi_search_to(referrer_list, 1, link_fragment, link_target)
+                or 0
+
+            for referrer_index = 1, referrer_count do
+                local referrer = referrer_list[referrer_index]
+
+                if not processed_fragment_set[referrer] then
+                    __remove_entity_fragments(referrer, link_fragment)
+                end
+            end
+        end
+
+        __release_table(__table_pool_tag.entity_list, referrer_list, false, true)
+        __release_table(__table_pool_tag.fragment_list, remove_fragment_link_fragment_list, false, true)
+        __release_table(__table_pool_tag.entity_list, remove_fragment_link_target_list, false, true)
     end
 
     if releasing_fragment_count > 0 then
@@ -3895,6 +4032,114 @@ function __destroy_fragment_stack(processing_fragment_stack, processing_fragment
 
     __release_table(__table_pool_tag.fragment_set, processed_fragment_set,
         true, false)
+end
+
+---@param entity evolved.entity
+---@param ... evolved.fragment fragments
+function __remove_entity_fragments(entity, ...)
+    if __defer_depth <= 0 then
+        __debug_fns.error_fmt('this operation should be deferred')
+    end
+
+    local entity_primary = entity % 2 ^ 20
+
+    if __freelist_ids[entity_primary] ~= entity then
+        -- nothing to remove from non-alive entities
+        return
+    end
+
+    local entity_chunks = __entity_chunks
+    local entity_places = __entity_places
+
+    local old_chunk = entity_chunks[entity_primary]
+    local old_place = entity_places[entity_primary]
+
+    local new_chunk = __chunk_without_fragments(old_chunk or nil, ...)
+
+    if old_chunk and old_chunk ~= new_chunk then
+        local old_component_indices = old_chunk.__component_indices
+        local old_component_storages = old_chunk.__component_storages
+
+        local old_remove_fragment_list = old_chunk.__remove_fragment_list
+
+        if old_remove_fragment_list then
+            local new_fragment_set = new_chunk and new_chunk.__fragment_set
+                or __safe_tbls.__EMPTY_FRAGMENT_SET
+
+            for old_remove_fragment_index = 1, old_chunk.__remove_fragment_count do
+                local fragment = old_remove_fragment_list[old_remove_fragment_index]
+
+                if not new_fragment_set[fragment] then
+                    ---@type evolved.remove_hook?
+                    local fragment_on_remove = __evolved_get(fragment, __ON_REMOVE)
+
+                    if fragment_on_remove then
+                        local old_component_index = old_component_indices[fragment]
+
+                        if old_component_index then
+                            local old_component_storage = old_component_storages[old_component_index]
+                            local old_component = old_component_storage[old_place]
+                            fragment_on_remove(entity, fragment, old_component)
+                        else
+                            fragment_on_remove(entity, fragment)
+                        end
+                    end
+                end
+            end
+        end
+
+        local old_index_fragment_list = old_chunk.__index_fragment_list
+
+        if old_index_fragment_list then
+            local new_fragment_set = new_chunk and new_chunk.__fragment_set
+                or __safe_tbls.__EMPTY_FRAGMENT_SET
+
+            for old_index_fragment_index = 1, old_chunk.__index_fragment_count do
+                local fragment = old_index_fragment_list[old_index_fragment_index]
+
+                if not new_fragment_set[fragment] then
+                    local fragment_search_index = __search_indices[fragment]
+                    __search_index_fns.remove(fragment_search_index, entity)
+                end
+            end
+        end
+
+        if new_chunk then
+            local new_component_count = new_chunk.__component_count
+            local new_component_storages = new_chunk.__component_storages
+            local new_component_fragments = new_chunk.__component_fragments
+
+            local new_place = new_chunk.__entity_count + 1
+
+            if new_place > new_chunk.__entity_capacity then
+                __expand_chunk(new_chunk, new_place)
+            end
+
+            local new_entity_list = new_chunk.__entity_list
+
+            new_entity_list[new_place] = entity
+            new_chunk.__entity_count = new_place
+
+            for new_ci = 1, new_component_count do
+                local new_f = new_component_fragments[new_ci]
+                local new_cs = new_component_storages[new_ci]
+
+                local old_ci = old_component_indices[new_f]
+                local old_cs = old_component_storages[old_ci]
+
+                new_cs[new_place] = old_cs[old_place]
+            end
+        end
+
+        do
+            __detach_entity(old_chunk, old_place)
+
+            entity_chunks[entity_primary] = new_chunk or false
+            entity_places[entity_primary] = new_chunk and new_chunk.__entity_count or 0
+
+            __structural_changes = __structural_changes + 1
+        end
+    end
 end
 
 ---@param chunk evolved.chunk
@@ -5889,99 +6134,10 @@ function __evolved_remove(entity, ...)
         return
     end
 
-    local entity_chunks = __entity_chunks
-    local entity_places = __entity_places
-
-    local old_chunk = entity_chunks[entity_primary]
-    local old_place = entity_places[entity_primary]
-
-    local new_chunk = __chunk_without_fragments(old_chunk or nil, ...)
-
     __evolved_defer()
 
-    if old_chunk and old_chunk ~= new_chunk then
-        local old_component_indices = old_chunk.__component_indices
-        local old_component_storages = old_chunk.__component_storages
-
-        local old_remove_fragment_list = old_chunk.__remove_fragment_list
-
-        if old_remove_fragment_list then
-            local new_fragment_set = new_chunk and new_chunk.__fragment_set
-                or __safe_tbls.__EMPTY_FRAGMENT_SET
-
-            for old_remove_fragment_index = 1, old_chunk.__remove_fragment_count do
-                local fragment = old_remove_fragment_list[old_remove_fragment_index]
-
-                if not new_fragment_set[fragment] then
-                    ---@type evolved.remove_hook?
-                    local fragment_on_remove = __evolved_get(fragment, __ON_REMOVE)
-
-                    if fragment_on_remove then
-                        local old_component_index = old_component_indices[fragment]
-
-                        if old_component_index then
-                            local old_component_storage = old_component_storages[old_component_index]
-                            local old_component = old_component_storage[old_place]
-                            fragment_on_remove(entity, fragment, old_component)
-                        else
-                            fragment_on_remove(entity, fragment)
-                        end
-                    end
-                end
-            end
-        end
-
-        local old_index_fragment_list = old_chunk.__index_fragment_list
-
-        if old_index_fragment_list then
-            local new_fragment_set = new_chunk and new_chunk.__fragment_set
-                or __safe_tbls.__EMPTY_FRAGMENT_SET
-
-            for old_index_fragment_index = 1, old_chunk.__index_fragment_count do
-                local fragment = old_index_fragment_list[old_index_fragment_index]
-
-                if not new_fragment_set[fragment] then
-                    local fragment_search_index = __search_indices[fragment]
-                    __search_index_fns.remove(fragment_search_index, entity)
-                end
-            end
-        end
-
-        if new_chunk then
-            local new_component_count = new_chunk.__component_count
-            local new_component_storages = new_chunk.__component_storages
-            local new_component_fragments = new_chunk.__component_fragments
-
-            local new_place = new_chunk.__entity_count + 1
-
-            if new_place > new_chunk.__entity_capacity then
-                __expand_chunk(new_chunk, new_place)
-            end
-
-            local new_entity_list = new_chunk.__entity_list
-
-            new_entity_list[new_place] = entity
-            new_chunk.__entity_count = new_place
-
-            for new_ci = 1, new_component_count do
-                local new_f = new_component_fragments[new_ci]
-                local new_cs = new_component_storages[new_ci]
-
-                local old_ci = old_component_indices[new_f]
-                local old_cs = old_component_storages[old_ci]
-
-                new_cs[new_place] = old_cs[old_place]
-            end
-        end
-
-        do
-            __detach_entity(old_chunk, old_place)
-
-            entity_chunks[entity_primary] = new_chunk or false
-            entity_places[entity_primary] = new_chunk and new_chunk.__entity_count or 0
-
-            __structural_changes = __structural_changes + 1
-        end
+    do
+        __remove_entity_fragments(entity, ...)
     end
 
     __evolved_commit()
@@ -6081,6 +6237,7 @@ function __evolved_destroy(...)
 
     do
         local minor_chunks = __minor_chunks
+        local target_fragments = __target_fragments
 
         local purging_entity_list ---@type evolved.entity[]?
         local purging_entity_count = 0 ---@type integer
@@ -6096,9 +6253,9 @@ function __evolved_destroy(...)
             if __freelist_ids[entity_primary] ~= entity then
                 -- nothing to destroy from non-alive entities
             else
-                local is_fragment = minor_chunks[entity]
+                local is_fragment_or_target = minor_chunks[entity] or target_fragments[entity]
 
-                if not is_fragment then
+                if not is_fragment_or_target then
                     if not purging_entity_list then
                         ---@type evolved.entity[]
                         purging_entity_list = __acquire_table(__table_pool_tag.entity_list)
@@ -6149,9 +6306,9 @@ function __evolved_destroy_one(entity)
         if __freelist_ids[entity_primary] ~= entity then
             -- nothing to destroy from non-alive entities
         else
-            local is_fragment = __minor_chunks[entity]
+            local is_fragment_or_target = __minor_chunks[entity] or __target_fragments[entity]
 
-            if not is_fragment then
+            if not is_fragment_or_target then
                 __destroy_entity_one(entity)
             else
                 __destroy_fragment_one(entity)
@@ -6361,6 +6518,7 @@ function __evolved_batch_destroy(...)
 
     do
         local minor_chunks = __minor_chunks
+        local target_fragments = __target_fragments
 
         local clearing_chunk_list ---@type evolved.chunk[]?
         local clearing_chunk_count = 0 ---@type integer
@@ -6394,9 +6552,9 @@ function __evolved_batch_destroy(...)
                     for i = 1, entity_count do
                         local entity = entity_list[i]
 
-                        local is_fragment = minor_chunks[entity]
+                        local is_fragment_or_target = minor_chunks[entity] or target_fragments[entity]
 
-                        if not is_fragment then
+                        if not is_fragment_or_target then
                             if not purging_entity_list then
                                 ---@type evolved.entity[]
                                 purging_entity_list = __acquire_table(__table_pool_tag.entity_list)
