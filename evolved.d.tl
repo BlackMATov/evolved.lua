@@ -115,6 +115,7 @@
 
         default: function<Component>(self: Builder, default: Component): Builder
         duplicate: function<Component>(self: Builder, duplicate: function(Component): Component): Builder
+        extract: function<Component, Extract>(self: Builder, extract: function(Component): Extract | nil): Builder
 
         realloc: function<Component>(self: Builder, realloc: function({ Component } | nil, integer, integer): { Component } | nil): Builder
         compmove: function<Component>(self: Builder, compmove: function({ Component }, integer, integer, integer, { Component })): Builder
@@ -155,6 +156,7 @@
 
     DEFAULT: Fragment
     DUPLICATE: Fragment
+    EXTRACT: Fragment
 
     REALLOC: Fragment
     COMPMOVE: Fragment

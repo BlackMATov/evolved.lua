@@ -1215,11 +1215,38 @@ evolved.reindex(team)
 assert(evolved.search(team, 'blue') == unit)
 ```
 
+Sometimes the component itself is not a good key. For example, a component can be a table, and you want to find entities by one of its fields, or names should be found regardless of their case. In such cases, use the [`evolved.EXTRACT`](#evolvedextract) fragment trait. This trait expects a function that takes a component and returns a value to be indexed instead of it. Components themselves are stored as is, only the index uses the extracted values. If the function returns `nil`, the entity is not indexed at all.
+
+```lua
+local evolved = require 'evolved'
+
+local unit_info = evolved.builder()
+    :index()
+    :extract(function(info) return info.team end)
+    :build()
+
+local unit1 = evolved.builder()
+    :set(unit_info, { team = 'red', health = 100 })
+    :build()
+
+local unit2 = evolved.builder()
+    :set(unit_info, { team = 'blue', health = 50 })
+    :build()
+
+assert(evolved.search(unit_info, 'red') == unit1)
+assert(evolved.search(unit_info, 'blue') == unit2)
+```
+
+The function is called every time a component of the fragment is inserted or assigned, including reindexing, and the index remembers the extracted values. Removals and destructions use these remembered values, so the function is not called for them. The trait can be added, changed, or removed at any time, and the index is rebuilt each time.
+
+> [!NOTE]
+> The extracted value must depend only on the component itself. The index is not updated when other fragments of the entity change, so a function that reads them will leave the index outdated. For the same reason, the function should not call any library functions. Tables changed in place bypass the index too, so set them again or use the [`evolved.reindex`](#evolvedreindex) function after such changes.
+
 > [!NOTE]
 > Searching by a fragment without the [`evolved.INDEX`](#evolvedindex) or [`evolved.LINK`](#evolvedlink) trait is an error.
 
 > [!NOTE]
-> Components are used as keys in the index, so table components are indexed by reference, and searching by another table with the same content will not find anything. Also, [Fragment Tags](#fragment-tags) and `NaN` components are not indexed at all.
+> Components, or values extracted from them, are used as keys in the index, so table keys are indexed by reference, and searching by another table with the same content will not find anything. Also, [Fragment Tags](#fragment-tags) are not indexed at all, and neither are `nil` and `NaN` keys.
 
 > [!NOTE]
 > The index is not free. Every indexed entity takes some additional memory, and all operations that change indexed components, such as spawning, cloning, setting, removing, or destroying, become slower because they have to update the index too. So mark only the fragments you are actually going to search by.
@@ -1471,6 +1498,32 @@ evolved.destroy(pillar1)
 
 -- the rope is still alive, but it is no longer attached to anything
 assert(evolved.alive(rope) and not evolved.has(rope, attached_to))
+```
+
+The [`evolved.EXTRACT`](#evolvedextract) fragment trait works with linked fragments too, so components can store links among other data. In this case, the function should return an entity or a list of entities to link to, or `nil` if the component does not link to anything. Link policies are still applied to whole components, so with the default policy, the whole component is removed, not only the link inside it.
+
+```lua
+local evolved = require 'evolved'
+
+local equipment = evolved.builder()
+    :link()
+    :extract(function(item) return item.owner end)
+    :build()
+
+local player = evolved.builder()
+    :build()
+
+local sword = evolved.builder()
+    :set(equipment, { owner = player, slot = 'hand' })
+    :build()
+
+assert(evolved.search(equipment, player) == sword)
+
+-- destroy the player that the sword links to
+evolved.destroy(player)
+
+-- the whole equipment component is removed, not only the owner field
+assert(evolved.alive(sword) and not evolved.has(sword, equipment))
 ```
 
 The [`evolved.INCLUDES`](#evolvedincludes), [`evolved.EXCLUDES`](#evolvedexcludes), [`evolved.VARIANTS`](#evolvedvariants), and [`evolved.REQUIRES`](#evolvedrequires) fragments are linked this way with the [`evolved.LINK_POLICY_DESTROY_ENTITY`](#evolvedlink_policy_destroy_entity) policy. So you can also find all queries that use some fragment, or all fragments that require it.
@@ -1741,6 +1794,7 @@ component_mapper :: {chunk, integer, integer}
 
 default :: component
 duplicate :: {component -> component}
+extract :: {component -> component?}
 
 realloc :: {storage?, integer, integer -> storage?}
 compmove :: {storage, integer, integer, integer, storage}
@@ -1775,6 +1829,7 @@ INTERNAL :: fragment
 
 DEFAULT :: fragment
 DUPLICATE :: fragment
+EXTRACT :: fragment
 
 REALLOC :: fragment
 COMPMOVE :: fragment
@@ -1940,6 +1995,7 @@ builder_mt:internal :: builder
 
 builder_mt:default :: component -> builder
 builder_mt:duplicate :: {component -> component} -> builder
+builder_mt:extract :: {component -> component?} -> builder
 
 builder_mt:realloc :: {storage?, integer, integer -> storage?} -> builder
 builder_mt:compmove :: {storage, integer, integer, integer, storage} -> builder
@@ -1977,6 +2033,7 @@ builder_mt:destruction_policy :: id -> builder
 - The [`evolved.GROUP`](#evolvedgroup) and [`evolved.QUERY`](#evolvedquery) fragments are now linked, so destroying a group or a query also destroys the systems that use them
 - Components of [linked fragments](#linked-fragments) can be lists of entities, which link to every entity in them
 - The [`evolved.INCLUDES`](#evolvedincludes), [`evolved.EXCLUDES`](#evolvedexcludes), [`evolved.VARIANTS`](#evolvedvariants), and [`evolved.REQUIRES`](#evolvedrequires) fragments are now linked, so destroying a fragment also destroys the queries and fragments that use it
+- Added the new [`evolved.EXTRACT`](#evolvedextract) fragment trait that allows indexing and linking by values extracted from components
 
 ### v1.12.0
 
@@ -2082,6 +2139,8 @@ builder_mt:destruction_policy :: id -> builder
 ### `evolved.DEFAULT`
 
 ### `evolved.DUPLICATE`
+
+### `evolved.EXTRACT`
 
 ### `evolved.REALLOC`
 
@@ -2918,6 +2977,14 @@ function evolved.builder_mt:default(default) end
 ---@param duplicate evolved.duplicate
 ---@return evolved.builder builder
 function evolved.builder_mt:duplicate(duplicate) end
+```
+
+#### `evolved.builder_mt:extract`
+
+```lua
+---@param extract evolved.extract
+---@return evolved.builder builder
+function evolved.builder_mt:extract(extract) end
 ```
 
 #### `evolved.builder_mt:realloc`
