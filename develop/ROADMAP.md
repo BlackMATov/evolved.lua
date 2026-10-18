@@ -2,6 +2,8 @@
 
 ## Backlog
 
+- custom indexing function
+- custom linking function
 - observers and events
 - use compact prefix-tree for chunks
 

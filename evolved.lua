@@ -187,6 +187,7 @@ __builder_mt.__index = __builder_mt
 
 local __lua_next = next
 local __lua_select = select
+local __lua_type = type
 
 ---@type fun(nseq?: integer): table
 local __lua_table_new = (function()
@@ -843,6 +844,27 @@ function __list_fns.dup(list, size)
 end
 
 ---@generic V
+---@param list_a V[]
+---@param list_b V[]
+---@return boolean
+---@nodiscard
+function __list_fns.eq(list_a, list_b)
+    local list_size = #list_a
+
+    if list_size ~= #list_b then
+        return false
+    end
+
+    for list_index = 1, list_size do
+        if list_a[list_index] ~= list_b[list_index] then
+            return false
+        end
+    end
+
+    return true
+end
+
+---@generic V
 ---@param list V[]
 ---@param item V
 ---@param comp? fun(a: V, b: V): boolean
@@ -1347,6 +1369,7 @@ local __safe_tbls = {
 ---@field package __next_entities table<integer, evolved.entity>
 ---@field package __entity_components table<integer, evolved.component>
 ---@field package __target_fragment? evolved.fragment
+---@field package __combined_keys boolean
 
 local __search_index_fns = {}
 
@@ -1361,7 +1384,38 @@ function __search_index_fns.new(fragment)
         __next_entities = {},
         __entity_components = {},
         __target_fragment = __evolved_has(fragment, __LINK) and fragment or nil,
+        __combined_keys = false,
     }
+end
+
+---@param index evolved.search_index
+function __search_index_fns.combine_keys(index)
+    if index.__combined_keys then
+        return
+    end
+
+    local entity_components = index.__entity_components
+
+    local old_prev_entities = index.__prev_entities
+    local old_next_entities = index.__next_entities
+
+    local new_prev_entities = {} ---@type table<integer, evolved.entity>
+    local new_next_entities = {} ---@type table<integer, evolved.entity>
+
+    for entity_primary, prev_entity in __lua_next, old_prev_entities do
+        local component = entity_components[entity_primary]
+
+        local key_offset = (component % 2 ^ 20) * 2 ^ 20
+        local entity_key = key_offset + entity_primary
+
+        new_prev_entities[entity_key] = prev_entity
+        new_next_entities[entity_key] = old_next_entities[entity_primary]
+    end
+
+    index.__prev_entities = new_prev_entities
+    index.__next_entities = new_next_entities
+
+    index.__combined_keys = true
 end
 
 ---@param target evolved.entity
@@ -1403,6 +1457,34 @@ function __search_index_fns.insert(index, entity, component)
 
     local entity_primary = entity % 2 ^ 20
 
+    if index.__target_fragment and __lua_type(component) == 'table' then
+        if not index.__combined_keys then
+            __search_index_fns.combine_keys(index)
+        end
+
+        ---@type evolved.entity[], integer
+        local target_list, target_count = __list_fns.dup(component)
+
+        for target_index = 1, target_count do
+            __search_index_fns.insert_node(index, entity, target_list[target_index])
+        end
+
+        index.__entity_components[entity_primary] = target_list
+    else
+        __search_index_fns.insert_node(index, entity, component)
+        index.__entity_components[entity_primary] = component
+    end
+end
+
+---@param index evolved.search_index
+---@param entity evolved.entity
+---@param component evolved.component
+function __search_index_fns.insert_node(index, entity, component)
+    local target_fragment = index.__target_fragment
+
+    local key_offset = index.__combined_keys and (component % 2 ^ 20) * 2 ^ 20 or 0
+    local entity_key = key_offset + entity % 2 ^ 20
+
     local head_entities = index.__head_entities
     local prev_entities = index.__prev_entities
     local next_entities = index.__next_entities
@@ -1411,37 +1493,34 @@ function __search_index_fns.insert(index, entity, component)
     local head_entity = head_entities[component]
 
     if head_entity then
-        local head_entity_primary = head_entity % 2 ^ 20
-
-        local tail_entity = prev_entities[head_entity_primary]
-        local tail_entity_primary = tail_entity % 2 ^ 20
-
-        prev_entities[entity_primary] = tail_entity
-        next_entities[entity_primary] = head_entity
-
-        prev_entities[head_entity_primary] = entity
-        next_entities[tail_entity_primary] = entity
-    else
-        local target_fragment = index.__target_fragment
-
-        if __debug_mode and target_fragment then
-            if __freelist_ids[component % 2 ^ 20] ~= component then
-                __debug_fns.error_fmt('the target (%s) of the linked fragment (%s) is not alive',
-                    __id_name(component), __id_name(target_fragment))
-            end
+        if prev_entities[entity_key] then
+            -- this target is duplicated in the list and has already been linked
+            return
         end
 
+        local head_entity_key = key_offset + head_entity % 2 ^ 20
+
+        local tail_entity = prev_entities[head_entity_key]
+        local tail_entity_key = key_offset + tail_entity % 2 ^ 20
+
+        prev_entities[entity_key] = tail_entity
+        next_entities[entity_key] = head_entity
+
+        prev_entities[head_entity_key] = entity
+        next_entities[tail_entity_key] = entity
+    elseif not target_fragment or __freelist_ids[component % 2 ^ 20] == component then
         head_entities[component] = entity
 
-        prev_entities[entity_primary] = entity
-        next_entities[entity_primary] = entity
+        prev_entities[entity_key] = entity
+        next_entities[entity_key] = entity
 
         if target_fragment then
             __search_index_fns.link(component, target_fragment)
         end
+    elseif __debug_mode and target_fragment then
+        __debug_fns.error_fmt('the target (%s) of the linked fragment (%s) is not alive',
+            __id_name(component), __id_name(target_fragment))
     end
-
-    index.__entity_components[entity_primary] = component
 end
 
 ---@param index evolved.search_index
@@ -1456,49 +1535,98 @@ function __search_index_fns.remove(index, entity)
         return
     end
 
+    if index.__target_fragment and __lua_type(component) == 'table' then
+        ---@type evolved.entity[], integer
+        local target_list, target_count = component, #component
+
+        for target_index = 1, target_count do
+            __search_index_fns.remove_node(index, entity, target_list[target_index])
+        end
+
+        index.__entity_components[entity_primary] = nil
+    else
+        __search_index_fns.remove_node(index, entity, component)
+        index.__entity_components[entity_primary] = nil
+    end
+end
+
+---@param index evolved.search_index
+---@param entity evolved.entity
+---@param component evolved.component
+function __search_index_fns.remove_node(index, entity, component)
+    local target_fragment = index.__target_fragment
+
+    local key_offset = index.__combined_keys and (component % 2 ^ 20) * 2 ^ 20 or 0
+    local entity_key = key_offset + entity % 2 ^ 20
+
     local head_entities = index.__head_entities
     local prev_entities = index.__prev_entities
     local next_entities = index.__next_entities
 
-    local prev_entity = prev_entities[entity_primary]
-    local next_entity = next_entities[entity_primary]
+    ---@type evolved.entity?
+    local head_entity = head_entities[component]
+
+    if not head_entity then
+        -- this target is dead or has no links anymore
+        return
+    end
+
+    ---@type evolved.entity?
+    local next_entity = next_entities[entity_key]
+
+    if not next_entity then
+        -- this target is duplicated in the list and has already been unlinked
+        return
+    end
 
     if next_entity == entity then
         head_entities[component] = nil
-
-        local target_fragment = index.__target_fragment
 
         if target_fragment then
             __search_index_fns.unlink(component, target_fragment)
         end
     else
-        local prev_entity_primary = prev_entity % 2 ^ 20
-        local next_entity_primary = next_entity % 2 ^ 20
+        local prev_entity = prev_entities[entity_key]
 
-        prev_entities[next_entity_primary] = prev_entity
-        next_entities[prev_entity_primary] = next_entity
+        local prev_entity_key = key_offset + prev_entity % 2 ^ 20
+        local next_entity_key = key_offset + next_entity % 2 ^ 20
 
-        if head_entities[component] == entity then
+        prev_entities[next_entity_key] = prev_entity
+        next_entities[prev_entity_key] = next_entity
+
+        if head_entity == entity then
             head_entities[component] = next_entity
         end
     end
 
-    prev_entities[entity_primary] = nil
-    next_entities[entity_primary] = nil
-
-    index.__entity_components[entity_primary] = nil
+    prev_entities[entity_key] = nil
+    next_entities[entity_key] = nil
 end
 
 ---@param index evolved.search_index
 ---@param entity evolved.entity
 ---@param component evolved.component
 function __search_index_fns.assign(index, entity, component)
+    local target_fragment = index.__target_fragment
     local entity_components = index.__entity_components
+    local entity_component = entity_components[entity % 2 ^ 20]
 
-    if entity_components[entity % 2 ^ 20] ~= component then
-        __search_index_fns.remove(index, entity)
-        __search_index_fns.insert(index, entity, component)
+    if component == entity_component then
+        -- nothing to reassign
+        return
     end
+
+    if target_fragment
+        and __lua_type(component) == 'table'
+        and __lua_type(entity_component) == 'table'
+        and __list_fns.eq(component, entity_component)
+    then
+        -- the list has the same targets, nothing to reassign
+        return
+    end
+
+    __search_index_fns.remove(index, entity)
+    __search_index_fns.insert(index, entity, component)
 end
 
 ---@param index evolved.search_index
@@ -1528,13 +1656,23 @@ end
 ---@param first integer
 ---@param last integer
 function __search_index_fns.multi_assign(index, entity_list, component_list, first, last)
+    local target_fragment = index.__target_fragment
     local entity_components = index.__entity_components
 
     for place = first, last do
         local entity = entity_list[place]
         local component = component_list[place]
+        local entity_component = entity_components[entity % 2 ^ 20]
 
-        if entity_components[entity % 2 ^ 20] ~= component then
+        if component == entity_component then
+            -- nothing to reassign
+        elseif target_fragment
+            and __lua_type(component) == 'table'
+            and __lua_type(entity_component) == 'table'
+            and __list_fns.eq(component, entity_component)
+        then
+            -- the list has the same targets, nothing to reassign
+        else
             __search_index_fns.remove(index, entity)
             __search_index_fns.insert(index, entity, component)
         end
@@ -6914,11 +7052,13 @@ function __evolved_multi_search_to(out_entity_list, out_entity_first, fragment, 
     local head_entity = head_entities[component]
 
     if head_entity then
+        local key_offset = fragment_search_index.__combined_keys and (component % 2 ^ 20) * 2 ^ 20 or 0
+
         local entity = head_entity
 
         repeat
             out_entity_list[out_entity_first + entity_count] = entity
-            entity = next_entities[entity % 2 ^ 20]
+            entity = next_entities[key_offset + entity % 2 ^ 20]
             entity_count = entity_count + 1
         until entity == head_entity
     end
@@ -8043,15 +8183,23 @@ __evolved_set(__DISABLED, __EXPLICIT)
 
 __evolved_set(__INCLUDES, __DEFAULT, __list_fns.new())
 __evolved_set(__INCLUDES, __DUPLICATE, __list_fns.dup)
+__evolved_set(__INCLUDES, __LINK)
+__evolved_set(__INCLUDES, __LINK_POLICY, __LINK_POLICY_DESTROY_ENTITY)
 
 __evolved_set(__EXCLUDES, __DEFAULT, __list_fns.new())
 __evolved_set(__EXCLUDES, __DUPLICATE, __list_fns.dup)
+__evolved_set(__EXCLUDES, __LINK)
+__evolved_set(__EXCLUDES, __LINK_POLICY, __LINK_POLICY_DESTROY_ENTITY)
 
 __evolved_set(__VARIANTS, __DEFAULT, __list_fns.new())
 __evolved_set(__VARIANTS, __DUPLICATE, __list_fns.dup)
+__evolved_set(__VARIANTS, __LINK)
+__evolved_set(__VARIANTS, __LINK_POLICY, __LINK_POLICY_DESTROY_ENTITY)
 
 __evolved_set(__REQUIRES, __DEFAULT, __list_fns.new())
 __evolved_set(__REQUIRES, __DUPLICATE, __list_fns.dup)
+__evolved_set(__REQUIRES, __LINK)
+__evolved_set(__REQUIRES, __LINK_POLICY, __LINK_POLICY_DESTROY_ENTITY)
 
 __evolved_set(__ON_SET, __UNIQUE)
 __evolved_set(__ON_ASSIGN, __UNIQUE)

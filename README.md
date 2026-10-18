@@ -728,6 +728,8 @@ local query = evolved.builder()
 
 We don't have to set all of [`evolved.INCLUDES`](#evolvedincludes), [`evolved.EXCLUDES`](#evolvedexcludes), and [`evolved.VARIANTS`](#evolvedvariants) fragments, we can even do it without filters at all, then the query will match all chunks in the world.
 
+These fragments are [linked](#linked-fragments) to the fragments they list. So when a fragment used by a query is destroyed, the query is destroyed too, and so are all [systems](#systems) that use it.
+
 After the query is created, we are ready to process our filtered by this query entities. You can do this by using the [`evolved.execute`](#evolvedexecute) function. This function takes a query as an argument and returns an iterator that can be used to iterate over all matching with the query chunks.
 
 ```lua
@@ -1358,6 +1360,8 @@ local enemy = evolved.builder()
 assert(evolved.has_all(enemy, position, velocity))
 ```
 
+The [`evolved.REQUIRES`](#evolvedrequires) fragment is [linked](#linked-fragments) to the fragments it lists. So when a required fragment is destroyed, all fragments that require it are destroyed too, and their [destruction policies](#destruction-policies) are applied to the entities that have them.
+
 #### Linked Fragments
 
 Components often refer to other entities. For example, an item can store its owner, or a node can store its parent. When such an entity is destroyed, these components would keep referring to a dead entity. To avoid this, mark the fragment with the [`evolved.LINK`](#evolvedlink) fragment trait. Components of such fragments are treated as links to other entities, and when an entity is destroyed, the library resolves all links to it. By default, the linked fragment is removed from all entities that link to the destroyed entity.
@@ -1439,11 +1443,61 @@ local child_list, child_count = evolved.multi_search(parent, root)
 assert(child_count == 2 and child_list[1] == child1 and child_list[2] == child2)
 ```
 
-> [!NOTE]
-> Links must refer to alive entities. In [debug mode](#debug-mode), linking to an entity that is not alive is an error.
+A component of a linked fragment can also be a list of entities. Unlike regular [indexed fragments](#indexed-fragments), where table components are indexed by reference, such a list links to every entity in it. So you can find the entity that holds the list by any entity from this list, and the link policy is applied as soon as any of these entities is destroyed. With the default policy, the whole list is removed, and with the [`evolved.LINK_POLICY_DESTROY_ENTITY`](#evolvedlink_policy_destroy_entity) policy, the entity that holds the list is destroyed.
+
+```lua
+local evolved = require 'evolved'
+
+local attached_to = evolved.builder()
+    :link()
+    :build()
+
+local pillar1 = evolved.builder()
+    :build()
+
+local pillar2 = evolved.builder()
+    :build()
+
+local rope = evolved.builder()
+    :set(attached_to, { pillar1, pillar2 })
+    :build()
+
+-- the rope can be found by any of its pillars
+assert(evolved.search(attached_to, pillar1) == rope)
+assert(evolved.search(attached_to, pillar2) == rope)
+
+-- destroy one of the pillars that the rope is attached to
+evolved.destroy(pillar1)
+
+-- the rope is still alive, but it is no longer attached to anything
+assert(evolved.alive(rope) and not evolved.has(rope, attached_to))
+```
+
+The [`evolved.INCLUDES`](#evolvedincludes), [`evolved.EXCLUDES`](#evolvedexcludes), [`evolved.VARIANTS`](#evolvedvariants), and [`evolved.REQUIRES`](#evolvedrequires) fragments are linked this way with the [`evolved.LINK_POLICY_DESTROY_ENTITY`](#evolvedlink_policy_destroy_entity) policy. So you can also find all queries that use some fragment, or all fragments that require it.
+
+```lua
+local evolved = require 'evolved'
+
+local position, velocity = evolved.id(2)
+
+local query = evolved.builder()
+    :include(position, velocity)
+    :build()
+
+assert(evolved.search(evolved.INCLUDES, velocity) == query)
+
+-- destroy one of the fragments that the query includes
+evolved.destroy(velocity)
+
+-- the query is destroyed together with the fragment
+assert(not evolved.alive(query))
+```
 
 > [!NOTE]
-> Components changed directly in chunk storages bypass the index, and so the links too. After such changes, update the index using the [`evolved.reindex`](#evolvedreindex) function, otherwise these links will not be resolved when their entities are destroyed.
+> Links must refer to alive entities. In [debug mode](#debug-mode), linking to an entity that is not alive is an error. Otherwise, such links are not indexed, so they cannot be found by the search functions and are never resolved.
+
+> [!NOTE]
+> Components changed directly in chunk storages bypass the index, and so the links too. The same applies to lists changed in place. After such changes, set the components again or update the index using the [`evolved.reindex`](#evolvedreindex) function, otherwise these links will not be resolved when their entities are destroyed.
 
 #### Destruction Policies
 
@@ -1921,6 +1975,8 @@ builder_mt:destruction_policy :: id -> builder
 
 - Added the new [`evolved.LINK`](#evolvedlink) and [`evolved.LINK_POLICY`](#evolvedlink_policy) fragment traits that resolve links to destroyed entities, see the [Linked Fragments](#linked-fragments) section
 - The [`evolved.GROUP`](#evolvedgroup) and [`evolved.QUERY`](#evolvedquery) fragments are now linked, so destroying a group or a query also destroys the systems that use them
+- Components of [linked fragments](#linked-fragments) can be lists of entities, which link to every entity in them
+- The [`evolved.INCLUDES`](#evolvedincludes), [`evolved.EXCLUDES`](#evolvedexcludes), [`evolved.VARIANTS`](#evolvedvariants), and [`evolved.REQUIRES`](#evolvedrequires) fragments are now linked, so destroying a fragment also destroys the queries and fragments that use it
 
 ### v1.12.0
 

@@ -59,10 +59,35 @@ local function random_entity()
     return all_entity_list[math.random(1, #all_entity_list)]
 end
 
+---@return evolved.entity | evolved.entity[]
+local function random_link_component()
+    if math.random(1, 2) == 1 then
+        return random_entity()
+    end
+
+    local link_target_list = {}
+
+    for i = 1, math.random(0, 3) do
+        link_target_list[i] = random_entity()
+    end
+
+    return link_target_list
+end
+
+---@param link_component evolved.entity | evolved.entity[]
+---@return evolved.entity[]
+local function link_component_targets(link_component)
+    if type(link_component) == 'table' then
+        return link_component
+    end
+
+    return { link_component }
+end
+
 for _, entity in ipairs(all_entity_list) do
     for _, link_fragment in ipairs(all_link_fragment_list) do
         if math.random(1, 2) == 1 then
-            evo.set(entity, link_fragment, random_entity())
+            evo.set(entity, link_fragment, random_link_component())
         end
     end
 end
@@ -71,15 +96,27 @@ for _ = 1, math.random(0, #all_entity_list) do
     local entity = random_entity()
     local link_fragment = all_link_fragment_list[math.random(1, #all_link_fragment_list)]
 
-    local r = math.random(1, 3)
+    local r = math.random(1, 4)
 
     if r == 1 then
-        evo.set(entity, link_fragment, random_entity())
+        evo.set(entity, link_fragment, random_link_component())
     elseif r == 2 then
         evo.remove(entity, link_fragment)
-    else
+    elseif r == 3 then
         evo.remove(link_fragment, evo.LINK)
         evo.set(link_fragment, evo.LINK)
+    else
+        local link_component = evo.get(entity, link_fragment)
+
+        if type(link_component) == 'table' then
+            if math.random(1, 2) == 1 then
+                link_component[#link_component + 1] = random_entity()
+            else
+                link_component[#link_component] = nil
+            end
+
+            evo.reindex(link_fragment)
+        end
     end
 end
 
@@ -119,13 +156,21 @@ repeat
                     or evo.LINK_POLICY_REMOVE_FRAGMENT
 
                 if link_policy == evo.LINK_POLICY_DESTROY_ENTITY then
-                    local link_target = evo.get(entity, link_fragment)
+                    local link_component = evo.get(entity, link_fragment)
 
-                    if link_target and should_be_destroyed_entity_set[link_target] then
-                        should_be_destroyed_entity_set[entity] = true
-                        has_new_destroyed_entities = true
-                        break
+                    if link_component then
+                        for _, link_target in ipairs(link_component_targets(link_component)) do
+                            if should_be_destroyed_entity_set[link_target] then
+                                should_be_destroyed_entity_set[entity] = true
+                                has_new_destroyed_entities = true
+                                break
+                            end
+                        end
                     end
+                end
+
+                if should_be_destroyed_entity_set[entity] then
+                    break
                 end
             end
         end
@@ -185,8 +230,13 @@ end
 for _, entity in ipairs(all_entity_list) do
     if evo.alive(entity) then
         for _, link_fragment in ipairs(all_link_fragment_list) do
-            local link_target = evo.get(entity, link_fragment)
-            assert(link_target == nil or evo.alive(link_target))
+            local link_component = evo.get(entity, link_fragment)
+
+            if link_component then
+                for _, link_target in ipairs(link_component_targets(link_component)) do
+                    assert(evo.alive(link_target))
+                end
+            end
         end
     end
 end
@@ -202,21 +252,48 @@ end
 for _, link_fragment in ipairs(all_link_fragment_list) do
     for _, entity in ipairs(all_entity_list) do
         if evo.alive(entity) then
-            local link_target = evo.get(entity, link_fragment)
+            local link_component = evo.get(entity, link_fragment)
 
-            if link_target then
-                local referrer_list, referrer_count = evo.multi_search(link_fragment, link_target)
+            if link_component then
+                for _, link_target in ipairs(link_component_targets(link_component)) do
+                    local referrer_list, referrer_count = evo.multi_search(link_fragment, link_target)
 
-                local is_referrer_found = false
+                    local referrer_found_count = 0
 
-                for i = 1, referrer_count do
-                    if referrer_list[i] == entity then
-                        is_referrer_found = true
-                        break
+                    for i = 1, referrer_count do
+                        if referrer_list[i] == entity then
+                            referrer_found_count = referrer_found_count + 1
+                        end
+                    end
+
+                    assert(referrer_found_count == 1)
+                end
+            end
+        end
+    end
+end
+
+for _, link_fragment in ipairs(all_link_fragment_list) do
+    for _, link_target in ipairs(all_entity_list) do
+        if evo.alive(link_target) then
+            local referrer_list, referrer_count = evo.multi_search(link_fragment, link_target)
+
+            for i = 1, referrer_count do
+                local referrer = referrer_list[i]
+                local referrer_component = evo.get(referrer, link_fragment)
+
+                local is_target_found = false
+
+                if referrer_component then
+                    for _, referrer_target in ipairs(link_component_targets(referrer_component)) do
+                        if referrer_target == link_target then
+                            is_target_found = true
+                            break
+                        end
                     end
                 end
 
-                assert(is_referrer_found)
+                assert(is_target_found)
             end
         end
     end

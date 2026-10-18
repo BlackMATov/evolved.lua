@@ -8,6 +8,18 @@ do
 
     assert(evo.has_all(evo.QUERY, evo.LINK, evo.INDEX))
     assert(evo.get(evo.QUERY, evo.LINK_POLICY) == evo.LINK_POLICY_DESTROY_ENTITY)
+
+    assert(evo.has(evo.INCLUDES, evo.LINK) and not evo.has(evo.INCLUDES, evo.INDEX))
+    assert(evo.get(evo.INCLUDES, evo.LINK_POLICY) == evo.LINK_POLICY_DESTROY_ENTITY)
+
+    assert(evo.has(evo.EXCLUDES, evo.LINK) and not evo.has(evo.EXCLUDES, evo.INDEX))
+    assert(evo.get(evo.EXCLUDES, evo.LINK_POLICY) == evo.LINK_POLICY_DESTROY_ENTITY)
+
+    assert(evo.has(evo.VARIANTS, evo.LINK) and not evo.has(evo.VARIANTS, evo.INDEX))
+    assert(evo.get(evo.VARIANTS, evo.LINK_POLICY) == evo.LINK_POLICY_DESTROY_ENTITY)
+
+    assert(evo.has(evo.REQUIRES, evo.LINK) and not evo.has(evo.REQUIRES, evo.INDEX))
+    assert(evo.get(evo.REQUIRES, evo.LINK_POLICY) == evo.LINK_POLICY_DESTROY_ENTITY)
 end
 
 do
@@ -622,4 +634,723 @@ do
     evo.batch_destroy(q)
     assert(removed_count == 2)
     assert(not evo.alive_any(t, e1, e2))
+end
+
+do
+    local f = evo.builder():link():build()
+    local g = evo.id()
+
+    local t1, t2, t3 = evo.id(3)
+
+    local e1 = evo.builder():set(f, { t1, t2 }):set(g, 42):build()
+    local e2 = evo.builder():set(f, { t2, t3 }):build()
+    local e3 = evo.builder():set(f, { t3 }):build()
+    local e4 = evo.builder():set(f, t2):build()
+    local e5 = evo.builder():set(f, {}):build()
+
+    evo.destroy(t2)
+    assert(evo.alive_all(e1, e2, e3, e4, e5))
+
+    assert(not evo.has(e1, f) and evo.get(e1, g) == 42)
+    assert(not evo.has(e2, f))
+    assert(not evo.has(e4, f))
+
+    do
+        local l3 = evo.get(e3, f)
+        assert(#l3 == 1 and l3[1] == t3)
+
+        local l5 = evo.get(e5, f)
+        assert(#l5 == 0)
+    end
+
+    assert(evo.search(f, t1) == nil)
+    assert(evo.search(f, t2) == nil)
+    assert(evo.search(f, t3) == e3)
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_DESTROY_ENTITY):build()
+
+    local t1, t2 = evo.id(2)
+
+    local e1 = evo.builder():set(f, { t1, t2 }):build()
+    local e2 = evo.builder():set(f, { t2 }):build()
+    local e3 = evo.builder():set(f, { t2, e1 }):build()
+    local e4 = evo.builder():set(f, e3):build()
+    local e5 = evo.builder():set(f, {}):build()
+
+    evo.destroy(t1)
+    assert(not evo.alive_any(t1, e1, e3, e4))
+    assert(evo.alive_all(t2, e2, e5))
+
+    evo.destroy(t2)
+    assert(not evo.alive_any(t2, e2))
+    assert(evo.alive(e5))
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_DESTROY_ENTITY):build()
+
+    local e1, e2, e3 = evo.id(3)
+    evo.set(e1, f, { e2 })
+    evo.set(e2, f, { e3, e3 })
+    evo.set(e3, f, { e1, e2 })
+
+    evo.destroy(e2)
+    assert(not evo.alive_any(e1, e2, e3))
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t1, t2 = evo.id(2)
+
+    local e1 = evo.builder():set(f, { t1, t2 }):build()
+    local e2 = evo.builder():set(f, { t2 }):build()
+    local e3 = evo.builder():set(f, { t2, t1 }):build()
+
+    assert(evo.search(f, t1) == e1)
+    assert(evo.search(f, t2) == e1)
+
+    do
+        local l, c = evo.multi_search(f, t1)
+        assert(c == 2 and l[1] == e1 and l[2] == e3)
+    end
+
+    do
+        local l, c = evo.multi_search(f, t2)
+        assert(c == 3 and l[1] == e1 and l[2] == e2 and l[3] == e3)
+    end
+
+    evo.remove(e1, f)
+
+    do
+        local l, c = evo.multi_search(f, t1)
+        assert(c == 1 and l[1] == e3)
+    end
+
+    do
+        local l, c = evo.multi_search(f, t2)
+        assert(c == 2 and l[1] == e2 and l[2] == e3)
+    end
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t = evo.id()
+
+    local e1 = evo.builder():set(f, t):build()
+    local e2 = evo.builder():set(f, { t }):build()
+
+    do
+        local l, c = evo.multi_search(f, t)
+        assert(c == 2 and l[1] == e1 and l[2] == e2)
+    end
+
+    evo.remove(e1, f)
+    assert(evo.search(f, t) == e2)
+
+    evo.remove(e2, f)
+    assert(evo.search(f, t) == nil)
+
+    evo.set(e1, f, { t })
+    evo.set(e2, f, t)
+
+    evo.destroy(t)
+    assert(evo.alive_all(e1, e2) and not evo.has_any(e1, f) and not evo.has_any(e2, f))
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t1, t2 = evo.id(2)
+
+    local e1 = evo.builder():set(f, t1):build()
+    local e2 = evo.builder():set(f, t2):build()
+    local e3 = evo.builder():set(f, t1):build()
+
+    local e4 = evo.builder():set(f, { t2, t1 }):build()
+
+    do
+        local l, c = evo.multi_search(f, t1)
+        assert(c == 3 and l[1] == e1 and l[2] == e3 and l[3] == e4)
+    end
+
+    do
+        local l, c = evo.multi_search(f, t2)
+        assert(c == 2 and l[1] == e2 and l[2] == e4)
+    end
+
+    evo.remove(e1, f)
+    evo.set(e2, f, t1)
+
+    do
+        local l, c = evo.multi_search(f, t1)
+        assert(c == 3 and l[1] == e3 and l[2] == e4 and l[3] == e2)
+    end
+
+    do
+        local l, c = evo.multi_search(f, t2)
+        assert(c == 1 and l[1] == e4)
+    end
+
+    evo.destroy(t2)
+    assert(evo.alive_all(e2, e3, e4) and not evo.has(e4, f))
+    assert(evo.get(e2, f) == t1 and evo.get(e3, f) == t1)
+
+    do
+        local l, c = evo.multi_search(f, t1)
+        assert(c == 2 and l[1] == e3 and l[2] == e2)
+    end
+
+    evo.destroy(t1)
+    assert(evo.alive_all(e2, e3) and not evo.has(e2, f) and not evo.has(e3, f))
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t = evo.id()
+    local e = evo.builder():set(f, { t, t, t }):build()
+
+    do
+        local l, c = evo.multi_search(f, t)
+        assert(c == 1 and l[1] == e)
+    end
+
+    evo.remove(e, f)
+    assert(evo.search(f, t) == nil)
+
+    evo.set(e, f, { t, t })
+    assert(evo.search(f, t) == e)
+
+    evo.destroy(t)
+    assert(evo.alive(e) and not evo.has(e, f))
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t = evo.id()
+
+    local e1 = evo.builder():set(f, t):build()
+    local e2 = evo.builder():set(f, { t, t }):build()
+    local e3 = evo.builder():set(f, { t }):build()
+
+    do
+        local l, c = evo.multi_search(f, t)
+        assert(c == 3 and l[1] == e1 and l[2] == e2 and l[3] == e3)
+    end
+
+    evo.remove(e2, f)
+
+    do
+        local l, c = evo.multi_search(f, t)
+        assert(c == 2 and l[1] == e1 and l[2] == e3)
+    end
+
+    evo.set(e2, f, { t, t })
+    evo.set(e2, f, { t })
+
+    do
+        local l, c = evo.multi_search(f, t)
+        assert(c == 3 and l[1] == e1 and l[2] == e3 and l[3] == e2)
+    end
+
+    evo.set(e2, f, { t, t })
+    evo.destroy(e2)
+
+    do
+        local l, c = evo.multi_search(f, t)
+        assert(c == 2 and l[1] == e1 and l[2] == e3)
+    end
+
+    evo.destroy(t)
+    assert(evo.alive_all(e1, e3) and not evo.has(e1, f) and not evo.has(e3, f))
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t1, t2, t3 = evo.id(3)
+    local e = evo.builder():set(f, { t1, t2 }):build()
+
+    evo.set(e, f, { t2, t3 })
+    assert(evo.search(f, t1) == nil)
+    assert(evo.search(f, t2) == e)
+    assert(evo.search(f, t3) == e)
+
+    evo.destroy(t1)
+    assert(evo.has(e, f))
+
+    evo.destroy(t3)
+    assert(evo.alive(e) and not evo.has(e, f))
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t1, t2 = evo.id(2)
+    local e = evo.builder():set(f, t1):build()
+
+    evo.set(e, f, { t2 })
+    assert(evo.search(f, t1) == nil)
+    assert(evo.search(f, t2) == e)
+
+    evo.set(e, f, t1)
+    assert(evo.search(f, t1) == e)
+    assert(evo.search(f, t2) == nil)
+
+    evo.destroy(t2)
+    assert(evo.get(e, f) == t1)
+
+    evo.destroy(t1)
+    assert(evo.alive(e) and not evo.has(e, f))
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t = evo.id()
+
+    local e1 = evo.builder():set(f, { t }):build()
+    local e2 = evo.builder():set(f, t):build()
+    local e3 = evo.builder():set(f, { t, t }):build()
+
+    do
+        local l, c = evo.multi_search(f, t)
+        assert(c == 3 and l[1] == e1 and l[2] == e2 and l[3] == e3)
+    end
+
+    evo.set(e1, f, { t })
+    evo.set(e3, f, { t, t })
+
+    do
+        local l, c = evo.multi_search(f, t)
+        assert(c == 3 and l[1] == e1 and l[2] == e2 and l[3] == e3)
+    end
+
+    evo.set(e1, f, { t, t })
+
+    do
+        local l, c = evo.multi_search(f, t)
+        assert(c == 3 and l[1] == e2 and l[2] == e3 and l[3] == e1)
+    end
+
+    evo.set(e2, f, { t })
+
+    do
+        local l, c = evo.multi_search(f, t)
+        assert(c == 3 and l[1] == e3 and l[2] == e1 and l[3] == e2)
+    end
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t1, t2, t3 = evo.id(3)
+
+    local e1 = evo.builder():set(f, { t1, t2 }):build()
+    local e2 = evo.builder():set(f, { t1, t2 }):build()
+
+    evo.set(e1, f, { t2, t3 })
+
+    do
+        local l, c = evo.multi_search(f, t1)
+        assert(c == 1 and l[1] == e2)
+    end
+
+    do
+        local l, c = evo.multi_search(f, t2)
+        assert(c == 2 and l[1] == e2 and l[2] == e1)
+    end
+
+    assert(evo.search(f, t3) == e1)
+end
+
+do
+    local f = evo.builder():link():build()
+    local g = evo.id()
+
+    local t1, t2 = evo.id(2)
+
+    local e1 = evo.builder():set(f, { t1 }):build()
+    local e2 = evo.builder():set(f, { t1 }):set(g, 42):build()
+    local e3 = evo.builder():set(f, { t1 }):build()
+
+    evo.reindex(f)
+
+    do
+        local l, c = evo.multi_search(f, t1)
+        assert(c == 3 and l[1] == e1 and l[2] == e2 and l[3] == e3)
+    end
+
+    do
+        local l = evo.get(e2, f)
+        l[2] = t2
+        evo.reindex(f)
+    end
+
+    do
+        local l, c = evo.multi_search(f, t1)
+        assert(c == 3 and l[1] == e1 and l[2] == e3 and l[3] == e2)
+    end
+
+    assert(evo.search(f, t2) == e2)
+
+    evo.destroy(t2)
+    assert(evo.alive(e2) and not evo.has(e2, f))
+
+    do
+        local l, c = evo.multi_search(f, t1)
+        assert(c == 2 and l[1] == e1 and l[2] == e3)
+    end
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t1, t2, t3 = evo.id(3)
+    local e = evo.builder():set(f, { t1, t2 }):build()
+
+    do
+        local l = evo.get(e, f)
+        l[1], l[2] = t2, t3
+        evo.reindex(f)
+    end
+
+    assert(evo.search(f, t1) == nil)
+    assert(evo.search(f, t2) == e)
+    assert(evo.search(f, t3) == e)
+
+    evo.destroy(t1)
+    assert(evo.has(e, f))
+
+    evo.destroy(t2)
+    assert(evo.alive(e) and not evo.has(e, f))
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t1, t2 = evo.id(2)
+
+    local l = { t1 }
+    local e = evo.builder():set(f, l):build()
+
+    l[1] = t2
+    evo.set(e, f, l)
+
+    assert(evo.search(f, t1) == nil)
+    assert(evo.search(f, t2) == e)
+
+    evo.destroy(t2)
+    assert(evo.alive(e) and not evo.has(e, f))
+end
+
+do
+    local f = evo.builder():index():build()
+
+    local t = evo.id()
+
+    local l = { t }
+    local e = evo.builder():set(f, l):build()
+
+    assert(evo.search(f, l) == e)
+    assert(evo.search(f, t) == nil)
+
+    evo.set(f, evo.LINK)
+
+    assert(evo.search(f, l) == nil)
+    assert(evo.search(f, t) == e)
+
+    evo.remove(f, evo.LINK)
+
+    assert(evo.search(f, l) == e)
+    assert(evo.search(f, t) == nil)
+
+    evo.destroy(t)
+    assert(evo.get(e, f) == l)
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t1, t2 = evo.id(2)
+    local e = evo.builder():set(f, { t1, t2 }):build()
+
+    evo.remove(f, evo.LINK)
+
+    evo.destroy(t1)
+    assert(evo.has(e, f))
+
+    evo.set(e, f, { t2 })
+    evo.set(f, evo.LINK)
+    assert(evo.search(f, t2) == e)
+
+    evo.destroy(t2)
+    assert(evo.alive(e) and not evo.has(e, f))
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t1, t2 = evo.id(2)
+    local e = evo.builder():set(f, { t1 }):build()
+
+    evo.defer()
+    do
+        evo.destroy(t1)
+        evo.set(e, f, { t2 })
+    end
+    evo.commit()
+
+    do
+        local l = evo.get(e, f)
+        assert(#l == 1 and l[1] == t2)
+    end
+end
+
+do
+    local f = evo.builder():link():build()
+    local p = evo.builder():prefab():build()
+
+    local t = evo.id()
+    evo.set(p, f, { t })
+
+    local e1 = evo.clone(p)
+    local e2 = evo.clone(p)
+
+    do
+        local l, c = evo.multi_search(f, t)
+        assert(c == 3 and l[1] == p and l[2] == e1 and l[3] == e2)
+    end
+
+    evo.destroy(t)
+    assert(not evo.has(p, f) and not evo.has(e1, f) and not evo.has(e2, f))
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_DESTROY_ENTITY):build()
+
+    local t1, t2 = evo.id(2)
+
+    local l1, c1 = evo.multi_spawn(2, { [f] = { t1 } })
+    local l2, c2 = evo.multi_spawn(2, { [f] = { t2, t1 } })
+    assert(c1 == 2 and c2 == 2)
+
+    evo.destroy(t2)
+    assert(evo.alive_all(l1[1], l1[2]))
+    assert(not evo.alive_any(l2[1], l2[2]))
+
+    evo.destroy(t1)
+    assert(not evo.alive_any(l1[1], l1[2]))
+end
+
+do
+    local f = evo.builder():link():build()
+    local g = evo.builder():tag():build()
+
+    local t1, t2 = evo.id(2)
+
+    local e1 = evo.builder():set(g):build()
+    local e2 = evo.builder():set(g):set(f, t1):build()
+
+    local q = evo.builder():include(g):build()
+
+    evo.batch_set(q, f, { t1, t2 })
+
+    do
+        local l, c = evo.multi_search(f, t1)
+        assert(c == 2)
+        assert((l[1] == e1 and l[2] == e2) or (l[1] == e2 and l[2] == e1))
+    end
+
+    do
+        local l, c = evo.multi_search(f, t2)
+        assert(c == 2)
+        assert((l[1] == e1 and l[2] == e2) or (l[1] == e2 and l[2] == e1))
+    end
+
+    evo.destroy(t2)
+    assert(evo.alive_all(e1, e2) and not evo.has(e1, f) and not evo.has(e2, f))
+end
+
+do
+    local f1, f2 = evo.id(2)
+
+    local q = evo.builder():include(f1, f2):build()
+    local s = evo.builder():query(q):build()
+
+    local e = evo.builder():set(f1, 42):set(f2, 21):build()
+
+    evo.destroy(f2)
+    assert(not evo.alive_any(f2, q, s))
+    assert(evo.alive(e) and evo.get(e, f1) == 42)
+end
+
+do
+    local f1, f2, f3 = evo.id(3)
+
+    local q1 = evo.builder():include(f1):exclude(f2):build()
+    local q2 = evo.builder():include(f1):variant(f2, f3):build()
+    local q3 = evo.builder():include(f1):exclude(f3):build()
+    local q4 = evo.builder():variant(f1, f3):build()
+
+    evo.destroy(f2)
+    assert(not evo.alive_any(q1, q2))
+    assert(evo.alive_all(q3, q4))
+
+    evo.destroy(f3)
+    assert(not evo.alive_any(q3, q4))
+end
+
+do
+    local f1, f2 = evo.id(2)
+
+    local s = evo.builder():include(f1):exclude(f2):execute(function() end):build()
+
+    evo.destroy(f2)
+    assert(not evo.alive(s))
+end
+
+do
+    local f1, f2, f3 = evo.id(3)
+
+    local q1 = evo.builder():include(f1):build()
+    local q2 = evo.builder():include(f2, f1):exclude(f3):build()
+    local q3 = evo.builder():variant(f1):build()
+
+    do
+        local l, c = evo.multi_search(evo.INCLUDES, f1)
+        assert(c == 2 and l[1] == q1 and l[2] == q2)
+    end
+
+    assert(evo.search(evo.EXCLUDES, f3) == q2)
+    assert(evo.search(evo.VARIANTS, f1) == q3)
+
+    evo.set(q2, evo.INCLUDES, { f2 })
+
+    do
+        local l, c = evo.multi_search(evo.INCLUDES, f1)
+        assert(c == 1 and l[1] == q1)
+    end
+
+    evo.destroy(f1)
+    assert(not evo.alive_any(q1, q3))
+    assert(evo.alive(q2))
+end
+
+do
+    local f1, f2 = evo.id(2)
+    local f3 = evo.builder():require(f1, f2):build()
+
+    local e = evo.builder():set(f3, 42):build()
+    assert(evo.has_all(e, f1, f2, f3))
+
+    evo.destroy(f2)
+    assert(not evo.alive_any(f2, f3))
+    assert(evo.alive(e) and evo.has(e, f1) and not evo.has_any(e, f2, f3))
+
+    local f4 = evo.builder():require(f1):build()
+    evo.set(e, f4)
+    assert(evo.has_all(e, f1, f4))
+end
+
+do
+    local f1 = evo.id()
+    local f2 = evo.builder():require(f1):destruction_policy(evo.DESTRUCTION_POLICY_DESTROY_ENTITY):build()
+
+    local e1 = evo.builder():set(f2):build()
+    local e2 = evo.builder():set(f1):build()
+
+    evo.destroy(f1)
+    assert(not evo.alive_any(f1, f2, e1))
+    assert(evo.alive(e2) and not evo.has(e2, f1))
+end
+
+do
+    local f1 = evo.id()
+    local f2 = evo.builder():require(f1):build()
+    local f3 = evo.builder():require(f2):build()
+    local f4 = evo.builder():require(f3):destruction_policy(evo.DESTRUCTION_POLICY_DESTROY_ENTITY):build()
+
+    local e1 = evo.builder():set(f3):build()
+    local e2 = evo.builder():set(f4):build()
+
+    assert(evo.has_all(e1, f1, f2, f3))
+    assert(evo.has_all(e2, f1, f2, f3, f4))
+
+    do
+        local l, c = evo.multi_search(evo.REQUIRES, f2)
+        assert(c == 1 and l[1] == f3)
+    end
+
+    evo.destroy(f1)
+    assert(not evo.alive_any(f1, f2, f3, f4, e2))
+    assert(evo.alive(e1) and evo.empty(e1))
+end
+
+do
+    local f1, f2 = evo.id(2)
+
+    local q = evo.builder():include(f1, f2):build()
+    local s = evo.builder():query(q):build()
+
+    evo.remove(q, evo.INCLUDES)
+    assert(evo.search(evo.INCLUDES, f1) == nil)
+
+    evo.destroy(f1)
+    assert(evo.alive_all(q, s))
+
+    evo.set(q, evo.INCLUDES, { f2 })
+
+    evo.destroy(f2)
+    assert(not evo.alive_any(q, s))
+end
+
+do
+    evo.debug_mode(false)
+
+    local f = evo.builder():link():build()
+
+    local dead = evo.id()
+    evo.destroy(dead)
+
+    local alive = evo.id()
+    assert(alive % 2 ^ 20 == dead % 2 ^ 20)
+
+    local e1 = evo.builder():set(f, { dead, alive }):build()
+    local e2 = evo.builder():set(f, alive):build()
+
+    assert(evo.search(f, dead) == nil)
+
+    do
+        local l, c = evo.multi_search(f, alive)
+        assert(c == 2 and l[1] == e1 and l[2] == e2)
+    end
+
+    evo.remove(e1, f)
+    assert(evo.search(f, alive) == e2)
+
+    do
+        local l, c = evo.multi_search(f, alive)
+        assert(c == 1 and l[1] == e2)
+    end
+
+    evo.destroy(e2)
+    assert(evo.search(f, alive) == nil)
+
+    local e3 = evo.builder():set(f, { dead, alive }):build()
+
+    evo.destroy(e3)
+    assert(evo.search(f, alive) == nil)
+
+    local e4 = evo.builder():set(f, alive):build()
+
+    evo.destroy(alive)
+    assert(evo.alive(e4) and not evo.has(e4, f))
+
+    evo.debug_mode(true)
 end
