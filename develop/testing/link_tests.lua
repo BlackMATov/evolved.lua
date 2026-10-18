@@ -539,3 +539,87 @@ do
     assert(evo.alive(e1) and not evo.has(e1, f1))
     assert(not evo.alive(e2))
 end
+
+do
+    local f = evo.builder():link():build()
+
+    local t = evo.id()
+    local e1 = evo.builder():set(f, t):build()
+    local e2 = evo.builder():set(f, t):build()
+
+    evo.set(f, evo.INDEX)
+    evo.remove(f, evo.INDEX)
+
+    evo.destroy(t)
+    assert(evo.alive_all(e1, e2) and not evo.has(e1, f) and not evo.has(e2, f))
+end
+
+do
+    local g = evo.builder():build()
+
+    local removed_list = {}
+
+    local f = evo.builder()
+        :link()
+        :link_policy(evo.LINK_POLICY_DESTROY_ENTITY)
+        :on_remove(function(e, _, t)
+            assert(evo.alive(t) and evo.get(t, g) == 42)
+            removed_list[#removed_list + 1] = e
+        end)
+        :build()
+
+    local e1 = evo.builder():set(g, 42):build()
+    local e2 = evo.builder():set(f, e1):set(g, 42):build()
+    local e3 = evo.builder():set(f, e2):set(g, 42):build()
+
+    evo.destroy(e1)
+    assert(not evo.alive_any(e1, e2, e3))
+    assert(#removed_list == 2 and removed_list[1] == e3 and removed_list[2] == e2)
+end
+
+do
+    local g = evo.builder():build()
+
+    local removed_count = 0
+
+    local f = evo.builder()
+        :link()
+        :on_remove(function(_, _, t)
+            assert(evo.alive(t) and evo.get(t, g) == 42)
+            removed_count = removed_count + 1
+        end)
+        :build()
+
+    local t = evo.builder():set(g, 42):build()
+    local e1 = evo.builder():set(f, t):build()
+    local e2 = evo.builder():set(f, t):build()
+
+    evo.destroy(t)
+    assert(removed_count == 2)
+    assert(evo.alive_all(e1, e2) and not evo.has(e1, f) and not evo.has(e2, f))
+end
+
+do
+    local g = evo.builder():tag():build()
+
+    local removed_count = 0
+
+    local f = evo.builder()
+        :link()
+        :link_policy(evo.LINK_POLICY_DESTROY_ENTITY)
+        :on_remove(function(_, _, t)
+            assert(evo.alive(t))
+            removed_count = removed_count + 1
+        end)
+        :build()
+
+    local t = evo.builder():set(g):build()
+    local e1 = evo.builder():set(f, t):build()
+    local e2 = evo.builder():set(f, e1):build()
+
+    local q = evo.builder():include(g):build()
+
+    evo.batch_destroy(q)
+    assert(removed_count == 2)
+    assert(not evo.alive_any(t, e1, e2))
+end

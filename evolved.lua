@@ -1110,214 +1110,6 @@ end
 ---
 ---
 
----@class (exact) evolved.search_index
----@field package __head_entities table<evolved.component, evolved.entity>
----@field package __prev_entities table<integer, evolved.entity>
----@field package __next_entities table<integer, evolved.entity>
----@field package __entity_components table<integer, evolved.component>
----@field package __target_fragment? evolved.fragment
-
-local __search_index_fns = {}
-
----@param target_fragment? evolved.fragment
----@return evolved.search_index
----@nodiscard
-function __search_index_fns.new(target_fragment)
-    ---@type evolved.search_index
-    return {
-        __head_entities = {},
-        __prev_entities = {},
-        __next_entities = {},
-        __entity_components = {},
-        __target_fragment = target_fragment,
-    }
-end
-
----@param target evolved.entity
----@param fragment evolved.fragment
-function __search_index_fns.link(target, fragment)
-    if __debug_mode then
-        local target_primary = target % 2 ^ 20
-
-        if __freelist_ids[target_primary] ~= target then
-            __debug_fns.error_fmt('the target (%s) of the fragment (%s) is not alive',
-                tostring(target), tostring(fragment))
-        end
-    end
-
-    local target_fragments = __target_fragments[target]
-
-    if not target_fragments then
-        ---@type evolved.assoc_list<evolved.fragment>
-        target_fragments = __assoc_list_fns.new(1)
-        __target_fragments[target] = target_fragments
-    end
-
-    __assoc_list_fns.insert(target_fragments, fragment)
-end
-
----@param target evolved.entity
----@param fragment evolved.fragment
-function __search_index_fns.unlink(target, fragment)
-    local target_fragments = __target_fragments[target]
-
-    if not target_fragments then
-        return
-    end
-
-    if __assoc_list_fns.unordered_remove(target_fragments, fragment) == 0 then
-        __target_fragments[target] = nil
-    end
-end
-
----@param index evolved.search_index
----@param entity evolved.entity
----@param component evolved.component
-function __search_index_fns.insert(index, entity, component)
-    if component ~= component then
-        -- NaN components cannot be indexed
-        return
-    end
-
-    local entity_primary = entity % 2 ^ 20
-
-    local head_entities = index.__head_entities
-    local prev_entities = index.__prev_entities
-    local next_entities = index.__next_entities
-
-    ---@type evolved.entity?
-    local head_entity = head_entities[component]
-
-    if head_entity then
-        local head_entity_primary = head_entity % 2 ^ 20
-
-        local tail_entity = prev_entities[head_entity_primary]
-        local tail_entity_primary = tail_entity % 2 ^ 20
-
-        prev_entities[entity_primary] = tail_entity
-        next_entities[entity_primary] = head_entity
-
-        prev_entities[head_entity_primary] = entity
-        next_entities[tail_entity_primary] = entity
-    else
-        head_entities[component] = entity
-
-        prev_entities[entity_primary] = entity
-        next_entities[entity_primary] = entity
-
-        local target_fragment = index.__target_fragment
-
-        if target_fragment then
-            __search_index_fns.link(component, target_fragment)
-        end
-    end
-
-    index.__entity_components[entity_primary] = component
-end
-
----@param index evolved.search_index
----@param entity evolved.entity
-function __search_index_fns.remove(index, entity)
-    local entity_primary = entity % 2 ^ 20
-
-    ---@type evolved.component?
-    local component = index.__entity_components[entity_primary]
-
-    if component == nil then
-        return
-    end
-
-    local head_entities = index.__head_entities
-    local prev_entities = index.__prev_entities
-    local next_entities = index.__next_entities
-
-    local prev_entity = prev_entities[entity_primary]
-    local next_entity = next_entities[entity_primary]
-
-    if next_entity == entity then
-        head_entities[component] = nil
-
-        local target_fragment = index.__target_fragment
-
-        if target_fragment then
-            __search_index_fns.unlink(component, target_fragment)
-        end
-    else
-        local prev_entity_primary = prev_entity % 2 ^ 20
-        local next_entity_primary = next_entity % 2 ^ 20
-
-        prev_entities[next_entity_primary] = prev_entity
-        next_entities[prev_entity_primary] = next_entity
-
-        if head_entities[component] == entity then
-            head_entities[component] = next_entity
-        end
-    end
-
-    prev_entities[entity_primary] = nil
-    next_entities[entity_primary] = nil
-
-    index.__entity_components[entity_primary] = nil
-end
-
----@param index evolved.search_index
----@param entity evolved.entity
----@param component evolved.component
-function __search_index_fns.assign(index, entity, component)
-    local entity_components = index.__entity_components
-
-    if entity_components[entity % 2 ^ 20] ~= component then
-        __search_index_fns.remove(index, entity)
-        __search_index_fns.insert(index, entity, component)
-    end
-end
-
----@param index evolved.search_index
----@param entity_list evolved.entity[]
----@param component_list evolved.component[]
----@param first integer
----@param last integer
-function __search_index_fns.multi_insert(index, entity_list, component_list, first, last)
-    for place = first, last do
-        __search_index_fns.insert(index, entity_list[place], component_list[place])
-    end
-end
-
----@param index evolved.search_index
----@param entity_list evolved.entity[]
----@param first integer
----@param last integer
-function __search_index_fns.multi_remove(index, entity_list, first, last)
-    for place = first, last do
-        __search_index_fns.remove(index, entity_list[place])
-    end
-end
-
----@param index evolved.search_index
----@param entity_list evolved.entity[]
----@param component_list evolved.component[]
----@param first integer
----@param last integer
-function __search_index_fns.multi_assign(index, entity_list, component_list, first, last)
-    local entity_components = index.__entity_components
-
-    for place = first, last do
-        local entity = entity_list[place]
-        local component = component_list[place]
-
-        if entity_components[entity % 2 ^ 20] ~= component then
-            __search_index_fns.remove(index, entity)
-            __search_index_fns.insert(index, entity, component)
-        end
-    end
-end
-
----
----
----
----
----
-
 local __TAG = __acquire_id()
 local __NAME = __acquire_id()
 
@@ -1542,6 +1334,212 @@ local __safe_tbls = {
         __newindex = function() __debug_fns.error_fmt 'attempt to modify empty component storage' end
     }) --[=[@as evolved.component[]]=],
 }
+
+---
+---
+---
+---
+---
+
+---@class (exact) evolved.search_index
+---@field package __head_entities table<evolved.component, evolved.entity>
+---@field package __prev_entities table<integer, evolved.entity>
+---@field package __next_entities table<integer, evolved.entity>
+---@field package __entity_components table<integer, evolved.component>
+---@field package __target_fragment? evolved.fragment
+
+local __search_index_fns = {}
+
+---@param fragment evolved.fragment
+---@return evolved.search_index
+---@nodiscard
+function __search_index_fns.new(fragment)
+    ---@type evolved.search_index
+    return {
+        __head_entities = {},
+        __prev_entities = {},
+        __next_entities = {},
+        __entity_components = {},
+        __target_fragment = __evolved_has(fragment, __LINK) and fragment or nil,
+    }
+end
+
+---@param target evolved.entity
+---@param fragment evolved.fragment
+function __search_index_fns.link(target, fragment)
+    local target_fragments = __target_fragments[target]
+
+    if not target_fragments then
+        ---@type evolved.assoc_list<evolved.fragment>
+        target_fragments = __assoc_list_fns.new(1)
+        __target_fragments[target] = target_fragments
+    end
+
+    __assoc_list_fns.insert(target_fragments, fragment)
+end
+
+---@param target evolved.entity
+---@param fragment evolved.fragment
+function __search_index_fns.unlink(target, fragment)
+    local target_fragments = __target_fragments[target]
+
+    if not target_fragments then
+        return
+    end
+
+    if __assoc_list_fns.unordered_remove(target_fragments, fragment) == 0 then
+        __target_fragments[target] = nil
+    end
+end
+
+---@param index evolved.search_index
+---@param entity evolved.entity
+---@param component evolved.component
+function __search_index_fns.insert(index, entity, component)
+    if component ~= component then
+        -- NaN components cannot be indexed
+        return
+    end
+
+    local entity_primary = entity % 2 ^ 20
+
+    local head_entities = index.__head_entities
+    local prev_entities = index.__prev_entities
+    local next_entities = index.__next_entities
+
+    ---@type evolved.entity?
+    local head_entity = head_entities[component]
+
+    if head_entity then
+        local head_entity_primary = head_entity % 2 ^ 20
+
+        local tail_entity = prev_entities[head_entity_primary]
+        local tail_entity_primary = tail_entity % 2 ^ 20
+
+        prev_entities[entity_primary] = tail_entity
+        next_entities[entity_primary] = head_entity
+
+        prev_entities[head_entity_primary] = entity
+        next_entities[tail_entity_primary] = entity
+    else
+        local target_fragment = index.__target_fragment
+
+        if __debug_mode and target_fragment then
+            if __freelist_ids[component % 2 ^ 20] ~= component then
+                __debug_fns.error_fmt('the target (%s) of the linked fragment (%s) is not alive',
+                    __id_name(component), __id_name(target_fragment))
+            end
+        end
+
+        head_entities[component] = entity
+
+        prev_entities[entity_primary] = entity
+        next_entities[entity_primary] = entity
+
+        if target_fragment then
+            __search_index_fns.link(component, target_fragment)
+        end
+    end
+
+    index.__entity_components[entity_primary] = component
+end
+
+---@param index evolved.search_index
+---@param entity evolved.entity
+function __search_index_fns.remove(index, entity)
+    local entity_primary = entity % 2 ^ 20
+
+    ---@type evolved.component?
+    local component = index.__entity_components[entity_primary]
+
+    if component == nil then
+        return
+    end
+
+    local head_entities = index.__head_entities
+    local prev_entities = index.__prev_entities
+    local next_entities = index.__next_entities
+
+    local prev_entity = prev_entities[entity_primary]
+    local next_entity = next_entities[entity_primary]
+
+    if next_entity == entity then
+        head_entities[component] = nil
+
+        local target_fragment = index.__target_fragment
+
+        if target_fragment then
+            __search_index_fns.unlink(component, target_fragment)
+        end
+    else
+        local prev_entity_primary = prev_entity % 2 ^ 20
+        local next_entity_primary = next_entity % 2 ^ 20
+
+        prev_entities[next_entity_primary] = prev_entity
+        next_entities[prev_entity_primary] = next_entity
+
+        if head_entities[component] == entity then
+            head_entities[component] = next_entity
+        end
+    end
+
+    prev_entities[entity_primary] = nil
+    next_entities[entity_primary] = nil
+
+    index.__entity_components[entity_primary] = nil
+end
+
+---@param index evolved.search_index
+---@param entity evolved.entity
+---@param component evolved.component
+function __search_index_fns.assign(index, entity, component)
+    local entity_components = index.__entity_components
+
+    if entity_components[entity % 2 ^ 20] ~= component then
+        __search_index_fns.remove(index, entity)
+        __search_index_fns.insert(index, entity, component)
+    end
+end
+
+---@param index evolved.search_index
+---@param entity_list evolved.entity[]
+---@param component_list evolved.component[]
+---@param first integer
+---@param last integer
+function __search_index_fns.multi_insert(index, entity_list, component_list, first, last)
+    for place = first, last do
+        __search_index_fns.insert(index, entity_list[place], component_list[place])
+    end
+end
+
+---@param index evolved.search_index
+---@param entity_list evolved.entity[]
+---@param first integer
+---@param last integer
+function __search_index_fns.multi_remove(index, entity_list, first, last)
+    for place = first, last do
+        __search_index_fns.remove(index, entity_list[place])
+    end
+end
+
+---@param index evolved.search_index
+---@param entity_list evolved.entity[]
+---@param component_list evolved.component[]
+---@param first integer
+---@param last integer
+function __search_index_fns.multi_assign(index, entity_list, component_list, first, last)
+    local entity_components = index.__entity_components
+
+    for place = first, last do
+        local entity = entity_list[place]
+        local component = component_list[place]
+
+        if entity_components[entity % 2 ^ 20] ~= component then
+            __search_index_fns.remove(index, entity)
+            __search_index_fns.insert(index, entity, component)
+        end
+    end
+end
 
 ---
 ---
@@ -2289,14 +2287,21 @@ function __update_search_index(fragment)
         return
     end
 
+    local old_search_index = __search_indices[fragment]
+
+    if old_search_index and old_search_index.__target_fragment then
+        for target in __lua_next, old_search_index.__head_entities do
+            __search_index_fns.unlink(target, fragment)
+        end
+    end
+
     __search_indices[fragment] = nil
     __update_major_chunks(fragment)
 
     if __evolved_has_any(fragment, __INDEX, __LINK) then
-        local target_fragment = __evolved_has(fragment, __LINK) and fragment or nil
-        local fragment_search_index = __search_index_fns.new(target_fragment)
-        __search_indices[fragment] = fragment_search_index
-        __trace_minor_chunks(fragment, __update_search_index_trace, fragment, fragment_search_index)
+        local new_search_index = __search_index_fns.new(fragment)
+        __search_indices[fragment] = new_search_index
+        __trace_minor_chunks(fragment, __update_search_index_trace, fragment, new_search_index)
         __trace_major_chunks(fragment, __update_chunk_caches)
     end
 end
@@ -3787,14 +3792,22 @@ end
 
 ---@param entity_list evolved.entity[]
 ---@param entity_count integer
-function __destroy_entity_list(entity_list, entity_count)
+---@param reverse? boolean
+function __destroy_entity_list(entity_list, entity_count, reverse)
     if __defer_depth <= 0 then
         __debug_fns.error_fmt('this operation should be deferred')
     end
 
-    for entity_index = 1, entity_count do
-        local entity = entity_list[entity_index]
-        __destroy_entity_one(entity)
+    if reverse then
+        for entity_index = entity_count, 1, -1 do
+            local entity = entity_list[entity_index]
+            __destroy_entity_one(entity)
+        end
+    else
+        for entity_index = 1, entity_count do
+            local entity = entity_list[entity_index]
+            __destroy_entity_one(entity)
+        end
     end
 end
 
@@ -4024,7 +4037,7 @@ function __destroy_fragment_stack(processing_fragment_stack, processing_fragment
     end
 
     if releasing_fragment_count > 0 then
-        __destroy_entity_list(releasing_fragment_list, releasing_fragment_count)
+        __destroy_entity_list(releasing_fragment_list, releasing_fragment_count, true)
     end
 
     __release_table(__table_pool_tag.fragment_list, releasing_fragment_list,
