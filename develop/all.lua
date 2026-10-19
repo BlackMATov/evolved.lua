@@ -47,5 +47,11 @@ print '----------------------------------------'
 basics.describe_fuzz 'develop.fuzzing.requires_fuzz'
 print '----------------------------------------'
 basics.describe_fuzz 'develop.fuzzing.unique_fuzz'
+print '----------------------------------------'
 
-print 'All tests passed.'
+if basics.failure_count() == 0 then
+    print 'All tests passed.'
+else
+    print(string.format('%d test(s) failed.', basics.failure_count()))
+    os.exit(1)
+end

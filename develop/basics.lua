@@ -20,6 +20,14 @@ local __table_unpack = (function()
     return table.unpack or unpack
 end)()
 
+local __failure_count = 0
+
+---@return integer
+---@nodiscard
+function basics.failure_count()
+    return __failure_count
+end
+
 ---@param pattern string
 function basics.unload(pattern)
     for name, _ in pairs(package.loaded) do
@@ -63,6 +71,7 @@ function basics.describe_fuzz(modname)
                 iters))
         else
             print('|-- FUZZ FAIL: ' .. result)
+            __failure_count = __failure_count + 1
         end
     end
 
@@ -95,6 +104,7 @@ function basics.describe_bench(name, loop, init, fini)
 
         if not success then
             print('|-- WARMUP FAIL: ' .. result)
+            __failure_count = __failure_count + 1
             return
         end
     end
@@ -126,6 +136,7 @@ function basics.describe_bench(name, loop, init, fini)
                 iters))
         else
             print('|-- LOOP FAIL: ' .. result)
+            __failure_count = __failure_count + 1
         end
     end
 
@@ -136,6 +147,7 @@ function basics.describe_bench(name, loop, init, fini)
 
         if not success then
             print('|-- FINI FAIL: ' .. result)
+            __failure_count = __failure_count + 1
         end
     end
 
