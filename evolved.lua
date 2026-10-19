@@ -850,16 +850,19 @@ end
 ---@generic V
 ---@param list_a V[]
 ---@param list_b V[]
+---@param size_a? integer
+---@param size_b? integer
 ---@return boolean
 ---@nodiscard
-function __list_fns.eq(list_a, list_b)
-    local list_size = #list_a
+function __list_fns.eq(list_a, list_b, size_a, size_b)
+    size_a = size_a or #list_a
+    size_b = size_b or #list_b
 
-    if list_size ~= #list_b then
+    if size_a ~= size_b then
         return false
     end
 
-    for list_index = 1, list_size do
+    for list_index = 1, size_a do
         if list_a[list_index] ~= list_b[list_index] then
             return false
         end
@@ -869,13 +872,36 @@ function __list_fns.eq(list_a, list_b)
 end
 
 ---@generic V
+---@param list_a V[]
+---@param list_b V[]
+---@param size_a? integer
+---@param size_b? integer
+---@return boolean
+---@nodiscard
+function __list_fns.lt(list_a, list_b, size_a, size_b)
+    size_a = size_a or #list_a
+    size_b = size_b or #list_b
+
+    for list_index = 1, size_a < size_b and size_a or size_b do
+        local item_a = list_a[list_index]
+        local item_b = list_b[list_index]
+
+        if item_a ~= item_b then
+            return item_a < item_b
+        end
+    end
+
+    return size_a < size_b
+end
+
+---@generic V
 ---@param list V[]
 ---@param item V
 ---@param comp? fun(a: V, b: V): boolean
 ---@param size? integer
----@return integer lower_bound_index
+---@return integer upper_bound_index
 ---@nodiscard
-function __list_fns.lwr(list, item, comp, size)
+function __list_fns.upr(list, item, comp, size)
     local lower, upper = 1, size or #list
 
     if comp then
@@ -1046,6 +1072,50 @@ function __assoc_list_fns.insert_ex(al_item_set, al_item_list, al_item_count, it
     al_item_count = al_item_count + 1
     al_item_set[item] = al_item_count
     al_item_list[al_item_count] = item
+
+    return al_item_count
+end
+
+---@generic K
+---@param al evolved.assoc_list<K>
+---@param item K
+---@param comp? fun(a: K, b: K): boolean
+---@return integer new_al_count
+function __assoc_list_fns.sorted_insert(al, item, comp)
+    local new_al_count = __assoc_list_fns.sorted_insert_ex(
+        al.__item_set, al.__item_list, al.__item_count,
+        item, comp)
+
+    al.__item_count = new_al_count
+    return new_al_count
+end
+
+---@generic K
+---@param al_item_set table<K, integer>
+---@param al_item_list K[]
+---@param al_item_count integer
+---@param item K
+---@param comp? fun(a: K, b: K): boolean
+---@return integer new_al_count
+---@nodiscard
+function __assoc_list_fns.sorted_insert_ex(al_item_set, al_item_list, al_item_count, item, comp)
+    local item_index = al_item_set[item]
+
+    if item_index then
+        return al_item_count
+    end
+
+    item_index = __list_fns.upr(al_item_list, item, comp, al_item_count)
+
+    for al_item_index = al_item_count, item_index, -1 do
+        local al_item = al_item_list[al_item_index]
+        al_item_set[al_item] = al_item_index + 1
+        al_item_list[al_item_index + 1] = al_item
+    end
+
+    al_item_count = al_item_count + 1
+    al_item_set[item] = item_index
+    al_item_list[item_index] = item
 
     return al_item_count
 end
@@ -1899,9 +1969,7 @@ end
 
 ---@param root evolved.chunk
 function __add_root_chunk(root)
-    local root_index = __list_fns.lwr(__root_list, root, function(a, b)
-        return a.__fragment < b.__fragment
-    end, __root_count)
+    local root_index = __list_fns.upr(__root_list, root, __chunk_mt.__lt, __root_count)
 
     for sib_root_index = __root_count, root_index, -1 do
         local sib_root = __root_list[sib_root_index]
@@ -1944,19 +2012,9 @@ end
 ---@param child evolved.chunk
 ---@param parent evolved.chunk
 function __add_child_chunk(child, parent)
-    local child_index = __list_fns.lwr(parent.__child_list, child, function(a, b)
-        return a.__fragment < b.__fragment
-    end, parent.__child_count)
-
-    for sib_child_index = parent.__child_count, child_index, -1 do
-        local sib_child = parent.__child_list[sib_child_index]
-        parent.__child_set[sib_child] = sib_child_index + 1
-        parent.__child_list[sib_child_index + 1] = sib_child
-    end
-
-    parent.__child_set[child] = child_index
-    parent.__child_list[child_index] = child
-    parent.__child_count = parent.__child_count + 1
+    parent.__child_count = __assoc_list_fns.sorted_insert_ex(
+        parent.__child_set, parent.__child_list, parent.__child_count,
+        child, __chunk_mt.__lt)
 
     parent.__with_fragment_edges[child.__fragment] = child
     child.__without_fragment_edges[child.__fragment] = parent
@@ -1982,15 +2040,9 @@ function __remove_child_chunk(child)
         return
     end
 
-    for sib_child_index = child_index, parent.__child_count - 1 do
-        local next_sib_child = parent.__child_list[sib_child_index + 1]
-        parent.__child_set[next_sib_child] = sib_child_index
-        parent.__child_list[sib_child_index] = next_sib_child
-    end
-
-    parent.__child_set[child] = nil
-    parent.__child_list[parent.__child_count] = nil
-    parent.__child_count = parent.__child_count - 1
+    parent.__child_count = __assoc_list_fns.remove_ex(
+        parent.__child_set, parent.__child_list, parent.__child_count,
+        child)
 
     parent.__with_fragment_edges[child.__fragment] = nil
     child.__without_fragment_edges[child.__fragment] = nil
@@ -2203,7 +2255,7 @@ function __update_chunk_queries(chunk)
 
         if major_query_chunks then
             if __query_major_matches(chunk, major_query) then
-                __assoc_list_fns.insert(major_query_chunks, chunk)
+                __assoc_list_fns.sorted_insert(major_query_chunks, chunk, __chunk_mt.__lt)
             else
                 __assoc_list_fns.remove(major_query_chunks, chunk)
             end
@@ -2536,6 +2588,8 @@ function __cache_query_chunks(query)
         end
     end
 
+    __assoc_list_fns.sort(query_chunks, __chunk_mt.__lt)
+
     return query_chunks
 end
 
@@ -2559,7 +2613,7 @@ function __reset_query_chunks(query)
         local query_major = query_include_list[query_include_count]
         local major_queries = __major_queries[query_major]
 
-        if major_queries and __assoc_list_fns.remove(major_queries, query) == 0 then
+        if major_queries and __assoc_list_fns.unordered_remove(major_queries, query) == 0 then
             __major_queries[query_major] = nil
         end
     end
@@ -2570,7 +2624,7 @@ function __reset_query_chunks(query)
         if query_include_count == 0 or query_variant > query_include_list[query_include_count] then
             local major_queries = __major_queries[query_variant]
 
-            if major_queries and __assoc_list_fns.remove(major_queries, query) == 0 then
+            if major_queries and __assoc_list_fns.unordered_remove(major_queries, query) == 0 then
                 __major_queries[query_variant] = nil
             end
         end
@@ -7450,14 +7504,27 @@ function evolved.chunk(fragment, ...)
     return chunk, chunk.__entity_list, chunk.__entity_count
 end
 
-function __chunk_mt:__tostring()
+---@param chunk evolved.chunk
+---@return string
+---@nodiscard
+function __chunk_mt.__tostring(chunk)
     local fragment_names = {} ---@type string[]
 
-    for fragment_index = 1, self.__fragment_count do
-        fragment_names[fragment_index] = __id_name(self.__fragment_list[fragment_index])
+    for fragment_index = 1, chunk.__fragment_count do
+        fragment_names[fragment_index] = __id_name(chunk.__fragment_list[fragment_index])
     end
 
     return string.format('<%s>', table.concat(fragment_names, ', '))
+end
+
+---@param chunk_a evolved.chunk
+---@param chunk_b evolved.chunk
+---@return boolean
+---@nodiscard
+function __chunk_mt.__lt(chunk_a, chunk_b)
+    return __list_fns.lt(
+        chunk_a.__fragment_list, chunk_b.__fragment_list,
+        chunk_a.__fragment_count, chunk_b.__fragment_count)
 end
 
 ---@return boolean

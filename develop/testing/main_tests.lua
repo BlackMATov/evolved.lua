@@ -7455,4 +7455,122 @@ do
         local e2 = evo.builder():set(f0, 0):set(f1, 1):spawn()
         assert(evo.has_all(e2, f0, f1))
     end
+
+    ---@param query evolved.query
+    ---@return evolved.chunk[] chunk_list
+    ---@return integer chunk_count
+    local function execute_chunks(query)
+        local chunk_list, chunk_count = {}, 0
+
+        for chunk in evo.execute(query) do
+            chunk_count = chunk_count + 1
+            chunk_list[chunk_count] = chunk
+        end
+
+        return chunk_list, chunk_count
+    end
+
+    do
+        local fs = { evo.id(3) }
+        table.sort(fs)
+        local f0, f1, f2 = fs[1], fs[2], fs[3]
+
+        local q = evo.builder():variant(f1, f2):spawn()
+
+        evo.builder():set(f1, 1):spawn()
+        evo.builder():set(f2, 2):spawn()
+
+        do
+            local _, cc = execute_chunks(q)
+            assert(cc == 2)
+        end
+
+        evo.builder():set(f0, 0):set(f1, 1):spawn()
+
+        do
+            local cs, cc = execute_chunks(q)
+            assert(cc == 3)
+            assert(cs[1] == evo.chunk(f2) and cs[2] == evo.chunk(f1) and cs[3] == evo.chunk(f0, f1))
+        end
+
+        evo.set(q, evo.VARIANTS, { f1, f2 })
+
+        do
+            local cs, cc = execute_chunks(q)
+            assert(cc == 3)
+            assert(cs[1] == evo.chunk(f2) and cs[2] == evo.chunk(f1) and cs[3] == evo.chunk(f0, f1))
+        end
+    end
+
+    do
+        local fs = { evo.id(4) }
+        table.sort(fs)
+        local f0, f1, f2, f3 = fs[1], fs[2], fs[3], fs[4]
+
+        local q = evo.builder():include(f3):spawn()
+
+        evo.builder():set(f1, 1):set(f3, 3):spawn()
+
+        do
+            local _, cc = execute_chunks(q)
+            assert(cc == 1)
+        end
+
+        evo.builder():set(f2, 2):set(f3, 3):spawn()
+        evo.builder():set(f0, 0):set(f3, 3):spawn()
+
+        do
+            local cs, cc = execute_chunks(q)
+            assert(cc == 3)
+            assert(cs[1] == evo.chunk(f2, f3) and cs[2] == evo.chunk(f1, f3) and cs[3] == evo.chunk(f0, f3))
+        end
+
+        evo.set(f1, evo.EXPLICIT)
+
+        do
+            local cs, cc = execute_chunks(q)
+            assert(cc == 2)
+            assert(cs[1] == evo.chunk(f2, f3) and cs[2] == evo.chunk(f0, f3))
+        end
+
+        evo.remove(f1, evo.EXPLICIT)
+
+        do
+            local cs, cc = execute_chunks(q)
+            assert(cc == 3)
+            assert(cs[1] == evo.chunk(f2, f3) and cs[2] == evo.chunk(f1, f3) and cs[3] == evo.chunk(f0, f3))
+        end
+
+        evo.set(f3, evo.DEFAULT, 3)
+
+        do
+            local cs, cc = execute_chunks(q)
+            assert(cc == 3)
+            assert(cs[1] == evo.chunk(f2, f3) and cs[2] == evo.chunk(f1, f3) and cs[3] == evo.chunk(f0, f3))
+        end
+    end
+
+    do
+        local fs = { evo.id(3) }
+        table.sort(fs)
+        local f0, f1, f2 = fs[1], fs[2], fs[3]
+
+        local q = evo.builder():exclude(f0):spawn()
+
+        evo.builder():set(f2, 2):spawn()
+        evo.builder():set(f1, 1):spawn()
+
+        local c1_index, c2_index
+
+        do
+            local cs, cc = execute_chunks(q)
+
+            for i = 1, cc do
+                if cs[i] == evo.chunk(f1) then c1_index = i end
+                if cs[i] == evo.chunk(f2) then c2_index = i end
+            end
+        end
+
+        assert(c1_index and c2_index and c2_index < c1_index)
+    end
 end
