@@ -2030,10 +2030,11 @@ builder_mt:destruction_policy :: id -> builder
 ### vX.Y.Z
 
 - Added the new [`evolved.LINK`](#evolvedlink) and [`evolved.LINK_POLICY`](#evolvedlink_policy) fragment traits that resolve links to destroyed entities, see the [Linked Fragments](#linked-fragments) section
-- The [`evolved.GROUP`](#evolvedgroup) and [`evolved.QUERY`](#evolvedquery) fragments are now linked, so destroying a group or a query also destroys the systems that use them
-- Components of [linked fragments](#linked-fragments) can be lists of entities, which link to every entity in them
-- The [`evolved.INCLUDES`](#evolvedincludes), [`evolved.EXCLUDES`](#evolvedexcludes), [`evolved.VARIANTS`](#evolvedvariants), and [`evolved.REQUIRES`](#evolvedrequires) fragments are now linked, so destroying a fragment also destroys the queries and fragments that use it
 - Added the new [`evolved.EXTRACT`](#evolvedextract) fragment trait that allows indexing and linking by values extracted from components
+- The [`GROUP`](#evolvedgroup), [`QUERY`](#evolvedquery), [`INCLUDES`](#evolvedincludes), [`EXCLUDES`](#evolvedexcludes), [`VARIANTS`](#evolvedvariants), and [`REQUIRES`](#evolvedrequires) fragments are now linked, see the [Linked Fragments](#linked-fragments) section
+- Query iteration order no longer depends on the order in which chunks were created
+- Fixed [`evolved.batch_set`](#evolvedbatch_set) invoking hooks twice: [#54](https://github.com/BlackMATov/evolved.lua/issues/54)
+- Fixed query caches keeping collected chunks: [#55](https://github.com/BlackMATov/evolved.lua/issues/55)
 
 ### v1.12.0
 
