@@ -626,6 +626,9 @@ local __root_count = 0 ---@type integer
 local __major_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
 local __minor_chunks = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.chunk>>
 
+local __query_chunks = {} ---@type table<evolved.query, evolved.assoc_list<evolved.chunk>>
+local __major_queries = {} ---@type table<evolved.fragment, evolved.assoc_list<evolved.query>>
+
 local __entity_chunks = {} ---@type (evolved.chunk|false)[]
 local __entity_places = {} ---@type integer[]
 
@@ -1272,10 +1275,17 @@ local __add_child_chunk
 local __remove_child_chunk
 
 local __update_chunk_caches
+local __update_chunk_queries
 local __update_chunk_storages
 
 local __trace_major_chunks
 local __trace_minor_chunks
+
+local __cache_query_chunks
+local __reset_query_chunks
+
+local __query_major_matches
+local __query_minor_matches
 
 local __update_major_chunks
 local __update_major_chunks_trace
@@ -1850,6 +1860,7 @@ function __new_chunk(chunk_parent, chunk_fragment)
     end
 
     __update_chunk_caches(chunk)
+    __update_chunk_queries(chunk)
     __update_chunk_storages(chunk)
 
     return chunk
@@ -2181,6 +2192,26 @@ function __update_chunk_caches(chunk)
 end
 
 ---@param chunk evolved.chunk
+function __update_chunk_queries(chunk)
+    local major_queries = __major_queries[chunk.__fragment]
+    local major_query_list = major_queries and major_queries.__item_list
+    local major_query_count = major_queries and major_queries.__item_count or 0
+
+    for major_query_index = 1, major_query_count do
+        local major_query = major_query_list[major_query_index]
+        local major_query_chunks = __query_chunks[major_query]
+
+        if major_query_chunks then
+            if __query_major_matches(chunk, major_query) then
+                __assoc_list_fns.insert(major_query_chunks, chunk)
+            else
+                __assoc_list_fns.remove(major_query_chunks, chunk)
+            end
+        end
+    end
+end
+
+---@param chunk evolved.chunk
 function __update_chunk_storages(chunk)
     local entity_count = chunk.__entity_count
     local entity_capacity = chunk.__entity_capacity
@@ -2435,6 +2466,196 @@ function __trace_minor_chunks(minor, trace, ...)
     end
 end
 
+---@param query evolved.query
+---@return evolved.assoc_list<evolved.chunk>
+---@nodiscard
+function __cache_query_chunks(query)
+    local query_includes = __sorted_includes[query]
+    local query_include_list = query_includes and query_includes.__item_list
+    local query_include_count = query_includes and query_includes.__item_count or 0
+
+    local query_variants = __sorted_variants[query]
+    local query_variant_list = query_variants and query_variants.__item_list
+    local query_variant_count = query_variants and query_variants.__item_count or 0
+
+    ---@type evolved.assoc_list<evolved.chunk>
+    local query_chunks = __assoc_list_fns.new(4)
+    __query_chunks[query] = query_chunks
+
+    if query_include_count > 0 then
+        local query_major = query_include_list[query_include_count]
+
+        local major_chunks = __major_chunks[query_major]
+        local major_chunk_list = major_chunks and major_chunks.__item_list
+        local major_chunk_count = major_chunks and major_chunks.__item_count or 0
+
+        for major_chunk_index = 1, major_chunk_count do
+            local major_chunk = major_chunk_list[major_chunk_index]
+
+            if __query_major_matches(major_chunk, query) then
+                __assoc_list_fns.insert(query_chunks, major_chunk)
+            end
+        end
+
+        local major_queries = __major_queries[query_major]
+
+        if not major_queries then
+            ---@type evolved.assoc_list<evolved.query>
+            major_queries = __assoc_list_fns.new(4)
+            __major_queries[query_major] = major_queries
+        end
+
+        __assoc_list_fns.insert(major_queries, query)
+    end
+
+    for query_variant_index = 1, query_variant_count do
+        local query_variant = query_variant_list[query_variant_index]
+
+        if query_include_count == 0 or query_variant > query_include_list[query_include_count] then
+            local major_chunks = __major_chunks[query_variant]
+            local major_chunk_list = major_chunks and major_chunks.__item_list
+            local major_chunk_count = major_chunks and major_chunks.__item_count or 0
+
+            for major_chunk_index = 1, major_chunk_count do
+                local major_chunk = major_chunk_list[major_chunk_index]
+
+                if __query_major_matches(major_chunk, query) then
+                    __assoc_list_fns.insert(query_chunks, major_chunk)
+                end
+            end
+
+            local major_queries = __major_queries[query_variant]
+
+            if not major_queries then
+                ---@type evolved.assoc_list<evolved.query>
+                major_queries = __assoc_list_fns.new(4)
+                __major_queries[query_variant] = major_queries
+            end
+
+            __assoc_list_fns.insert(major_queries, query)
+        end
+    end
+
+    return query_chunks
+end
+
+---@param query evolved.query
+function __reset_query_chunks(query)
+    if not __query_chunks[query] then
+        return
+    end
+
+    __query_chunks[query] = nil
+
+    local query_includes = __sorted_includes[query]
+    local query_include_list = query_includes and query_includes.__item_list
+    local query_include_count = query_includes and query_includes.__item_count or 0
+
+    local query_variants = __sorted_variants[query]
+    local query_variant_list = query_variants and query_variants.__item_list
+    local query_variant_count = query_variants and query_variants.__item_count or 0
+
+    if query_include_count > 0 then
+        local query_major = query_include_list[query_include_count]
+        local major_queries = __major_queries[query_major]
+
+        if major_queries and __assoc_list_fns.remove(major_queries, query) == 0 then
+            __major_queries[query_major] = nil
+        end
+    end
+
+    for query_variant_index = 1, query_variant_count do
+        local query_variant = query_variant_list[query_variant_index]
+
+        if query_include_count == 0 or query_variant > query_include_list[query_include_count] then
+            local major_queries = __major_queries[query_variant]
+
+            if major_queries and __assoc_list_fns.remove(major_queries, query) == 0 then
+                __major_queries[query_variant] = nil
+            end
+        end
+    end
+end
+
+---@param chunk evolved.chunk
+---@param query evolved.query
+---@return boolean
+---@nodiscard
+function __query_major_matches(chunk, query)
+    local query_includes = __sorted_includes[query]
+    local query_include_set = query_includes and query_includes.__item_set
+    local query_include_count = query_includes and query_includes.__item_count or 0
+
+    local query_variants = __sorted_variants[query]
+    local query_variant_set = query_variants and query_variants.__item_set
+    local query_variant_list = query_variants and query_variants.__item_list
+    local query_variant_count = query_variants and query_variants.__item_count or 0
+
+    local query_include_index = query_include_count > 0 and query_include_set[chunk.__fragment] or nil
+    local query_variant_index = query_variant_count > 0 and query_variant_set[chunk.__fragment] or nil
+
+    return (
+        (query_include_index ~= nil and query_include_index == query_include_count) or
+        (query_variant_index ~= nil and not __chunk_has_any_fragment_list(chunk, query_variant_list, query_variant_index - 1))
+    ) and __query_minor_matches(chunk, query)
+end
+
+---@param chunk evolved.chunk
+---@param query evolved.query
+---@return boolean
+---@nodiscard
+function __query_minor_matches(chunk, query)
+    local query_includes = __sorted_includes[query]
+    local query_include_set = query_includes and query_includes.__item_set
+    local query_include_list = query_includes and query_includes.__item_list
+    local query_include_count = query_includes and query_includes.__item_count or 0
+
+    if query_include_count > 0 then
+        if not __chunk_has_all_fragment_list(chunk, query_include_list, query_include_count) then
+            return false
+        end
+    end
+
+    local query_excludes = __sorted_excludes[query]
+    local query_exclude_list = query_excludes and query_excludes.__item_list
+    local query_exclude_count = query_excludes and query_excludes.__item_count or 0
+
+    if query_exclude_count > 0 then
+        if __chunk_has_any_fragment_list(chunk, query_exclude_list, query_exclude_count) then
+            return false
+        end
+    end
+
+    local query_variants = __sorted_variants[query]
+    local query_variant_set = query_variants and query_variants.__item_set
+    local query_variant_list = query_variants and query_variants.__item_list
+    local query_variant_count = query_variants and query_variants.__item_count or 0
+
+    if query_variant_count > 0 then
+        if not __chunk_has_any_fragment_list(chunk, query_variant_list, query_variant_count) then
+            return false
+        end
+    end
+
+    local chunk_explicit_fragment_list = chunk.__explicit_fragment_list
+
+    if chunk_explicit_fragment_list then
+        for chunk_explicit_fragment_index = 1, chunk.__explicit_fragment_count do
+            local fragment = chunk_explicit_fragment_list[chunk_explicit_fragment_index]
+
+            local is_chunk_fragment_matched =
+                (query_variant_count > 0 and query_variant_set[fragment]) or
+                (query_include_count > 0 and query_include_set[fragment])
+
+            if not is_chunk_fragment_matched then
+                return false
+            end
+        end
+    end
+
+    return true
+end
+
 ---@param major evolved.fragment
 function __update_major_chunks(major)
     if __defer_depth > 0 then
@@ -2448,6 +2669,7 @@ end
 ---@param chunk evolved.chunk
 function __update_major_chunks_trace(chunk)
     __update_chunk_caches(chunk)
+    __update_chunk_queries(chunk)
     __update_chunk_storages(chunk)
 end
 
@@ -3635,6 +3857,22 @@ function __purge_chunk(chunk)
 
         if major_chunks and __assoc_list_fns.remove(major_chunks, chunk) == 0 then
             __major_chunks[major] = nil
+        end
+    end
+
+    do
+        local major = chunk.__fragment
+        local major_queries = __major_queries[major]
+        local major_query_list = major_queries and major_queries.__item_list
+        local major_query_count = major_queries and major_queries.__item_count or 0
+
+        for major_query_index = 1, major_query_count do
+            local major_query = major_query_list[major_query_index]
+            local major_query_chunks = __query_chunks[major_query]
+
+            if major_query_chunks then
+                __assoc_list_fns.remove(major_query_chunks, chunk)
+            end
         end
     end
 
@@ -6829,128 +7067,27 @@ function __evolved_execute(query)
 
     local query_includes = __sorted_includes[query]
     local query_include_set = query_includes and query_includes.__item_set
-    local query_include_list = query_includes and query_includes.__item_list
     local query_include_count = query_includes and query_includes.__item_count or 0
 
     local query_excludes = __sorted_excludes[query]
     local query_exclude_set = query_excludes and query_excludes.__item_set
-    local query_exclude_list = query_excludes and query_excludes.__item_list
     local query_exclude_count = query_excludes and query_excludes.__item_count or 0
 
     local query_variants = __sorted_variants[query]
     local query_variant_set = query_variants and query_variants.__item_set
-    local query_variant_list = query_variants and query_variants.__item_list
     local query_variant_count = query_variants and query_variants.__item_count or 0
 
     if query_include_count > 0 or query_variant_count > 0 then
-        if query_include_count > 0 then
-            local query_major = query_include_list[query_include_count]
+        local query_chunks = __query_chunks[query] or __cache_query_chunks(query)
+        local query_chunk_list = query_chunks and query_chunks.__item_list
+        local query_chunk_count = query_chunks and query_chunks.__item_count or 0
 
-            local major_chunks = __major_chunks[query_major]
-            local major_chunk_list = major_chunks and major_chunks.__item_list
-            local major_chunk_count = major_chunks and major_chunks.__item_count or 0
+        if query_chunk_count > 0 then
+            __lua_table_move(
+                query_chunk_list, 1, query_chunk_count,
+                chunk_stack_size + 1, chunk_stack)
 
-            for major_chunk_index = 1, major_chunk_count do
-                local major_chunk = major_chunk_list[major_chunk_index]
-
-                local is_major_chunk_matched = true
-
-                if is_major_chunk_matched and query_include_count > 1 then
-                    is_major_chunk_matched = __chunk_has_all_fragment_list(
-                        major_chunk, query_include_list, query_include_count - 1)
-                end
-
-                if is_major_chunk_matched and query_exclude_count > 0 then
-                    is_major_chunk_matched = not __chunk_has_any_fragment_list(
-                        major_chunk, query_exclude_list, query_exclude_count)
-                end
-
-                if is_major_chunk_matched and query_variant_count > 0 then
-                    is_major_chunk_matched = __chunk_has_any_fragment_list(
-                        major_chunk, query_variant_list, query_variant_count)
-                end
-
-                if is_major_chunk_matched and major_chunk.__has_explicit_fragments then
-                    local major_chunk_explicit_fragment_list = major_chunk.__explicit_fragment_list
-                    local major_chunk_explicit_fragment_count = major_chunk.__explicit_fragment_count
-
-                    ---@cast major_chunk_explicit_fragment_list -?
-
-                    for major_chunk_explicit_fragment_index = 1, major_chunk_explicit_fragment_count do
-                        local fragment = major_chunk_explicit_fragment_list[major_chunk_explicit_fragment_index]
-
-                        local is_explicit_fragment_matched =
-                            (query_include_set and query_include_set[fragment]) or
-                            (query_variant_set and query_variant_set[fragment])
-
-                        if not is_explicit_fragment_matched then
-                            is_major_chunk_matched = false
-                            break
-                        end
-                    end
-                end
-
-                if is_major_chunk_matched then
-                    chunk_stack_size = chunk_stack_size + 1
-                    chunk_stack[chunk_stack_size] = major_chunk
-                end
-            end
-        end
-
-        for query_variant_index = 1, query_variant_count do
-            local query_variant = query_variant_list[query_variant_index]
-
-            if query_include_count == 0 or query_variant > query_include_list[query_include_count] then
-                local major_chunks = __major_chunks[query_variant]
-                local major_chunk_list = major_chunks and major_chunks.__item_list
-                local major_chunk_count = major_chunks and major_chunks.__item_count or 0
-
-                for major_chunk_index = 1, major_chunk_count do
-                    local major_chunk = major_chunk_list[major_chunk_index]
-
-                    local is_major_chunk_matched = true
-
-                    if is_major_chunk_matched and query_include_count > 0 then
-                        is_major_chunk_matched = __chunk_has_all_fragment_list(
-                            major_chunk, query_include_list, query_include_count)
-                    end
-
-                    if is_major_chunk_matched and query_exclude_count > 0 then
-                        is_major_chunk_matched = not __chunk_has_any_fragment_list(
-                            major_chunk, query_exclude_list, query_exclude_count)
-                    end
-
-                    if is_major_chunk_matched and query_variant_index > 1 then
-                        is_major_chunk_matched = not __chunk_has_any_fragment_list(
-                            major_chunk, query_variant_list, query_variant_index - 1)
-                    end
-
-                    if is_major_chunk_matched and major_chunk.__has_explicit_fragments then
-                        local major_chunk_explicit_fragment_list = major_chunk.__explicit_fragment_list
-                        local major_chunk_explicit_fragment_count = major_chunk.__explicit_fragment_count
-
-                        ---@cast major_chunk_explicit_fragment_list -?
-
-                        for major_chunk_explicit_fragment_index = 1, major_chunk_explicit_fragment_count do
-                            local fragment = major_chunk_explicit_fragment_list[major_chunk_explicit_fragment_index]
-
-                            local is_explicit_fragment_matched =
-                                (query_include_set and query_include_set[fragment]) or
-                                (query_variant_set and query_variant_set[fragment])
-
-                            if not is_explicit_fragment_matched then
-                                is_major_chunk_matched = false
-                                break
-                            end
-                        end
-                    end
-
-                    if is_major_chunk_matched then
-                        chunk_stack_size = chunk_stack_size + 1
-                        chunk_stack[chunk_stack_size] = major_chunk
-                    end
-                end
-            end
+            chunk_stack_size = chunk_stack_size + query_chunk_count
         end
     elseif query_exclude_count > 0 then
         for root_index = 1, __root_count do
@@ -8265,6 +8402,8 @@ __evolved_set(__QUERY, __LINK_POLICY, __LINK_POLICY_DESTROY_ENTITY)
 ---@param query evolved.query
 ---@param include_list evolved.fragment[]
 __evolved_set(__INCLUDES, __ON_SET, function(query, _, include_list)
+    __reset_query_chunks(query)
+
     local include_count = #include_list
 
     if include_count > 0 then
@@ -8281,6 +8420,8 @@ __evolved_set(__INCLUDES, __ON_SET, function(query, _, include_list)
 end)
 
 __evolved_set(__INCLUDES, __ON_REMOVE, function(query)
+    __reset_query_chunks(query)
+
     __sorted_includes[query] = nil
 end)
 
@@ -8293,6 +8434,8 @@ end)
 ---@param query evolved.query
 ---@param exclude_list evolved.fragment[]
 __evolved_set(__EXCLUDES, __ON_SET, function(query, _, exclude_list)
+    __reset_query_chunks(query)
+
     local exclude_count = #exclude_list
 
     if exclude_count > 0 then
@@ -8309,6 +8452,8 @@ __evolved_set(__EXCLUDES, __ON_SET, function(query, _, exclude_list)
 end)
 
 __evolved_set(__EXCLUDES, __ON_REMOVE, function(query)
+    __reset_query_chunks(query)
+
     __sorted_excludes[query] = nil
 end)
 
@@ -8321,6 +8466,8 @@ end)
 ---@param query evolved.query
 ---@param variant_list evolved.fragment[]
 __evolved_set(__VARIANTS, __ON_SET, function(query, _, variant_list)
+    __reset_query_chunks(query)
+
     local variant_count = #variant_list
 
     if variant_count > 0 then
@@ -8337,6 +8484,8 @@ __evolved_set(__VARIANTS, __ON_SET, function(query, _, variant_list)
 end)
 
 __evolved_set(__VARIANTS, __ON_REMOVE, function(query)
+    __reset_query_chunks(query)
+
     __sorted_variants[query] = nil
 end)
 
@@ -8368,6 +8517,7 @@ end)
 
 __evolved_set(__REQUIRES, __ON_REMOVE, function(fragment)
     __sorted_requires[fragment] = nil
+
     __update_major_chunks(fragment)
 end)
 
