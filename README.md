@@ -1056,7 +1056,25 @@ local player = evolved.builder()
 assert(evolved.name(player) == 'Player')
 ```
 
-Names are not unique, so multiple entities can have the same name. Also, the name of an entity can be changed at any time by setting a new name using the [`evolved.NAME`](#evolvedname) fragment as a usual component.
+The same name can be used by multiple entities at once, nothing prevents two entities from being called `'Player'`. Also, the name of an entity can be changed at any time by setting a new name using the [`evolved.NAME`](#evolvedname) fragment as a usual component.
+
+However, names are not copied when cloning entities, because the [`evolved.NAME`](#evolvedname) fragment is marked with the [`evolved.UNIQUE`](#evolvedunique) fragment trait. Note that this trait only affects cloning, it doesn't mean that the name value must be unique among entities. So clones of a named prefab are unnamed, unless you pass a name in the component table. See the [Unique Fragments](#unique-fragments) section for more details.
+
+```lua
+local evolved = require 'evolved'
+
+local enemy_prefab = evolved.builder()
+    :name('Enemy')
+    :prefab()
+    :build()
+
+local enemy1 = evolved.clone(enemy_prefab)
+local enemy2 = evolved.clone(enemy_prefab, { [evolved.NAME] = 'Boss' })
+
+assert(evolved.name(enemy_prefab) == 'Enemy')
+assert(not evolved.has(enemy1, evolved.NAME))
+assert(evolved.name(enemy2) == 'Boss')
+```
 
 You can find entities by their names using the [`evolved.lookup`](#evolvedlookup) and [`evolved.multi_lookup`](#evolvedmulti_lookup) functions. The [`evolved.lookup`](#evolvedlookup) function returns the first entity with the specified name, while the [`evolved.multi_lookup`](#evolvedmulti_lookup) function returns a list of all entities with the specified name.
 
@@ -1274,6 +1292,8 @@ assert(evolved.has(enemy_prefab, evolved.PREFAB))
 -- but the enemy_clone doesn't have it, because it is marked as unique
 assert(not evolved.has(enemy_clone, evolved.PREFAB))
 ```
+
+The [`evolved.NAME`](#evolvedname) fragment is marked as unique too, so clones don't inherit the names of their prefabs. Otherwise, every clone of a named prefab would also be added to the name index, which is costly when spawning many entities.
 
 #### Explicit Fragments
 
@@ -2029,11 +2049,12 @@ builder_mt:destruction_policy :: id -> builder
 
 ### vX.Y.Z
 
-- Added the new [`evolved.LINK`](#evolvedlink) and [`evolved.LINK_POLICY`](#evolvedlink_policy) fragment traits that resolve links to destroyed entities, see the [Linked Fragments](#linked-fragments) section
-- Added the new [`evolved.EXTRACT`](#evolvedextract) fragment trait that allows indexing and linking by values extracted from components
-- The [`GROUP`](#evolvedgroup), [`QUERY`](#evolvedquery), [`INCLUDES`](#evolvedincludes), [`EXCLUDES`](#evolvedexcludes), [`VARIANTS`](#evolvedvariants), and [`REQUIRES`](#evolvedrequires) fragments are now linked, see the [Linked Fragments](#linked-fragments) section
+- Added the new [`LINK`](#evolvedlink) and [`LINK_POLICY`](#evolvedlink_policy) fragment traits that resolve links to destroyed entities, see the [Linked Fragments](#linked-fragments) section
+- The [`GROUP`](#evolvedgroup), [`QUERY`](#evolvedquery), [`INCLUDES`](#evolvedincludes), [`EXCLUDES`](#evolvedexcludes), [`VARIANTS`](#evolvedvariants), and [`REQUIRES`](#evolvedrequires) fragments are now linked
+- Added the new [`EXTRACT`](#evolvedextract) fragment trait that allows indexing and linking by values extracted from components
 - Query iteration order no longer depends on the order in which chunks were created
-- Fixed [`evolved.batch_set`](#evolvedbatch_set) invoking hooks twice: [#54](https://github.com/BlackMATov/evolved.lua/issues/54)
+- The [`NAME`](#evolvedname) fragment is now marked as [UNIQUE](#unique-fragments), so clones no longer inherit the names of their prefabs
+- Fixed [`batch_set`](#evolvedbatch_set) invoking hooks twice: [#54](https://github.com/BlackMATov/evolved.lua/issues/54)
 - Fixed query caches keeping collected chunks: [#55](https://github.com/BlackMATov/evolved.lua/issues/55)
 
 ### v1.12.0

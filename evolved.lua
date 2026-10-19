@@ -8376,6 +8376,7 @@ __evolved_set(__COMPMOVE, __ON_REMOVE, __update_major_chunks)
 __evolved_set(__TAG, __TAG)
 
 __evolved_set(__NAME, __INDEX)
+__evolved_set(__NAME, __UNIQUE)
 
 __evolved_set(__INDEX, __TAG)
 __evolved_set(__INDEX, __UNIQUE)
