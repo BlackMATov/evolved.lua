@@ -3,6 +3,8 @@
 ## Backlog
 
 - observers and events
+- add batch hooks for fragments
+- add component mapper for batch_set
 - use compact prefix-tree for chunks
 
 ## Thoughts

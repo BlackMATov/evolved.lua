@@ -1261,7 +1261,7 @@ The function is called every time a component of the fragment is inserted or ass
 > The extracted value must depend only on the component itself. The index is not updated when other fragments of the entity change, so a function that reads them will leave the index outdated. For the same reason, the function should not call any library functions. Tables changed in place bypass the index too, so set them again or use the [`evolved.reindex`](#evolvedreindex) function after such changes.
 
 > [!NOTE]
-> Searching by a fragment without the [`evolved.INDEX`](#evolvedindex) or [`evolved.LINK`](#evolvedlink) trait is an error.
+> Searching by a fragment without the [`evolved.INDEX`](#evolvedindex) or [`evolved.LINK`](#evolvedlink) trait finds nothing and prints a warning. The [`evolved.reindex`](#evolvedreindex) function prints a warning for such fragments too and skips them.
 
 > [!NOTE]
 > Components, or values extracted from them, are used as keys in the index, so table keys are indexed by reference, and searching by another table with the same content will not find anything. Also, [Fragment Tags](#fragment-tags) are not indexed at all, and neither are `nil` and `NaN` keys.
@@ -2054,6 +2054,7 @@ builder_mt:destruction_policy :: id -> builder
 - Added the new [`EXTRACT`](#evolvedextract) fragment trait that allows indexing and linking by values extracted from components
 - Query iteration order no longer depends on the order in which chunks were created
 - The [`NAME`](#evolvedname) fragment is now marked as [UNIQUE](#unique-fragments), so clones no longer inherit the names of their prefabs
+- The [`search`](#evolvedsearch) and [`reindex`](#evolvedreindex) functions now print a warning instead of throwing an error for non-indexed fragments
 - Fixed [`batch_set`](#evolvedbatch_set) invoking hooks twice: [#54](https://github.com/BlackMATov/evolved.lua/issues/54)
 - Fixed query caches keeping collected chunks: [#55](https://github.com/BlackMATov/evolved.lua/issues/55)
 

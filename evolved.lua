@@ -3464,7 +3464,6 @@ function __multi_spawn_entity(chunk, entity_list, entity_first, entity_count, co
             if component_index then
                 local fragment_search_index = __search_indices[fragment]
                 local component_storage = chunk_component_storages[component_index]
-
                 __search_index_fns.multi_insert(fragment_search_index,
                     chunk_entity_list, component_storage, b_place, e_place)
             end
@@ -3824,7 +3823,6 @@ function __multi_clone_entity(prefab, entity_list, entity_first, entity_count, c
             if component_index then
                 local fragment_search_index = __search_indices[fragment]
                 local component_storage = chunk_component_storages[component_index]
-
                 __search_index_fns.multi_insert(fragment_search_index,
                     chunk_entity_list, component_storage, b_place, e_place)
             end
@@ -4642,11 +4640,6 @@ function __chunk_assign(chunk, fragment, component)
             __evolved_get(fragment, __DEFAULT, __DUPLICATE, __ON_SET, __ON_ASSIGN)
     end
 
-    ---@type evolved.search_index?
-    local fragment_search_index = chunk_has_index_fragments
-        and __search_indices[fragment]
-        or nil
-
     local component_storage = chunk_component_storages[component_index]
     local component_realloc = chunk_component_reallocs[component_index]
     local component_compmove = chunk_component_compmoves[component_index]
@@ -4694,6 +4687,10 @@ function __chunk_assign(chunk, fragment, component)
             component_storage[place] = new_component
         end
     end
+
+    local fragment_search_index = chunk_has_index_fragments
+        and __search_indices[fragment]
+        or nil
 
     if fragment_search_index then
         __search_index_fns.multi_assign(fragment_search_index,
@@ -4774,11 +4771,6 @@ function __chunk_insert(old_chunk, fragment, component)
         fragment_default, fragment_duplicate =
             __evolved_get(fragment, __DEFAULT, __DUPLICATE)
     end
-
-    ---@type evolved.search_index?
-    local fragment_search_index = new_chunk_has_index_fragments
-        and __search_indices[fragment]
-        or nil
 
     local sum_entity_count = old_entity_count + new_chunk.__entity_count
 
@@ -4868,6 +4860,10 @@ function __chunk_insert(old_chunk, fragment, component)
                 end
             end
 
+            local fragment_search_index = new_chunk_has_index_fragments
+                and __search_indices[fragment]
+                or nil
+
             if fragment_search_index then
                 __search_index_fns.multi_insert(fragment_search_index,
                     new_entity_list, new_component_storage, new_entity_count + 1, sum_entity_count)
@@ -4893,11 +4889,6 @@ function __chunk_insert(old_chunk, fragment, component)
                         __evolved_get(req_fragment, __DEFAULT, __DUPLICATE)
                 end
 
-                ---@type evolved.search_index?
-                local req_fragment_search_index = new_chunk_has_index_fragments
-                    and __search_indices[req_fragment]
-                    or nil
-
                 local req_component_index = new_component_indices[req_fragment]
 
                 if req_component_index then
@@ -4917,6 +4908,10 @@ function __chunk_insert(old_chunk, fragment, component)
                             req_component_storage[new_place] = req_component
                         end
                     end
+
+                    local req_fragment_search_index = new_chunk_has_index_fragments
+                        and __search_indices[req_fragment]
+                        or nil
 
                     if req_fragment_search_index then
                         __search_index_fns.multi_insert(req_fragment_search_index,
@@ -5055,7 +5050,6 @@ function __chunk_remove(old_chunk, ...)
 
             if not new_fragment_set[fragment] then
                 local fragment_search_index = __search_indices[fragment]
-
                 __search_index_fns.multi_remove(fragment_search_index,
                     old_entity_list, 1, old_entity_count)
             end
@@ -5202,7 +5196,6 @@ function __chunk_clear(chunk)
         for chunk_index_fragment_index = 1, chunk.__index_fragment_count do
             local fragment = chunk_index_fragment_list[chunk_index_fragment_index]
             local fragment_search_index = __search_indices[fragment]
-
             __search_index_fns.multi_remove(fragment_search_index,
                 chunk_entity_list, 1, chunk_entity_count)
         end
@@ -6357,11 +6350,6 @@ function __evolved_set(entity, fragment, component)
                 __evolved_get(fragment, __DEFAULT, __DUPLICATE, __ON_SET, __ON_ASSIGN)
         end
 
-        ---@type evolved.search_index?
-        local fragment_search_index = old_chunk_has_index_fragments
-            and __search_indices[fragment]
-            or nil
-
         local old_component_index = old_component_indices[fragment]
 
         if old_component_index then
@@ -6374,6 +6362,10 @@ function __evolved_set(entity, fragment, component)
 
             local old_component = old_component_storage[old_place]
             old_component_storage[old_place] = new_component
+
+            local fragment_search_index = old_chunk_has_index_fragments
+                and __search_indices[fragment]
+                or nil
 
             if fragment_search_index then
                 __search_index_fns.assign(fragment_search_index, entity, new_component)
@@ -6417,11 +6409,6 @@ function __evolved_set(entity, fragment, component)
             fragment_default, fragment_duplicate =
                 __evolved_get(fragment, __DEFAULT, __DUPLICATE)
         end
-
-        ---@type evolved.search_index?
-        local fragment_search_index = new_chunk_has_index_fragments
-            and __search_indices[fragment]
-            or nil
 
         local new_place = new_chunk.__entity_count + 1
 
@@ -6472,6 +6459,10 @@ function __evolved_set(entity, fragment, component)
 
                 new_component_storage[new_place] = new_component
 
+                local fragment_search_index = new_chunk_has_index_fragments
+                    and __search_indices[fragment]
+                    or nil
+
                 if fragment_search_index then
                     __search_index_fns.insert(fragment_search_index, entity, new_component)
                 end
@@ -6496,11 +6487,6 @@ function __evolved_set(entity, fragment, component)
                             __evolved_get(req_fragment, __DEFAULT, __DUPLICATE)
                     end
 
-                    ---@type evolved.search_index?
-                    local req_fragment_search_index = new_chunk_has_index_fragments
-                        and __search_indices[req_fragment]
-                        or nil
-
                     local req_component_index = new_component_indices[req_fragment]
 
                     if req_component_index then
@@ -6517,6 +6503,10 @@ function __evolved_set(entity, fragment, component)
                         end
 
                         req_component_storage[new_place] = req_component
+
+                        local req_fragment_search_index = new_chunk_has_index_fragments
+                            and __search_indices[req_fragment]
+                            or nil
 
                         if req_fragment_search_index then
                             __search_index_fns.insert(req_fragment_search_index, entity, req_component)
@@ -7210,8 +7200,9 @@ function __evolved_search(fragment, component)
     local fragment_search_index = __search_indices[fragment]
 
     if not fragment_search_index then
-        __debug_fns.error_fmt('the fragment (%s) is not indexed and cannot be searched',
+        __debug_fns.warning_fmt('the fragment (%s) is not indexed and cannot be searched',
             __id_name(fragment))
+        return
     end
 
     return fragment_search_index.__head_entities[component]
@@ -7237,8 +7228,9 @@ function __evolved_multi_search_to(out_entity_list, out_entity_first, fragment, 
     local fragment_search_index = __search_indices[fragment]
 
     if not fragment_search_index then
-        __debug_fns.error_fmt('the fragment (%s) is not indexed and cannot be searched',
+        __debug_fns.warning_fmt('the fragment (%s) is not indexed and cannot be searched',
             __id_name(fragment))
+        return 0
     end
 
     local entity_count = 0
@@ -7280,18 +7272,14 @@ function __evolved_reindex(...)
     for fragment_index = 1, fragment_count do
         ---@type evolved.fragment
         local fragment = __lua_select(fragment_index, ...)
-
-        if not __search_indices[fragment] then
-            __debug_fns.error_fmt('the fragment (%s) is not indexed and cannot be reindexed',
-                __id_name(fragment))
-        end
-    end
-
-    for fragment_index = 1, fragment_count do
-        ---@type evolved.fragment
-        local fragment = __lua_select(fragment_index, ...)
         local fragment_search_index = __search_indices[fragment]
-        __trace_minor_chunks(fragment, __update_search_index_trace, fragment, fragment_search_index)
+
+        if not fragment_search_index then
+            __debug_fns.warning_fmt('the fragment (%s) is not indexed and cannot be reindexed',
+                __id_name(fragment))
+        else
+            __trace_minor_chunks(fragment, __update_search_index_trace, fragment, fragment_search_index)
+        end
     end
 end
 
