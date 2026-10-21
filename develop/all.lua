@@ -1,6 +1,7 @@
 require 'develop.issues.issue_52'
 require 'develop.issues.issue_54'
 require 'develop.issues.issue_55'
+require 'develop.issues.issue_56'
 
 require 'develop.testing.build_tests'
 require 'develop.testing.cached_hooks_tests'
