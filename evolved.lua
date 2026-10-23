@@ -658,7 +658,7 @@ local function __acquire_id()
         local acquired_primary = available_primary
         local freelist_id = freelist_ids[acquired_primary]
 
-        available_primary = freelist_id % 2 ^ 20
+        available_primary = freelist_id % 1048576
         local shifted_secondary = freelist_id - available_primary
 
         local acquired_id = acquired_primary + shifted_secondary
@@ -670,13 +670,13 @@ local function __acquire_id()
     else
         local acquired_count = __acquired_count
 
-        if acquired_count == 2 ^ 20 - 1 then
+        if acquired_count == 1048576 - 1 then
             __debug_fns.error_fmt('id index overflow')
         end
 
         local acquired_primary = acquired_count + 1
 
-        local acquired_id = acquired_primary + 2 ^ 20
+        local acquired_id = acquired_primary + 1048576
         freelist_ids[acquired_primary] = acquired_id
 
         __entity_chunks[acquired_primary] = false
@@ -690,13 +690,13 @@ end
 
 ---@param id evolved.id
 local function __release_id(id)
-    local acquired_primary = id % 2 ^ 20
+    local acquired_primary = id % 1048576
     local shifted_secondary = id - acquired_primary
 
     if __freelist_ids[acquired_primary] == id then
-        shifted_secondary = shifted_secondary == 2 ^ 40 - 2 ^ 20
-            and 2 ^ 20
-            or shifted_secondary + 2 ^ 20
+        shifted_secondary = shifted_secondary == 1099511627776 - 1048576
+            and 1048576
+            or shifted_secondary + 1048576
 
         __freelist_ids[acquired_primary] = __available_primary + shifted_secondary
         __available_primary = acquired_primary
@@ -714,7 +714,7 @@ local function __acquire_id_list(id_list, id_first, id_count)
         local acquired_primary = available_primary
         local freelist_id = freelist_ids[acquired_primary]
 
-        available_primary = freelist_id % 2 ^ 20
+        available_primary = freelist_id % 1048576
         local shifted_secondary = freelist_id - available_primary
 
         local acquired_id = acquired_primary + shifted_secondary
@@ -729,7 +729,7 @@ local function __acquire_id_list(id_list, id_first, id_count)
     if id_count > 0 then
         local acquired_count = __acquired_count
 
-        if acquired_count + id_count > 2 ^ 20 - 1 then
+        if acquired_count + id_count > 1048576 - 1 then
             __debug_fns.error_fmt('id index overflow')
         end
 
@@ -737,7 +737,7 @@ local function __acquire_id_list(id_list, id_first, id_count)
         local entity_places = __entity_places
 
         for acquired_primary = acquired_count + 1, acquired_count + id_count do
-            local acquired_id = acquired_primary + 2 ^ 20
+            local acquired_id = acquired_primary + 1048576
             freelist_ids[acquired_primary] = acquired_id
 
             entity_chunks[acquired_primary] = false
@@ -757,13 +757,13 @@ local function __release_id_list(id_list, id_count)
     for id_index = 1, id_count do
         local id = id_list[id_index]
 
-        local acquired_primary = id % 2 ^ 20
+        local acquired_primary = id % 1048576
         local shifted_secondary = id - acquired_primary
 
         if __freelist_ids[acquired_primary] == id then
-            shifted_secondary = shifted_secondary == 2 ^ 40 - 2 ^ 20
-                and 2 ^ 20
-                or shifted_secondary + 2 ^ 20
+            shifted_secondary = shifted_secondary == 1099511627776 - 1048576
+                and 1048576
+                or shifted_secondary + 1048576
 
             __freelist_ids[acquired_primary] = __available_primary + shifted_secondary
             __available_primary = acquired_primary
@@ -1545,7 +1545,7 @@ function __search_index_fns.combine_keys(index)
     for entity_primary, prev_entity in __lua_next, old_prev_entities do
         local extracted = entity_extracts[entity_primary]
 
-        local key_offset = (extracted % 2 ^ 20) * 2 ^ 20
+        local key_offset = extracted % 1048576 * 1048576
         local entity_key = key_offset + entity_primary
 
         new_prev_entities[entity_key] = prev_entity
@@ -1622,10 +1622,10 @@ function __search_index_fns.insert_extracted(index, entity, extracted)
             __search_index_fns.insert_node(index, entity, target_list[target_index])
         end
 
-        index.__entity_extracts[entity % 2 ^ 20] = target_list
+        index.__entity_extracts[entity % 1048576] = target_list
     else
         __search_index_fns.insert_node(index, entity, extracted)
-        index.__entity_extracts[entity % 2 ^ 20] = extracted
+        index.__entity_extracts[entity % 1048576] = extracted
     end
 end
 
@@ -1635,8 +1635,8 @@ end
 function __search_index_fns.insert_node(index, entity, extracted)
     local target_fragment = index.__target_fragment
 
-    local key_offset = index.__combined_keys and (extracted % 2 ^ 20) * 2 ^ 20 or 0
-    local entity_key = key_offset + entity % 2 ^ 20
+    local key_offset = index.__combined_keys and extracted % 1048576 * 1048576 or 0
+    local entity_key = key_offset + entity % 1048576
 
     local head_entities = index.__head_entities
     local prev_entities = index.__prev_entities
@@ -1651,17 +1651,17 @@ function __search_index_fns.insert_node(index, entity, extracted)
             return
         end
 
-        local head_entity_key = key_offset + head_entity % 2 ^ 20
+        local head_entity_key = key_offset + head_entity % 1048576
 
         local tail_entity = prev_entities[head_entity_key]
-        local tail_entity_key = key_offset + tail_entity % 2 ^ 20
+        local tail_entity_key = key_offset + tail_entity % 1048576
 
         prev_entities[entity_key] = tail_entity
         next_entities[entity_key] = head_entity
 
         prev_entities[head_entity_key] = entity
         next_entities[tail_entity_key] = entity
-    elseif not target_fragment or __freelist_ids[extracted % 2 ^ 20] == extracted then
+    elseif not target_fragment or __freelist_ids[extracted % 1048576] == extracted then
         head_entities[extracted] = entity
 
         prev_entities[entity_key] = entity
@@ -1679,7 +1679,7 @@ end
 ---@param index evolved.search_index
 ---@param entity evolved.entity
 function __search_index_fns.remove(index, entity)
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     ---@type evolved.component?
     local extracted = index.__entity_extracts[entity_primary]
@@ -1709,8 +1709,8 @@ end
 function __search_index_fns.remove_node(index, entity, extracted)
     local target_fragment = index.__target_fragment
 
-    local key_offset = index.__combined_keys and (extracted % 2 ^ 20) * 2 ^ 20 or 0
-    local entity_key = key_offset + entity % 2 ^ 20
+    local key_offset = index.__combined_keys and extracted % 1048576 * 1048576 or 0
+    local entity_key = key_offset + entity % 1048576
 
     local head_entities = index.__head_entities
     local prev_entities = index.__prev_entities
@@ -1741,8 +1741,8 @@ function __search_index_fns.remove_node(index, entity, extracted)
     else
         local prev_entity = prev_entities[entity_key]
 
-        local prev_entity_key = key_offset + prev_entity % 2 ^ 20
-        local next_entity_key = key_offset + next_entity % 2 ^ 20
+        local prev_entity_key = key_offset + prev_entity % 1048576
+        local next_entity_key = key_offset + next_entity % 1048576
 
         prev_entities[next_entity_key] = prev_entity
         next_entities[prev_entity_key] = next_entity
@@ -1770,7 +1770,7 @@ function __search_index_fns.assign(index, entity, component)
         new_extracted = extract_component(new_extracted)
     end
 
-    local old_extracted = entity_extracts[entity % 2 ^ 20]
+    local old_extracted = entity_extracts[entity % 1048576]
 
     if new_extracted == old_extracted then
         -- nothing to reassign
@@ -1831,7 +1831,7 @@ function __search_index_fns.multi_assign(index, entity_list, component_list, fir
             new_extracted = extract_component(new_extracted)
         end
 
-        local old_extracted = entity_extracts[entity % 2 ^ 20]
+        local old_extracted = entity_extracts[entity % 1048576]
 
         if new_extracted == old_extracted then
             -- nothing to reassign
@@ -1874,7 +1874,7 @@ end
 ---@return evolved.chunk
 ---@nodiscard
 function __new_chunk(chunk_parent, chunk_fragment)
-    local chunk_fragment_primary = chunk_fragment % 2 ^ 20
+    local chunk_fragment_primary = chunk_fragment % 1048576
 
     if __freelist_ids[chunk_fragment_primary] ~= chunk_fragment then
         __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be used for a new chunk',
@@ -3258,7 +3258,7 @@ function __detach_entity(chunk, place)
         local last_entity = entity_list[entity_count]
         entity_list[place] = last_entity
 
-        local last_entity_primary = last_entity % 2 ^ 20
+        local last_entity_primary = last_entity % 1048576
         __entity_places[last_entity_primary] = place
 
         for component_index = 1, component_count do
@@ -3324,7 +3324,7 @@ function __spawn_entity(chunk, entity, component_table, component_mapper)
 
         chunk_entity_list[place] = entity
 
-        local entity_primary = entity % 2 ^ 20
+        local entity_primary = entity % 1048576
         __entity_chunks[entity_primary] = chunk
         __entity_places[entity_primary] = place
     end
@@ -3473,7 +3473,7 @@ function __multi_spawn_entity(chunk, entity_list, entity_first, entity_count, co
             local entity = entity_list[place - b_place + entity_first]
             chunk_entity_list[place] = entity
 
-            local entity_primary = entity % 2 ^ 20
+            local entity_primary = entity % 1048576
             entity_chunks[entity_primary] = chunk
             entity_places[entity_primary] = place
         end
@@ -3644,7 +3644,7 @@ function __clone_entity(prefab, entity, component_table, component_mapper)
 
         chunk_entity_list[place] = entity
 
-        local entity_primary = entity % 2 ^ 20
+        local entity_primary = entity % 1048576
         __entity_chunks[entity_primary] = chunk
         __entity_places[entity_primary] = place
     end
@@ -3822,7 +3822,7 @@ function __multi_clone_entity(prefab, entity_list, entity_first, entity_count, c
             local entity = entity_list[place - b_place + entity_first]
             chunk_entity_list[place] = entity
 
-            local entity_primary = entity % 2 ^ 20
+            local entity_primary = entity % 1048576
             entity_chunks[entity_primary] = chunk
             entity_places[entity_primary] = place
         end
@@ -4167,7 +4167,7 @@ function __clear_entity_one(entity)
     local entity_chunks = __entity_chunks
     local entity_places = __entity_places
 
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     if __freelist_ids[entity_primary] ~= entity then
         -- nothing to clear from non-alive entities
@@ -4270,7 +4270,7 @@ function __destroy_entity_one(entity)
     local entity_chunks = __entity_chunks
     local entity_places = __entity_places
 
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     if __freelist_ids[entity_primary] ~= entity then
         -- this entity is not alive, nothing to purge
@@ -4577,7 +4577,7 @@ function __destroy_entity_stack(chunk_stack, chunk_stack_size, entity_stack, ent
 
     for processed_entity_index = 1, processed_entity_count do
         local entity = processed_entity_list[processed_entity_index]
-        local entity_primary = entity % 2 ^ 20
+        local entity_primary = entity % 1048576
 
         local chunk = entity_chunks[entity_primary]
         local place = entity_places[entity_primary]
@@ -4623,7 +4623,7 @@ function __destroy_entity_stack(chunk_stack, chunk_stack_size, entity_stack, ent
 
     for processed_entity_index = 1, processed_entity_count do
         local entity = processed_entity_list[processed_entity_index]
-        local entity_primary = entity % 2 ^ 20
+        local entity_primary = entity % 1048576
 
         local chunk = entity_chunks[entity_primary]
         local place = entity_places[entity_primary]
@@ -4652,7 +4652,7 @@ function __remove_entity_fragments(entity, ...)
         __debug_fns.error_fmt('this operation should be deferred')
     end
 
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     if __freelist_ids[entity_primary] ~= entity then
         -- nothing to remove from non-alive entities
@@ -4980,7 +4980,7 @@ function __chunk_insert(old_chunk, fragment, component)
 
         for new_place = new_entity_count + 1, sum_entity_count do
             local entity = new_entity_list[new_place]
-            local entity_primary = entity % 2 ^ 20
+            local entity_primary = entity % 1048576
             entity_chunks[entity_primary] = new_chunk
             entity_places[entity_primary] = new_place
         end
@@ -5271,7 +5271,7 @@ function __chunk_remove(old_chunk, ...)
 
             for new_place = new_entity_count + 1, sum_entity_count do
                 local entity = new_entity_list[new_place]
-                local entity_primary = entity % 2 ^ 20
+                local entity_primary = entity % 1048576
                 entity_chunks[entity_primary] = new_chunk
                 entity_places[entity_primary] = new_place
             end
@@ -5284,7 +5284,7 @@ function __chunk_remove(old_chunk, ...)
 
         for old_place = 1, old_entity_count do
             local entity = old_entity_list[old_place]
-            local entity_primary = entity % 2 ^ 20
+            local entity_primary = entity % 1048576
             entity_chunks[entity_primary] = false
             entity_places[entity_primary] = 0
         end
@@ -5358,7 +5358,7 @@ function __chunk_clear(chunk)
 
         for place = 1, chunk_entity_count do
             local entity = chunk_entity_list[place]
-            local entity_primary = entity % 2 ^ 20
+            local entity_primary = entity % 1048576
             entity_chunks[entity_primary] = false
             entity_places[entity_primary] = 0
         end
@@ -5918,15 +5918,15 @@ end
 ---@return evolved.id id
 ---@nodiscard
 function __evolved_pack(primary, secondary)
-    if primary < 1 or primary > 2 ^ 20 - 1 then
+    if primary < 1 or primary > 1048576 - 1 then
         __debug_fns.error_fmt('the primary (%d) is out of range [1, 2 ^ 20 - 1]', primary)
     end
 
-    if secondary < 1 or secondary > 2 ^ 20 - 1 then
+    if secondary < 1 or secondary > 1048576 - 1 then
         __debug_fns.error_fmt('the secondary (%d) is out of range [1, 2 ^ 20 - 1]', secondary)
     end
 
-    return primary + secondary * 2 ^ 20 --[[@as evolved.id]]
+    return primary + secondary * 1048576 --[[@as evolved.id]]
 end
 
 ---@param id evolved.id
@@ -5934,8 +5934,7 @@ end
 ---@return integer secondary
 ---@nodiscard
 function __evolved_unpack(id)
-    return id % 2 ^ 20,
-        (id - id % 2 ^ 20) / 2 ^ 20 % 2 ^ 20
+    return id % 1048576, (id - id % 1048576) / 1048576 % 1048576
 end
 
 ---@return boolean started
@@ -6232,7 +6231,7 @@ end
 ---@return boolean
 ---@nodiscard
 function __evolved_alive(entity)
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     if __freelist_ids[entity_primary] ~= entity then
         return false
@@ -6287,7 +6286,7 @@ end
 ---@return boolean
 ---@nodiscard
 function __evolved_empty(entity)
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     if __freelist_ids[entity_primary] ~= entity then
         -- non-alive entities are empty
@@ -6351,7 +6350,7 @@ end
 ---@return boolean
 ---@nodiscard
 function __evolved_has(entity, fragment)
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     if __freelist_ids[entity_primary] ~= entity then
         -- non-alive entities have no fragments
@@ -6379,7 +6378,7 @@ function __evolved_has_all(entity, ...)
         return true
     end
 
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     if __freelist_ids[entity_primary] ~= entity then
         -- non-alive entities have no fragments
@@ -6407,7 +6406,7 @@ function __evolved_has_any(entity, ...)
         return false
     end
 
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     if __freelist_ids[entity_primary] ~= entity then
         -- non-alive entities have no fragments
@@ -6429,7 +6428,7 @@ end
 ---@return evolved.component ... components
 ---@nodiscard
 function __evolved_get(entity, ...)
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     if __freelist_ids[entity_primary] ~= entity then
         -- non-alive entities have no fragments
@@ -6451,7 +6450,7 @@ end
 ---@param fragment evolved.fragment
 ---@param component evolved.component
 function __evolved_set(entity, fragment, component)
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     if __freelist_ids[entity_primary] ~= entity then
         __debug_fns.error_fmt('the entity (%s) is not alive and cannot be changed',
@@ -6459,7 +6458,7 @@ function __evolved_set(entity, fragment, component)
     end
 
     if __debug_mode then
-        local fragment_primary = fragment % 2 ^ 20
+        local fragment_primary = fragment % 1048576
 
         if __freelist_ids[fragment_primary] ~= fragment then
             __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be set',
@@ -6720,7 +6719,7 @@ function __evolved_remove(entity, ...)
         return
     end
 
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     if __freelist_ids[entity_primary] ~= entity then
         -- nothing to remove from non-alive entities
@@ -6767,7 +6766,7 @@ function __evolved_clear(...)
         for argument_index = 1, argument_count do
             ---@type evolved.entity
             local entity = __lua_select(argument_index, ...)
-            local entity_primary = entity % 2 ^ 20
+            local entity_primary = entity % 1048576
 
             if __freelist_ids[entity_primary] ~= entity then
                 -- nothing to clear from non-alive entities
@@ -6801,7 +6800,7 @@ function __evolved_clear_one(entity)
     __evolved_defer()
 
     do
-        local entity_primary = entity % 2 ^ 20
+        local entity_primary = entity % 1048576
 
         if __freelist_ids[entity_primary] ~= entity then
             -- nothing to clear from non-alive entities
@@ -6842,7 +6841,7 @@ function __evolved_destroy(...)
         for argument_index = 1, argument_count do
             ---@type evolved.entity
             local entity = __lua_select(argument_index, ...)
-            local entity_primary = entity % 2 ^ 20
+            local entity_primary = entity % 1048576
 
             if __freelist_ids[entity_primary] ~= entity then
                 -- nothing to destroy from non-alive entities
@@ -6878,7 +6877,7 @@ function __evolved_destroy_one(entity)
     __evolved_defer()
 
     do
-        local entity_primary = entity % 2 ^ 20
+        local entity_primary = entity % 1048576
 
         if __freelist_ids[entity_primary] ~= entity then
             -- nothing to destroy from non-alive entities
@@ -6904,7 +6903,7 @@ end
 ---@param fragment evolved.fragment
 ---@param component evolved.component
 function __evolved_batch_set(query, fragment, component)
-    local query_primary = query % 2 ^ 20
+    local query_primary = query % 1048576
 
     if __freelist_ids[query_primary] ~= query then
         __debug_fns.error_fmt('the query (%s) is not alive and cannot be executed',
@@ -6912,7 +6911,7 @@ function __evolved_batch_set(query, fragment, component)
     end
 
     if __debug_mode then
-        local fragment_primary = fragment % 2 ^ 20
+        local fragment_primary = fragment % 1048576
 
         if __freelist_ids[fragment_primary] ~= fragment then
             __debug_fns.error_fmt('the fragment (%s) is not alive and cannot be set',
@@ -6987,7 +6986,7 @@ function __evolved_batch_remove(query, ...)
         return
     end
 
-    local query_primary = query % 2 ^ 20
+    local query_primary = query % 1048576
 
     if __freelist_ids[query_primary] ~= query then
         __debug_fns.error_fmt('the query (%s) is not alive and cannot be executed',
@@ -7051,7 +7050,7 @@ function __evolved_batch_clear(...)
         for argument_index = 1, argument_count do
             ---@type evolved.query
             local query = __lua_select(argument_index, ...)
-            local query_primary = query % 2 ^ 20
+            local query_primary = query % 1048576
 
             if __freelist_ids[query_primary] ~= query then
                 __debug_fns.warning_fmt('the query (%s) is not alive and cannot be executed',
@@ -7100,7 +7099,7 @@ function __evolved_batch_destroy(...)
         for argument_index = 1, argument_count do
             ---@type evolved.query
             local query = __lua_select(argument_index, ...)
-            local query_primary = query % 2 ^ 20
+            local query_primary = query % 1048576
 
             if __freelist_ids[query_primary] ~= query then
                 __debug_fns.warning_fmt('the query (%s) is not alive and cannot be executed',
@@ -7132,7 +7131,7 @@ end
 ---@return evolved.each_state? iterator_state
 ---@nodiscard
 function __evolved_each(entity)
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     if __freelist_ids[entity_primary] ~= entity then
         __debug_fns.error_fmt('the entity (%s) is not alive and cannot be iterated',
@@ -7161,7 +7160,7 @@ end
 ---@return evolved.execute_state? iterator_state
 ---@nodiscard
 function __evolved_execute(query)
-    local query_primary = query % 2 ^ 20
+    local query_primary = query % 1048576
 
     if __freelist_ids[query_primary] ~= query then
         __debug_fns.error_fmt('the query (%s) is not alive and cannot be executed',
@@ -7241,7 +7240,7 @@ end
 ---@return integer place
 ---@nodiscard
 function __evolved_locate(entity)
-    local entity_primary = entity % 2 ^ 20
+    local entity_primary = entity % 1048576
 
     if __freelist_ids[entity_primary] ~= entity then
         -- non-alive entities have no chunks
@@ -7331,13 +7330,15 @@ function __evolved_multi_search_to(out_entity_list, out_entity_first, fragment, 
     local head_entity = head_entities[component]
 
     if head_entity then
-        local key_offset = fragment_search_index.__combined_keys and (component % 2 ^ 20) * 2 ^ 20 or 0
+        local key_offset = fragment_search_index.__combined_keys
+            and component % 1048576 * 1048576
+            or 0
 
         local entity = head_entity
 
         repeat
             out_entity_list[out_entity_first + entity_count] = entity
-            entity = next_entities[key_offset + entity % 2 ^ 20]
+            entity = next_entities[key_offset + entity % 1048576]
             entity_count = entity_count + 1
         until entity == head_entity
     end
@@ -7383,7 +7384,7 @@ function __evolved_process(...)
     for argument_index = 1, argument_count do
         ---@type evolved.system
         local system = __lua_select(argument_index, ...)
-        local system_primary = system % 2 ^ 20
+        local system_primary = system % 1048576
 
         if __freelist_ids[system_primary] ~= system then
             __debug_fns.warning_fmt('the system (%s) is not alive and cannot be processed',
@@ -7397,7 +7398,7 @@ end
 ---@param system evolved.system
 ---@param ... any processing payload
 function __evolved_process_with(system, ...)
-    local system_primary = system % 2 ^ 20
+    local system_primary = system % 1048576
 
     if __freelist_ids[system_primary] ~= system then
         __debug_fns.error_fmt('the system (%s) is not alive and cannot be processed',
@@ -8078,7 +8079,7 @@ end
 ---@param component evolved.component
 ---@return evolved.builder builder
 function __builder_mt:set(fragment, component)
-    local fragment_primary = fragment % 2 ^ 20
+    local fragment_primary = fragment % 1048576
 
     if __debug_mode then
         if __freelist_ids[fragment_primary] ~= fragment then
