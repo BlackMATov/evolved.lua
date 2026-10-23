@@ -658,13 +658,13 @@ local function __acquire_id()
         local acquired_primary = available_primary
         local freelist_id = freelist_ids[acquired_primary]
 
-        local next_available_primary = freelist_id % 2 ^ 20
-        local shifted_secondary = freelist_id - next_available_primary
-
-        __available_primary = next_available_primary
+        available_primary = freelist_id % 2 ^ 20
+        local shifted_secondary = freelist_id - available_primary
 
         local acquired_id = acquired_primary + shifted_secondary
         freelist_ids[acquired_primary] = acquired_id
+
+        __available_primary = available_primary
 
         return acquired_id --[[@as evolved.id]]
     else
@@ -674,17 +674,15 @@ local function __acquire_id()
             __debug_fns.error_fmt('id index overflow')
         end
 
-        acquired_count = acquired_count + 1
-        __acquired_count = acquired_count
+        local acquired_primary = acquired_count + 1
 
-        local acquired_primary = acquired_count
-        local shifted_secondary = 2 ^ 20
-
-        local acquired_id = acquired_primary + shifted_secondary
+        local acquired_id = acquired_primary + 2 ^ 20
         freelist_ids[acquired_primary] = acquired_id
 
         __entity_chunks[acquired_primary] = false
         __entity_places[acquired_primary] = 0
+
+        __acquired_count = acquired_count + 1
 
         return acquired_id --[[@as evolved.id]]
     end
@@ -702,6 +700,54 @@ local function __release_id(id)
 
         __freelist_ids[acquired_primary] = __available_primary + shifted_secondary
         __available_primary = acquired_primary
+    end
+end
+
+---@param id_list evolved.id[]
+---@param id_first integer
+---@param id_count integer
+local function __acquire_id_list(id_list, id_first, id_count)
+    local freelist_ids = __freelist_ids
+    local available_primary = __available_primary
+
+    while available_primary ~= 0 and id_count > 0 do
+        local acquired_primary = available_primary
+        local freelist_id = freelist_ids[acquired_primary]
+
+        available_primary = freelist_id % 2 ^ 20
+        local shifted_secondary = freelist_id - available_primary
+
+        local acquired_id = acquired_primary + shifted_secondary
+        freelist_ids[acquired_primary] = acquired_id
+
+        id_list[id_first] = acquired_id --[[@as evolved.id]]
+        id_first, id_count = id_first + 1, id_count - 1
+    end
+
+    __available_primary = available_primary
+
+    if id_count > 0 then
+        local acquired_count = __acquired_count
+
+        if acquired_count + id_count > 2 ^ 20 - 1 then
+            __debug_fns.error_fmt('id index overflow')
+        end
+
+        local entity_chunks = __entity_chunks
+        local entity_places = __entity_places
+
+        for acquired_primary = acquired_count + 1, acquired_count + id_count do
+            local acquired_id = acquired_primary + 2 ^ 20
+            freelist_ids[acquired_primary] = acquired_id
+
+            entity_chunks[acquired_primary] = false
+            entity_places[acquired_primary] = 0
+
+            id_list[id_first] = acquired_id --[[@as evolved.id]]
+            id_first = id_first + 1
+        end
+
+        __acquired_count = acquired_count + id_count
     end
 end
 
@@ -6040,9 +6086,7 @@ function __evolved_multi_spawn_to(out_entity_list, out_entity_first,
         end
     end
 
-    for entity_index = out_entity_first, out_entity_first + entity_count - 1 do
-        out_entity_list[entity_index] = __acquire_id()
-    end
+    __acquire_id_list(out_entity_list, out_entity_first, entity_count)
 
     if not component_table or not __lua_next(component_table) then
         return
@@ -6166,9 +6210,7 @@ function __evolved_multi_clone_to(out_entity_list, out_entity_first,
         end
     end
 
-    for entity_index = out_entity_first, out_entity_first + entity_count - 1 do
-        out_entity_list[entity_index] = __acquire_id()
-    end
+    __acquire_id_list(out_entity_list, out_entity_first, entity_count)
 
     if __defer_depth > 0 then
         __defer_multi_clone_entity(prefab,
@@ -7816,9 +7858,7 @@ function __builder_mt:multi_spawn_to(out_entity_list, out_entity_first,
         end
     end
 
-    for entity_index = out_entity_first, out_entity_first + entity_count - 1 do
-        out_entity_list[entity_index] = __acquire_id()
-    end
+    __acquire_id_list(out_entity_list, out_entity_first, entity_count)
 
     if not component_table or not __lua_next(component_table) then
         return
@@ -7938,9 +7978,7 @@ function __builder_mt:multi_clone_to(out_entity_list, out_entity_first,
         end
     end
 
-    for entity_index = out_entity_first, out_entity_first + entity_count - 1 do
-        out_entity_list[entity_index] = __acquire_id()
-    end
+    __acquire_id_list(out_entity_list, out_entity_first, entity_count)
 
     if __defer_depth > 0 then
         __defer_multi_clone_entity(prefab,
