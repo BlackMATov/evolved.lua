@@ -2057,6 +2057,7 @@ builder_mt:destruction_policy :: id -> builder
 - The [`search`](#evolvedsearch) and [`reindex`](#evolvedreindex) functions now print a warning instead of throwing an error for non-indexed fragments
 - Fixed [`batch_set`](#evolvedbatch_set) invoking hooks twice: [#54](https://github.com/BlackMATov/evolved.lua/issues/54)
 - Fixed query caches keeping collected chunks: [#55](https://github.com/BlackMATov/evolved.lua/issues/55)
+- Fixed skipped remove hooks of fragments destroyed in a cascade: [#56](https://github.com/BlackMATov/evolved.lua/issues/56)
 
 ### v1.12.0
 
