@@ -695,18 +695,34 @@ local function __release_id(id)
     local acquired_primary = id % 2 ^ 20
     local shifted_secondary = id - acquired_primary
 
-    local freelist_ids = __freelist_ids
+    if __freelist_ids[acquired_primary] == id then
+        shifted_secondary = shifted_secondary == 2 ^ 40 - 2 ^ 20
+            and 2 ^ 20
+            or shifted_secondary + 2 ^ 20
 
-    if freelist_ids[acquired_primary] ~= id then
-        __debug_fns.error_fmt('the id (%d) is not acquired or already released', id)
+        __freelist_ids[acquired_primary] = __available_primary + shifted_secondary
+        __available_primary = acquired_primary
     end
+end
 
-    shifted_secondary = shifted_secondary == 2 ^ 40 - 2 ^ 20
-        and 2 ^ 20
-        or shifted_secondary + 2 ^ 20
+---@param id_list evolved.id[]
+---@param id_count integer
+local function __release_id_list(id_list, id_count)
+    for id_index = 1, id_count do
+        local id = id_list[id_index]
 
-    freelist_ids[acquired_primary] = __available_primary + shifted_secondary
-    __available_primary = acquired_primary
+        local acquired_primary = id % 2 ^ 20
+        local shifted_secondary = id - acquired_primary
+
+        if __freelist_ids[acquired_primary] == id then
+            shifted_secondary = shifted_secondary == 2 ^ 40 - 2 ^ 20
+                and 2 ^ 20
+                or shifted_secondary + 2 ^ 20
+
+            __freelist_ids[acquired_primary] = __available_primary + shifted_secondary
+            __available_primary = acquired_primary
+        end
+    end
 end
 
 ---
@@ -4300,8 +4316,6 @@ function __destroy_entity_stack(chunk_stack, chunk_stack_size, entity_stack, ent
         __debug_fns.error_fmt('this operation should be deferred')
     end
 
-    local freelist_ids = __freelist_ids
-
     local entity_chunks = __entity_chunks
     local entity_places = __entity_places
 
@@ -4578,14 +4592,7 @@ function __destroy_entity_stack(chunk_stack, chunk_stack_size, entity_stack, ent
         end
     end
 
-    for releasing_entity_index = 1, releasing_entity_count do
-        local entity = releasing_entity_list[releasing_entity_index]
-        local entity_primary = entity % 2 ^ 20
-
-        if freelist_ids[entity_primary] == entity then
-            __release_id(entity)
-        end
-    end
+    __release_id_list(releasing_entity_list, releasing_entity_count)
 
     __release_table(__table_pool_tag.entity_list, releasing_entity_list, false, true)
     __release_table(__table_pool_tag.entity_list, processed_entity_list, false, true)
