@@ -5779,7 +5779,7 @@ end
 ---@param query evolved.query
 ---@param execute evolved.execute
 ---@param ... any processing payload
-local function __query_execute(query, execute, ...)
+function __iterator_fns.__query_execute(query, execute, ...)
     for chunk, entity_list, entity_count in __evolved_execute(query) do
         execute(chunk, entity_list, entity_count, ...)
     end
@@ -5787,7 +5787,7 @@ end
 
 ---@param system evolved.system
 ---@param ... any processing payload
-local function __system_process(system, ...)
+function __iterator_fns.__system_process(system, ...)
     ---@type evolved.query?, evolved.execute?, evolved.prologue?, evolved.epilogue?
     local query, execute, prologue, epilogue = __evolved_get(system,
         __QUERY, __EXECUTE, __PROLOGUE, __EPILOGUE)
@@ -5803,7 +5803,8 @@ local function __system_process(system, ...)
     if execute then
         __evolved_defer()
         do
-            local success, result = __lua_xpcall(__query_execute, __error_handler, query or system, execute, ...)
+            local success, result = __lua_xpcall(__iterator_fns.__query_execute, __error_handler,
+                query or system, execute, ...)
 
             if not success then
                 __evolved_cancel()
@@ -5821,7 +5822,7 @@ local function __system_process(system, ...)
         for subsystem_index = 1, subsystem_count do
             local subsystem = subsystem_list[subsystem_index]
             if not __evolved_has(subsystem, __DISABLED) then
-                __system_process(subsystem, ...)
+                __iterator_fns.__system_process(subsystem, ...)
             end
         end
 
@@ -7388,7 +7389,7 @@ function __evolved_process(...)
             __debug_fns.warning_fmt('the system (%s) is not alive and cannot be processed',
                 __id_name(system))
         else
-            __system_process(system)
+            __iterator_fns.__system_process(system)
         end
     end
 end
@@ -7403,7 +7404,7 @@ function __evolved_process_with(system, ...)
             __id_name(system))
     end
 
-    __system_process(system, ...)
+    __iterator_fns.__system_process(system, ...)
 end
 
 ---@param yesno boolean
