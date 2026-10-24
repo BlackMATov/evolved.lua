@@ -362,6 +362,77 @@ do
 end
 
 do
+    local f = evo.builder():index():link_policy(evo.LINK_POLICY_DESTROY_ENTITY):build()
+
+    local t = evo.id()
+    local e = evo.builder():set(f, t):build()
+
+    evo.set(f, evo.LINK)
+
+    evo.destroy(t)
+    assert(not evo.alive(e))
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_DESTROY_ENTITY):build()
+
+    local t1, t2 = evo.id(2)
+    local e1 = evo.builder():set(f, t1):build()
+    local e2 = evo.builder():set(f, t2):build()
+
+    evo.remove(f, evo.LINK)
+    evo.set(f, evo.LINK)
+
+    evo.destroy(t1)
+    assert(not evo.alive(e1))
+
+    evo.remove(f, evo.LINK_POLICY)
+    evo.remove(f, evo.LINK)
+    evo.set(f, evo.LINK)
+
+    evo.destroy(t2)
+    assert(evo.alive(e2) and not evo.has(e2, f))
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t1, t2 = evo.id(2)
+    local e1 = evo.builder():set(f, t1):build()
+    local e2 = evo.builder():set(f, t2):build()
+
+    evo.defer()
+    do
+        evo.set(f, evo.LINK_POLICY, evo.LINK_POLICY_DESTROY_ENTITY)
+        evo.destroy(t1)
+        evo.remove(f, evo.LINK_POLICY)
+        evo.destroy(t2)
+    end
+    evo.commit()
+
+    assert(not evo.alive(e1))
+    assert(evo.alive(e2) and not evo.has(e2, f))
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t1, t2 = evo.id(2)
+    local e1 = evo.builder():set(f, t1):build()
+    local e2 = evo.builder():set(f, t2):build()
+
+    evo.set(f, evo.LINK_POLICY, evo.LINK_POLICY_DESTROY_ENTITY)
+
+    evo.destroy(t1)
+    assert(not evo.alive(e1))
+
+    evo.set(f, evo.LINK_POLICY, evo.LINK_POLICY_REMOVE_FRAGMENT)
+
+    evo.destroy(t2)
+    assert(evo.alive(e2) and not evo.has(e2, f))
+end
+
+do
     local f = evo.builder():link():build()
 
     local t1, t2 = evo.id(2)

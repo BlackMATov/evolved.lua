@@ -1507,6 +1507,7 @@ local __safe_tbls = {
 ---@field package __prev_entities table<integer, evolved.entity>
 ---@field package __next_entities table<integer, evolved.entity>
 ---@field package __entity_extracts table<integer, evolved.component>
+---@field package __link_policy? evolved.id
 ---@field package __target_fragment? evolved.fragment
 ---@field package __extract_component? evolved.extract
 
@@ -1523,6 +1524,7 @@ function __search_index_fns.new(fragment)
         __prev_entities = {},
         __next_entities = {},
         __entity_extracts = {},
+        __link_policy = __evolved_get(fragment, __LINK_POLICY),
         __target_fragment = __evolved_has(fragment, __LINK) and fragment or nil,
         __extract_component = __evolved_get(fragment, __EXTRACT),
     }
@@ -4502,7 +4504,7 @@ function __destroy_entity_stack(chunk_stack, chunk_stack_size, entity_stack, ent
                                 and target_fragment_search_index.__target_fragment == target_fragment
                                 and target_fragment_search_index.__head_entities[entity]
                             then
-                                local link_policy = __evolved_get(target_fragment, __LINK_POLICY)
+                                local link_policy = target_fragment_search_index.__link_policy
                                     or __LINK_POLICY_REMOVE_FRAGMENT
 
                                 if link_policy == __LINK_POLICY_DESTROY_ENTITY then
@@ -8420,6 +8422,9 @@ __evolved_set(__INDEX, __ON_REMOVE, __update_search_index)
 
 __evolved_set(__LINK, __ON_INSERT, __update_search_index)
 __evolved_set(__LINK, __ON_REMOVE, __update_search_index)
+
+__evolved_set(__LINK_POLICY, __ON_SET, __update_search_index)
+__evolved_set(__LINK_POLICY, __ON_REMOVE, __update_search_index)
 
 __evolved_set(__UNIQUE, __ON_INSERT, __update_major_chunks)
 __evolved_set(__UNIQUE, __ON_REMOVE, __update_major_chunks)
