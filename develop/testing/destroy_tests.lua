@@ -365,3 +365,201 @@ do
 
     evo.destroy(e)
 end
+
+do
+    local f1, f2 = evo.id(2)
+
+    local e = evo.spawn({ [f1] = true, [f2] = true })
+    local c12 = evo.locate(e)
+    local c1 = evo.chunk(f1)
+
+    evo.destroy(e)
+    assert(c1:alive() and c12:alive())
+
+    evo.destroy(f1)
+    assert(not evo.alive(f1) and evo.alive(f2))
+
+    evo.collect_garbage()
+    assert(not c1:alive() and not c12:alive())
+
+    evo.destroy(f2)
+    assert(not evo.alive(f2))
+end
+
+do
+    local p = evo.builder():destruction_policy(evo.DESTRUCTION_POLICY_DESTROY_ENTITY):build()
+    local f1 = evo.builder():destruction_policy(evo.DESTRUCTION_POLICY_DESTROY_ENTITY):build()
+    local f2, f3 = evo.id(2)
+
+    evo.set(f1, p)
+    evo.set(f2, p)
+    evo.set(f3, p)
+
+    local e1 = evo.spawn({ [f1] = true })
+    local e3 = evo.spawn({ [f3] = true })
+
+    local c1 = evo.locate(e1)
+    local c3 = evo.locate(e3)
+
+    evo.destroy(e1)
+    assert(c1:alive() and c3:alive())
+
+    evo.destroy(p)
+    assert(not evo.alive_any(p, f1, f2, f3))
+    assert(evo.alive(e3) and evo.empty(e3))
+
+    evo.collect_garbage()
+    assert(not c1:alive() and not c3:alive())
+
+    evo.destroy(e3)
+end
+
+do
+    local p = evo.builder():destruction_policy(evo.DESTRUCTION_POLICY_DESTROY_ENTITY):build()
+    local f1 = evo.builder():destruction_policy(evo.DESTRUCTION_POLICY_DESTROY_ENTITY):build()
+    local f2, f3 = evo.id(2)
+
+    evo.set(f1, p)
+    evo.set(f2, p)
+    evo.set(f3, p)
+
+    local e1 = evo.spawn({ [f1] = true, [f2] = true })
+    local e2 = evo.spawn({ [f2] = true })
+    local e3 = evo.spawn({ [f3] = true })
+
+    local c12 = evo.locate(e1)
+    local c2 = evo.locate(e2)
+
+    evo.destroy(e2, e3)
+    assert(c12:alive() and c2:alive())
+
+    evo.destroy(p)
+    assert(not evo.alive_any(p, f1, f2, f3, e1, e2, e3))
+
+    evo.collect_garbage()
+    assert(not c12:alive() and not c2:alive())
+end
+
+do
+    local p = evo.builder():destruction_policy(evo.DESTRUCTION_POLICY_DESTROY_ENTITY):build()
+    local f1, f2, f3 = evo.id(3)
+
+    evo.set(f1, p)
+    evo.set(f2, p)
+    evo.set(f3, p)
+
+    local e2 = evo.spawn({ [f2] = true })
+    evo.destroy(evo.spawn({ [f3] = true }))
+
+    evo.destroy(f1, f3, p)
+    assert(not evo.alive_any(p, f1, f2, f3))
+    assert(evo.alive(e2) and evo.empty(e2))
+
+    evo.destroy(e2)
+    evo.collect_garbage()
+end
+
+do
+    local f1, f2 = evo.id(2)
+
+    local e = evo.spawn({ [f1] = true, [f2] = true })
+
+    evo.destroy(f1)
+    assert(evo.alive(e) and not evo.has(e, f1) and evo.has(e, f2))
+    assert(evo.locate(e) == evo.chunk(f2))
+
+    evo.destroy(f2)
+    assert(evo.alive(e) and evo.empty(e))
+
+    evo.destroy(e)
+    evo.collect_garbage()
+end
+
+do
+    local f = evo.id()
+
+    evo.set(f, f)
+    local c = evo.locate(f)
+
+    evo.destroy(f)
+    assert(not evo.alive(f))
+
+    evo.collect_garbage()
+    assert(not c:alive())
+end
+
+do
+    local f = evo.builder():destruction_policy(evo.DESTRUCTION_POLICY_DESTROY_ENTITY):build()
+    local l = evo.builder():link():build()
+
+    local e = evo.spawn({ [f] = true })
+    local c = evo.locate(e)
+
+    local r = evo.spawn({ [l] = f })
+
+    evo.destroy(e)
+    assert(c:alive())
+
+    evo.destroy(f)
+    assert(not evo.alive(f) and evo.alive(r))
+    assert(not evo.has(r, l))
+
+    evo.collect_garbage()
+    assert(not c:alive())
+
+    evo.destroy(r, l)
+end
+
+do
+    for _, e_first in ipairs({ true, false }) do
+        local f1 = evo.builder():destruction_policy(evo.DESTRUCTION_POLICY_DESTROY_ENTITY):build()
+        local f2 = evo.builder():destruction_policy(evo.DESTRUCTION_POLICY_REMOVE_FRAGMENT):build()
+
+        local e1 = evo.spawn({ [f1] = true })
+        local e2 = evo.spawn({ [f2] = true })
+        local e3 = evo.spawn({ [f1] = true, [f2] = true })
+
+        evo.destroy(e3)
+
+        if e_first then
+            evo.destroy(e1, e2, f1, f2)
+        else
+            evo.destroy(f1, f2, e1, e2)
+        end
+
+        assert(not evo.alive_any(f1, f2, e1, e2, e3))
+        evo.collect_garbage()
+    end
+end
+
+do
+    for _, policy in ipairs({ evo.DESTRUCTION_POLICY_DESTROY_ENTITY, evo.DESTRUCTION_POLICY_REMOVE_FRAGMENT }) do
+        local f = evo.builder():destruction_policy(policy):build()
+        local f1, f2, f3 = evo.id(3)
+
+        local e1 = evo.spawn({ [f] = true, [f1] = true })
+        local e2 = evo.spawn({ [f] = true, [f2] = true })
+        local e3 = evo.spawn({ [f] = true, [f3] = true })
+
+        local c1, c2, c3 = evo.locate(e1), evo.locate(e2), evo.locate(e3)
+
+        evo.destroy(e1, e2)
+        evo.destroy(f)
+
+        if policy == evo.DESTRUCTION_POLICY_DESTROY_ENTITY then
+            assert(not evo.alive_any(f, e3))
+        else
+            assert(not evo.alive(f) and evo.alive(e3))
+            assert(not evo.has(e3, f) and evo.has(e3, f3))
+        end
+
+        evo.collect_garbage()
+        assert(not c1:alive() and not c2:alive() and not c3:alive())
+
+        local e4 = evo.spawn({ [f1] = true, [f2] = true, [f3] = true })
+        assert(evo.has_all(e4, f1, f2, f3))
+
+        evo.destroy(e3, e4, f1, f2, f3)
+        evo.collect_garbage()
+    end
+end

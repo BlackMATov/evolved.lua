@@ -4414,10 +4414,14 @@ function __destroy_entity_stack(chunk_stack, chunk_stack_size, entity_stack, ent
 
                 __chunk_clear(chunk)
             else
+                local entity_stack_curr = entity_stack_size
+
                 for place = chunk_entity_count, 1, -1 do
                     local entity = chunk_entity_list[place]
 
-                    if not minor_chunks[entity] and not target_fragments[entity] then
+                    if entity_stack_curr > entity_stack_base and entity == entity_stack[entity_stack_curr] then
+                        entity_stack_curr = entity_stack_curr - 1
+                    else
                         releasing_entity_count = releasing_entity_count + 1
                         releasing_entity_list[releasing_entity_count] = entity
 
