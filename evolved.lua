@@ -759,21 +759,26 @@ end
 ---@param id_list evolved.id[]
 ---@param id_count integer
 local function __release_id_list(id_list, id_count)
+    local freelist_ids = __freelist_ids
+    local available_primary = __available_primary
+
     for id_index = 1, id_count do
         local id = id_list[id_index]
 
         local acquired_primary = id % 1048576
         local shifted_secondary = id - acquired_primary
 
-        if __freelist_ids[acquired_primary] == id then
+        if freelist_ids[acquired_primary] == id then
             shifted_secondary = shifted_secondary == 1099511627776 - 1048576
                 and 1048576
                 or shifted_secondary + 1048576
 
-            __freelist_ids[acquired_primary] = __available_primary + shifted_secondary
-            __available_primary = acquired_primary
+            freelist_ids[acquired_primary] = available_primary + shifted_secondary
+            available_primary = acquired_primary
         end
     end
+
+    __available_primary = available_primary
 end
 
 ---
@@ -1460,12 +1465,8 @@ local __multi_clone_entity
 local __purge_chunk
 local __expand_chunk
 local __shrink_chunk
-local __clear_chunk_list
 local __clear_entity_one
-local __clear_entity_list
-local __destroy_chunk_list
 local __destroy_entity_one
-local __destroy_entity_list
 local __destroy_entity_stack
 local __remove_entity_fragments
 
@@ -4228,23 +4229,6 @@ function __shrink_chunk(chunk, min_capacity)
     chunk.__entity_capacity = min_capacity
 end
 
----@param chunk_list evolved.chunk[]
----@param chunk_count integer
-function __clear_chunk_list(chunk_list, chunk_count)
-    if __defer_depth <= 0 then
-        __debug_fns.error_fmt('this operation should be deferred')
-    end
-
-    if chunk_count == 0 then
-        return
-    end
-
-    for chunk_index = 1, chunk_count do
-        local chunk = chunk_list[chunk_index]
-        __chunk_clear(chunk)
-    end
-end
-
 ---@param entity evolved.entity
 function __clear_entity_one(entity)
     if __defer_depth <= 0 then
@@ -4311,43 +4295,6 @@ function __clear_entity_one(entity)
             __structural_changes = __structural_changes + 1
         end
     end
-end
-
----@param entity_list evolved.entity[]
----@param entity_count integer
-function __clear_entity_list(entity_list, entity_count)
-    if __defer_depth <= 0 then
-        __debug_fns.error_fmt('this operation should be deferred')
-    end
-
-    for entity_index = 1, entity_count do
-        local entity = entity_list[entity_index]
-        __clear_entity_one(entity)
-    end
-end
-
----@param chunk_list evolved.chunk[]
----@param chunk_count integer
-function __destroy_chunk_list(chunk_list, chunk_count)
-    if __defer_depth <= 0 then
-        __debug_fns.error_fmt('this operation should be deferred')
-    end
-
-    if chunk_count == 0 then
-        return
-    end
-
-    ---@type evolved.chunk[]
-    local chunk_stack = __acquire_table(__table_pool_tag.chunk_list)
-
-    ---@type evolved.entity[]
-    local entity_stack = __acquire_table(__table_pool_tag.entity_list)
-
-    __lua_table_move(chunk_list, 1, chunk_count, 1, chunk_stack)
-    __destroy_entity_stack(chunk_stack, chunk_count, entity_stack, 0)
-
-    __release_table(__table_pool_tag.chunk_list, chunk_stack, true, true)
-    __release_table(__table_pool_tag.entity_list, entity_stack, true, true)
 end
 
 ---@param entity evolved.entity
@@ -4418,30 +4365,6 @@ function __destroy_entity_one(entity)
 
         __release_id(entity)
     end
-end
-
----@param entity_list evolved.entity[]
----@param entity_count integer
-function __destroy_entity_list(entity_list, entity_count)
-    if __defer_depth <= 0 then
-        __debug_fns.error_fmt('this operation should be deferred')
-    end
-
-    if entity_count == 0 then
-        return
-    end
-
-    ---@type evolved.chunk[]
-    local chunk_stack = __acquire_table(__table_pool_tag.chunk_list)
-
-    ---@type evolved.entity[]
-    local entity_stack = __acquire_table(__table_pool_tag.entity_list)
-
-    __lua_table_move(entity_list, 1, entity_count, 1, entity_stack)
-    __destroy_entity_stack(chunk_stack, 0, entity_stack, entity_count)
-
-    __release_table(__table_pool_tag.entity_list, entity_stack, true, true)
-    __release_table(__table_pool_tag.chunk_list, chunk_stack, true, true)
 end
 
 ---@param chunk_stack evolved.chunk[]
@@ -6871,9 +6794,6 @@ function __evolved_clear(...)
     __evolved_defer()
 
     do
-        local purging_entity_list ---@type evolved.entity[]?
-        local purging_entity_count = 0 ---@type integer
-
         for argument_index = 1, argument_count do
             ---@type evolved.entity
             local entity = __lua_select(argument_index, ...)
@@ -6882,19 +6802,8 @@ function __evolved_clear(...)
             if __freelist_ids[entity_primary] ~= entity then
                 -- nothing to clear from non-alive entities
             else
-                if not purging_entity_list then
-                    ---@type evolved.entity[]
-                    purging_entity_list = __acquire_table(__table_pool_tag.entity_list)
-                end
-
-                purging_entity_count = purging_entity_count + 1
-                purging_entity_list[purging_entity_count] = entity
+                __clear_entity_one(entity)
             end
-        end
-
-        if purging_entity_list then
-            __clear_entity_list(purging_entity_list, purging_entity_count)
-            __release_table(__table_pool_tag.entity_list, purging_entity_list, false, true)
         end
     end
 
@@ -6946,8 +6855,8 @@ function __evolved_destroy(...)
         local minor_chunks = __minor_chunks
         local target_fragments = __target_fragments
 
-        local destroying_entity_list ---@type evolved.entity[]?
-        local destroying_entity_count = 0 ---@type integer
+        local destroying_entity_stack ---@type evolved.entity[]?
+        local destroying_entity_stack_size = 0 ---@type integer
 
         for argument_index = 1, argument_count do
             ---@type evolved.entity
@@ -6959,19 +6868,26 @@ function __evolved_destroy(...)
             elseif not minor_chunks[entity] and not target_fragments[entity] then
                 __destroy_entity_one(entity)
             else
-                if not destroying_entity_list then
+                if not destroying_entity_stack then
                     ---@type evolved.entity[]
-                    destroying_entity_list = __acquire_table(__table_pool_tag.entity_list)
+                    destroying_entity_stack = __acquire_table(__table_pool_tag.entity_list)
                 end
 
-                destroying_entity_count = destroying_entity_count + 1
-                destroying_entity_list[destroying_entity_count] = entity
+                destroying_entity_stack_size = destroying_entity_stack_size + 1
+                destroying_entity_stack[destroying_entity_stack_size] = entity
             end
         end
 
-        if destroying_entity_list then
-            __destroy_entity_list(destroying_entity_list, destroying_entity_count)
-            __release_table(__table_pool_tag.entity_list, destroying_entity_list, false, true)
+        if destroying_entity_stack then
+            ---@type evolved.chunk[]
+            local destroying_chunk_stack = __acquire_table(__table_pool_tag.chunk_list)
+
+            __destroy_entity_stack(
+                destroying_chunk_stack, 0,
+                destroying_entity_stack, destroying_entity_stack_size)
+
+            __release_table(__table_pool_tag.chunk_list, destroying_chunk_stack, true, true)
+            __release_table(__table_pool_tag.entity_list, destroying_entity_stack, true, true)
         end
     end
 
@@ -6995,15 +6911,20 @@ function __evolved_destroy_one(entity)
         elseif not __minor_chunks[entity] and not __target_fragments[entity] then
             __destroy_entity_one(entity)
         else
+            ---@type evolved.chunk[]
+            local destroying_chunk_stack = __acquire_table(__table_pool_tag.chunk_list)
+
             ---@type evolved.entity[]
-            local destroying_entity_list = __acquire_table(__table_pool_tag.entity_list)
-            local destroying_entity_count = 0
+            local destroying_entity_stack = __acquire_table(__table_pool_tag.entity_list)
 
-            destroying_entity_count = destroying_entity_count + 1
-            destroying_entity_list[destroying_entity_count] = entity
+            destroying_entity_stack[1] = entity
 
-            __destroy_entity_list(destroying_entity_list, destroying_entity_count)
-            __release_table(__table_pool_tag.entity_list, destroying_entity_list, false, true)
+            __destroy_entity_stack(
+                destroying_chunk_stack, 0,
+                destroying_entity_stack, 1)
+
+            __release_table(__table_pool_tag.chunk_list, destroying_chunk_stack, true, true)
+            __release_table(__table_pool_tag.entity_list, destroying_entity_stack, true, true)
         end
     end
 
@@ -7064,23 +6985,23 @@ function __evolved_batch_set(query, fragment, component)
             end
         end
 
-        for assign_chunk_index = 1, assign_chunk_count do
-            ---@cast assign_chunk_list -?
-            local assign_chunk = assign_chunk_list[assign_chunk_index]
-            __chunk_assign(assign_chunk, fragment, component)
-        end
-
-        for insert_chunk_index = 1, insert_chunk_count do
-            ---@cast insert_chunk_list -?
-            local insert_chunk = insert_chunk_list[insert_chunk_index]
-            __chunk_insert(insert_chunk, fragment, component)
-        end
-
         if assign_chunk_list then
+            for assign_chunk_index = 1, assign_chunk_count do
+                ---@cast assign_chunk_list -?
+                local assign_chunk = assign_chunk_list[assign_chunk_index]
+                __chunk_assign(assign_chunk, fragment, component)
+            end
+
             __release_table(__table_pool_tag.chunk_list, assign_chunk_list, false, true)
         end
 
         if insert_chunk_list then
+            for insert_chunk_index = 1, insert_chunk_count do
+                ---@cast insert_chunk_list -?
+                local insert_chunk = insert_chunk_list[insert_chunk_index]
+                __chunk_insert(insert_chunk, fragment, component)
+            end
+
             __release_table(__table_pool_tag.chunk_list, insert_chunk_list, false, true)
         end
     end
@@ -7112,27 +7033,26 @@ function __evolved_batch_remove(query, ...)
     __evolved_defer()
 
     do
-        local chunk_list ---@type evolved.chunk[]?
-        local chunk_count = 0 ---@type integer
+        local remove_chunk_list ---@type evolved.chunk[]?
+        local remove_chunk_count = 0 ---@type integer
 
         for chunk in __evolved_execute(query) do
-            if not chunk_list then
+            if not remove_chunk_list then
                 ---@type evolved.chunk[]
-                chunk_list = __acquire_table(__table_pool_tag.chunk_list)
+                remove_chunk_list = __acquire_table(__table_pool_tag.chunk_list)
             end
 
-            chunk_count = chunk_count + 1
-            chunk_list[chunk_count] = chunk
+            remove_chunk_count = remove_chunk_count + 1
+            remove_chunk_list[remove_chunk_count] = chunk
         end
 
-        for chunk_index = 1, chunk_count do
-            ---@cast chunk_list -?
-            local chunk = chunk_list[chunk_index]
-            __chunk_remove(chunk, ...)
-        end
+        if remove_chunk_list then
+            for chunk_index = 1, remove_chunk_count do
+                local chunk = remove_chunk_list[chunk_index]
+                __chunk_remove(chunk, ...)
+            end
 
-        if chunk_list then
-            __release_table(__table_pool_tag.chunk_list, chunk_list, false, true)
+            __release_table(__table_pool_tag.chunk_list, remove_chunk_list, false, true)
         end
     end
 
@@ -7155,8 +7075,8 @@ function __evolved_batch_clear(...)
     __evolved_defer()
 
     do
-        local chunk_list ---@type evolved.chunk[]?
-        local chunk_count = 0 ---@type integer
+        local clear_chunk_list ---@type evolved.chunk[]?
+        local clear_chunk_count = 0 ---@type integer
 
         for argument_index = 1, argument_count do
             ---@type evolved.query
@@ -7168,20 +7088,24 @@ function __evolved_batch_clear(...)
                     __id_name(query))
             else
                 for chunk in __evolved_execute(query) do
-                    if not chunk_list then
+                    if not clear_chunk_list then
                         ---@type evolved.chunk[]
-                        chunk_list = __acquire_table(__table_pool_tag.chunk_list)
+                        clear_chunk_list = __acquire_table(__table_pool_tag.chunk_list)
                     end
 
-                    chunk_count = chunk_count + 1
-                    chunk_list[chunk_count] = chunk
+                    clear_chunk_count = clear_chunk_count + 1
+                    clear_chunk_list[clear_chunk_count] = chunk
                 end
             end
         end
 
-        if chunk_list then
-            __clear_chunk_list(chunk_list, chunk_count)
-            __release_table(__table_pool_tag.chunk_list, chunk_list, false, true)
+        if clear_chunk_list then
+            for chunk_index = 1, clear_chunk_count do
+                local chunk = clear_chunk_list[chunk_index]
+                __chunk_clear(chunk)
+            end
+
+            __release_table(__table_pool_tag.chunk_list, clear_chunk_list, false, true)
         end
     end
 
@@ -7204,8 +7128,8 @@ function __evolved_batch_destroy(...)
     __evolved_defer()
 
     do
-        local destroying_chunk_list ---@type evolved.chunk[]?
-        local destroying_chunk_count = 0 ---@type integer
+        local destroy_chunk_stack ---@type evolved.chunk[]?
+        local destroy_chunk_stack_size = 0 ---@type integer
 
         for argument_index = 1, argument_count do
             ---@type evolved.query
@@ -7217,20 +7141,27 @@ function __evolved_batch_destroy(...)
                     __id_name(query))
             else
                 for chunk in __evolved_execute(query) do
-                    if not destroying_chunk_list then
+                    if not destroy_chunk_stack then
                         ---@type evolved.chunk[]
-                        destroying_chunk_list = __acquire_table(__table_pool_tag.chunk_list)
+                        destroy_chunk_stack = __acquire_table(__table_pool_tag.chunk_list)
                     end
 
-                    destroying_chunk_count = destroying_chunk_count + 1
-                    destroying_chunk_list[destroying_chunk_count] = chunk
+                    destroy_chunk_stack_size = destroy_chunk_stack_size + 1
+                    destroy_chunk_stack[destroy_chunk_stack_size] = chunk
                 end
             end
         end
 
-        if destroying_chunk_list then
-            __destroy_chunk_list(destroying_chunk_list, destroying_chunk_count)
-            __release_table(__table_pool_tag.chunk_list, destroying_chunk_list, false, true)
+        if destroy_chunk_stack then
+            ---@type evolved.entity[]
+            local destroying_entity_stack = __acquire_table(__table_pool_tag.entity_list)
+
+            __destroy_entity_stack(
+                destroy_chunk_stack, destroy_chunk_stack_size,
+                destroying_entity_stack, 0)
+
+            __release_table(__table_pool_tag.chunk_list, destroy_chunk_stack, true, true)
+            __release_table(__table_pool_tag.entity_list, destroying_entity_stack, true, true)
         end
     end
 
