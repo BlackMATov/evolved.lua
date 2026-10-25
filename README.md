@@ -2055,9 +2055,11 @@ builder_mt:destruction_policy :: id -> builder
 - Query iteration order no longer depends on the order in which chunks were created
 - The [`NAME`](#evolvedname) fragment is now marked as [UNIQUE](#unique-fragments), so clones no longer inherit the names of their prefabs
 - The [`search`](#evolvedsearch) and [`reindex`](#evolvedreindex) functions now print a warning instead of throwing an error for non-indexed fragments
+- Improved performance of modifying operations for fragments with [`ON_SET`](#evolvedon_set), [`ON_ASSIGN`](#evolvedon_assign), [`ON_INSERT`](#evolvedon_insert), and [`ON_REMOVE`](#evolvedon_remove) hooks
 - Fixed [`batch_set`](#evolvedbatch_set) invoking hooks twice: [#54](https://github.com/BlackMATov/evolved.lua/issues/54)
 - Fixed query caches keeping collected chunks: [#55](https://github.com/BlackMATov/evolved.lua/issues/55)
 - Fixed skipped remove hooks of fragments destroyed in a cascade: [#56](https://github.com/BlackMATov/evolved.lua/issues/56)
+- Fixed stale [`DEFAULT`](#evolveddefault) and [`DUPLICATE`](#evolvedduplicate) values after their reassignment: [#57](https://github.com/BlackMATov/evolved.lua/issues/57)
 
 ### v1.12.0
 
