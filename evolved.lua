@@ -1475,7 +1475,7 @@ local __chunk_insert
 local __chunk_remove
 local __chunk_clear
 
-local __defer_call_hook
+local __defer_call_func
 
 local __defer_spawn_entity
 local __defer_multi_spawn_entity
@@ -2827,7 +2827,7 @@ end
 ---@param major evolved.fragment
 function __update_major_chunks(major)
     if __defer_depth > 0 then
-        __defer_call_hook(__update_major_chunks, major)
+        __defer_call_func(__update_major_chunks, 1, major)
         return
     end
 
@@ -2844,7 +2844,7 @@ end
 ---@param fragment evolved.fragment
 function __update_search_index(fragment)
     if __defer_depth > 0 then
-        __defer_call_hook(__update_search_index, fragment)
+        __defer_call_func(__update_search_index, 1, fragment)
         return
     end
 
@@ -5399,91 +5399,153 @@ end
 
 ---@enum evolved.defer_op
 local __defer_op = {
-    call_hook = 1,
+    call_func_0 = 1,
+    call_func_1 = 2,
+    call_func_2 = 3,
+    call_func_3 = 4,
+    call_func_4 = 5,
+    call_func_N = 6,
 
-    spawn_entity = 2,
-    multi_spawn_entity = 3,
+    set = 7,
+    remove_one = 8,
+    clear_one = 9,
+    destroy_one = 10,
 
-    clone_entity = 4,
-    multi_clone_entity = 5,
+    spawn_entity = 11,
+    multi_spawn_entity = 12,
 
-    __count = 5,
+    clone_entity = 13,
+    multi_clone_entity = 14,
+
+    __count = 14,
 }
 
 ---@type table<evolved.defer_op, fun(bytes: any[], index: integer): integer>
 local __defer_ops = __lua_table_new(__defer_op.__count)
 
----@param hook fun(...)
----@param ... any hook arguments
-function __defer_call_hook(hook, ...)
+---@param func fun(...)
+---@param argument_count integer
+---@param a1? any
+---@param a2? any
+---@param a3? any
+---@param a4? any
+---@param ... any function arguments
+function __defer_call_func(func, argument_count, a1, a2, a3, a4, ...)
     local length = __defer_length
     local bytecode = __defer_bytecode
 
-    local argument_count = __lua_select('#', ...)
-
-    bytecode[length + 1] = __defer_op.call_hook
-    bytecode[length + 2] = hook
-    bytecode[length + 3] = argument_count
-
     if argument_count == 0 then
-        -- nothing
+        bytecode[length + 1] = __defer_op.call_func_0
+        bytecode[length + 2] = func
+        __defer_length = length + 2
     elseif argument_count == 1 then
-        local a1 = ...
-        bytecode[length + 4] = a1
+        bytecode[length + 1] = __defer_op.call_func_1
+        bytecode[length + 2] = func
+        bytecode[length + 3] = a1
+        __defer_length = length + 3
     elseif argument_count == 2 then
-        local a1, a2 = ...
-        bytecode[length + 4] = a1
-        bytecode[length + 5] = a2
+        bytecode[length + 1] = __defer_op.call_func_2
+        bytecode[length + 2] = func
+        bytecode[length + 3] = a1
+        bytecode[length + 4] = a2
+        __defer_length = length + 4
     elseif argument_count == 3 then
-        local a1, a2, a3 = ...
-        bytecode[length + 4] = a1
-        bytecode[length + 5] = a2
-        bytecode[length + 6] = a3
+        bytecode[length + 1] = __defer_op.call_func_3
+        bytecode[length + 2] = func
+        bytecode[length + 3] = a1
+        bytecode[length + 4] = a2
+        bytecode[length + 5] = a3
+        __defer_length = length + 5
     elseif argument_count == 4 then
-        local a1, a2, a3, a4 = ...
-        bytecode[length + 4] = a1
-        bytecode[length + 5] = a2
-        bytecode[length + 6] = a3
-        bytecode[length + 7] = a4
+        bytecode[length + 1] = __defer_op.call_func_4
+        bytecode[length + 2] = func
+        bytecode[length + 3] = a1
+        bytecode[length + 4] = a2
+        bytecode[length + 5] = a3
+        bytecode[length + 6] = a4
+        __defer_length = length + 6
     else
-        local a1, a2, a3, a4 = ...
+        bytecode[length + 1] = __defer_op.call_func_N
+        bytecode[length + 2] = func
+        bytecode[length + 3] = argument_count
         bytecode[length + 4] = a1
         bytecode[length + 5] = a2
         bytecode[length + 6] = a3
         bytecode[length + 7] = a4
         for i = 5, argument_count do
-            bytecode[length + 3 + i] = __lua_select(i, ...)
+            bytecode[length + 3 + i] = __lua_select(i - 4, ...)
         end
+        __defer_length = length + 3 + argument_count
     end
-
-    __defer_length = length + 3 + argument_count
 end
 
-__defer_ops[__defer_op.call_hook] = function(bytes, index)
-    local hook = bytes[index + 0]
+__defer_ops[__defer_op.call_func_0] = function(bytes, index)
+    local func = bytes[index]
+    func()
+    return 1
+end
+
+__defer_ops[__defer_op.call_func_1] = function(bytes, index)
+    local func = bytes[index]
+    local a1 = bytes[index + 1]
+    func(a1)
+    return 2
+end
+
+__defer_ops[__defer_op.call_func_2] = function(bytes, index)
+    local func = bytes[index]
+    local a1, a2 = bytes[index + 1], bytes[index + 2]
+    func(a1, a2)
+    return 3
+end
+
+__defer_ops[__defer_op.call_func_3] = function(bytes, index)
+    local func = bytes[index]
+    local a1, a2, a3 = bytes[index + 1], bytes[index + 2], bytes[index + 3]
+    func(a1, a2, a3)
+    return 4
+end
+
+__defer_ops[__defer_op.call_func_4] = function(bytes, index)
+    local func = bytes[index]
+    local a1, a2, a3, a4 = bytes[index + 1], bytes[index + 2], bytes[index + 3], bytes[index + 4]
+    func(a1, a2, a3, a4)
+    return 5
+end
+
+__defer_ops[__defer_op.call_func_N] = function(bytes, index)
+    local func = bytes[index]
     local argument_count = bytes[index + 1]
-
-    if argument_count == 0 then
-        hook()
-    elseif argument_count == 1 then
-        local a1 = bytes[index + 2]
-        hook(a1)
-    elseif argument_count == 2 then
-        local a1, a2 = bytes[index + 2], bytes[index + 3]
-        hook(a1, a2)
-    elseif argument_count == 3 then
-        local a1, a2, a3 = bytes[index + 2], bytes[index + 3], bytes[index + 4]
-        hook(a1, a2, a3)
-    elseif argument_count == 4 then
-        local a1, a2, a3, a4 = bytes[index + 2], bytes[index + 3], bytes[index + 4], bytes[index + 5]
-        hook(a1, a2, a3, a4)
-    else
-        local a1, a2, a3, a4 = bytes[index + 2], bytes[index + 3], bytes[index + 4], bytes[index + 5]
-        hook(a1, a2, a3, a4,
-            __lua_table_unpack(bytes, index + 6, index + 1 + argument_count))
-    end
-
+    local a1, a2, a3, a4 = bytes[index + 2], bytes[index + 3], bytes[index + 4], bytes[index + 5]
+    func(a1, a2, a3, a4, __lua_table_unpack(bytes, index + 6, index + 1 + argument_count))
     return 2 + argument_count
+end
+
+__defer_ops[__defer_op.set] = function(bytes, index)
+    local entity = bytes[index]
+    local fragment = bytes[index + 1]
+    local component = bytes[index + 2]
+    __evolved_set(entity, fragment, component)
+    return 3
+end
+
+__defer_ops[__defer_op.remove_one] = function(bytes, index)
+    local entity = bytes[index]
+    local fragment = bytes[index + 1]
+    __evolved_remove(entity, fragment)
+    return 2
+end
+
+__defer_ops[__defer_op.clear_one] = function(bytes, index)
+    local entity = bytes[index]
+    __evolved_clear_one(entity)
+    return 1
+end
+
+__defer_ops[__defer_op.destroy_one] = function(bytes, index)
+    local entity = bytes[index]
+    __evolved_destroy_one(entity)
+    return 1
 end
 
 ---@param chunk? evolved.chunk
@@ -5515,7 +5577,7 @@ function __defer_spawn_entity(chunk, entity, component_table, component_mapper)
 end
 
 __defer_ops[__defer_op.spawn_entity] = function(bytes, index)
-    local chunk = bytes[index + 0] ---@type evolved.chunk
+    local chunk = bytes[index] ---@type evolved.chunk
     local entity = bytes[index + 1] ---@type evolved.entity
     local component_table2 = bytes[index + 2] ---@type evolved.component_table?
     local component_mapper = bytes[index + 3] ---@type evolved.component_mapper?
@@ -5572,7 +5634,7 @@ function __defer_multi_spawn_entity(chunk, entity_list, entity_first, entity_cou
 end
 
 __defer_ops[__defer_op.multi_spawn_entity] = function(bytes, index)
-    local chunk = bytes[index + 0] ---@type evolved.chunk
+    local chunk = bytes[index] ---@type evolved.chunk
     local entity_count = bytes[index + 1] ---@type integer
     local entity_list2 = bytes[index + 2] ---@type evolved.entity[]
     local component_table2 = bytes[index + 3] ---@type evolved.component_table?
@@ -5626,7 +5688,7 @@ function __defer_clone_entity(prefab, entity, component_table, component_mapper)
 end
 
 __defer_ops[__defer_op.clone_entity] = function(bytes, index)
-    local prefab = bytes[index + 0] ---@type evolved.entity
+    local prefab = bytes[index] ---@type evolved.entity
     local entity = bytes[index + 1] ---@type evolved.entity
     local component_table2 = bytes[index + 2] ---@type evolved.component_table?
     local component_mapper = bytes[index + 3] ---@type evolved.component_mapper?
@@ -5683,7 +5745,7 @@ function __defer_multi_clone_entity(prefab, entity_list, entity_first, entity_co
 end
 
 __defer_ops[__defer_op.multi_clone_entity] = function(bytes, index)
-    local prefab = bytes[index + 0] ---@type evolved.entity
+    local prefab = bytes[index] ---@type evolved.entity
     local entity_count = bytes[index + 1] ---@type integer
     local entity_list2 = bytes[index + 2] ---@type evolved.entity[]
     local component_table2 = bytes[index + 3] ---@type evolved.component_table?
@@ -6489,7 +6551,15 @@ function __evolved_set(entity, fragment, component)
     end
 
     if __defer_depth > 0 then
-        __defer_call_hook(__evolved_set, entity, fragment, component)
+        local length = __defer_length
+        local bytecode = __defer_bytecode
+
+        bytecode[length + 1] = __defer_op.set
+        bytecode[length + 2] = entity
+        bytecode[length + 3] = fragment
+        bytecode[length + 4] = component
+
+        __defer_length = length + 4
         return
     end
 
@@ -6761,7 +6831,18 @@ function __evolved_remove(entity, ...)
     end
 
     if __defer_depth > 0 then
-        __defer_call_hook(__evolved_remove, entity, ...)
+        if fragment_count == 1 then
+            local length = __defer_length
+            local bytecode = __defer_bytecode
+
+            bytecode[length + 1] = __defer_op.remove_one
+            bytecode[length + 2] = entity
+            bytecode[length + 3] = ...
+
+            __defer_length = length + 3
+        else
+            __defer_call_func(__evolved_remove, fragment_count + 1, entity, ...)
+        end
         return
     end
 
@@ -6787,7 +6868,7 @@ function __evolved_clear(...)
     end
 
     if __defer_depth > 0 then
-        __defer_call_hook(__evolved_clear, ...)
+        __defer_call_func(__evolved_clear, argument_count, ...)
         return
     end
 
@@ -6813,7 +6894,13 @@ end
 ---@param entity evolved.entity
 function __evolved_clear_one(entity)
     if __defer_depth > 0 then
-        __defer_call_hook(__evolved_clear_one, entity)
+        local length = __defer_length
+        local bytecode = __defer_bytecode
+
+        bytecode[length + 1] = __defer_op.clear_one
+        bytecode[length + 2] = entity
+
+        __defer_length = length + 2
         return
     end
 
@@ -6845,7 +6932,7 @@ function __evolved_destroy(...)
     end
 
     if __defer_depth > 0 then
-        __defer_call_hook(__evolved_destroy, ...)
+        __defer_call_func(__evolved_destroy, argument_count, ...)
         return
     end
 
@@ -6897,7 +6984,13 @@ end
 ---@param entity evolved.entity
 function __evolved_destroy_one(entity)
     if __defer_depth > 0 then
-        __defer_call_hook(__evolved_destroy_one, entity)
+        local length = __defer_length
+        local bytecode = __defer_bytecode
+
+        bytecode[length + 1] = __defer_op.destroy_one
+        bytecode[length + 2] = entity
+
+        __defer_length = length + 2
         return
     end
 
@@ -6952,7 +7045,7 @@ function __evolved_batch_set(query, fragment, component)
     end
 
     if __defer_depth > 0 then
-        __defer_call_hook(__evolved_batch_set, query, fragment, component)
+        __defer_call_func(__evolved_batch_set, 3, query, fragment, component)
         return
     end
 
@@ -7026,7 +7119,7 @@ function __evolved_batch_remove(query, ...)
     end
 
     if __defer_depth > 0 then
-        __defer_call_hook(__evolved_batch_remove, query, ...)
+        __defer_call_func(__evolved_batch_remove, fragment_count + 1, query, ...)
         return
     end
 
@@ -7068,7 +7161,7 @@ function __evolved_batch_clear(...)
     end
 
     if __defer_depth > 0 then
-        __defer_call_hook(__evolved_batch_clear, ...)
+        __defer_call_func(__evolved_batch_clear, argument_count, ...)
         return
     end
 
@@ -7121,7 +7214,7 @@ function __evolved_batch_destroy(...)
     end
 
     if __defer_depth > 0 then
-        __defer_call_hook(__evolved_batch_destroy, ...)
+        __defer_call_func(__evolved_batch_destroy, argument_count, ...)
         return
     end
 
@@ -7397,7 +7490,7 @@ function __evolved_reindex(...)
     end
 
     if __defer_depth > 0 then
-        __defer_call_hook(__evolved_reindex, ...)
+        __defer_call_func(__evolved_reindex, fragment_count, ...)
         return
     end
 
@@ -7463,7 +7556,7 @@ end
 ---@param no_shrink? boolean
 function __evolved_collect_garbage(no_shrink)
     if __defer_depth > 0 then
-        __defer_call_hook(__evolved_collect_garbage)
+        __defer_call_func(__evolved_collect_garbage, 1, no_shrink)
         return
     end
 
