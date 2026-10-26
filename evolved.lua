@@ -1406,34 +1406,8 @@ local __evolved_collect_garbage
 
 local __id_name
 
-local __new_chunk
-
 local __default_realloc
 local __default_compmove
-
-local __add_root_chunk
-local __remove_root_chunk
-local __add_child_chunk
-local __remove_child_chunk
-
-local __update_chunk_caches
-local __update_chunk_queries
-local __update_chunk_storages
-
-local __trace_major_chunks
-local __trace_minor_chunks
-
-local __cache_query_chunks
-local __reset_query_chunks
-
-local __query_major_matches
-local __query_minor_matches
-
-local __update_major_chunks
-local __update_major_chunks_trace
-
-local __update_search_index
-local __update_search_index_trace
 
 local __chunk_with_fragment
 local __chunk_with_components
@@ -1862,26 +1836,13 @@ end
 ---
 ---
 
----@param id evolved.id
----@return string
----@nodiscard
-function __id_name(id)
-    ---@type string?
-    local id_name = __evolved_get(id, __NAME)
-
-    if id_name then
-        return id_name
-    end
-
-    local id_primary, id_secondary = __evolved_unpack(id)
-    return string.format('$%d#%d:%d', id, id_primary, id_secondary)
-end
+local __chunk_fns = {}
 
 ---@param chunk_parent? evolved.chunk
 ---@param chunk_fragment evolved.fragment
 ---@return evolved.chunk
 ---@nodiscard
-function __new_chunk(chunk_parent, chunk_fragment)
+function __chunk_fns.new_chunk(chunk_parent, chunk_fragment)
     local chunk_fragment_primary = chunk_fragment % 1048576
 
     if __freelist_ids[chunk_fragment_primary] ~= chunk_fragment then
@@ -1967,9 +1928,9 @@ function __new_chunk(chunk_parent, chunk_fragment)
     }, __chunk_mt)
 
     if not chunk_parent then
-        __add_root_chunk(chunk)
+        __chunk_fns.add_root_chunk(chunk)
     else
-        __add_child_chunk(chunk, chunk_parent)
+        __chunk_fns.add_child_chunk(chunk, chunk_parent)
     end
 
     do
@@ -1998,46 +1959,15 @@ function __new_chunk(chunk_parent, chunk_fragment)
         __assoc_list_fns.insert(minor_chunks, chunk)
     end
 
-    __update_chunk_caches(chunk)
-    __update_chunk_queries(chunk)
-    __update_chunk_storages(chunk)
+    __chunk_fns.update_chunk_caches(chunk)
+    __chunk_fns.update_chunk_queries(chunk)
+    __chunk_fns.update_chunk_storages(chunk)
 
     return chunk
 end
 
----@param src? evolved.storage
----@param src_size integer
----@param dst_size integer
----@return evolved.storage?
-function __default_realloc(src, src_size, dst_size)
-    if dst_size == 0 then
-        return
-    end
-
-    if src and dst_size >= src_size then
-        return src
-    end
-
-    local dst = __lua_table_new(dst_size)
-
-    if src then
-        __lua_table_move(src, 1, dst_size, 1, dst)
-    end
-
-    return dst
-end
-
----@param src evolved.storage
----@param f integer
----@param e integer
----@param t integer
----@param dst evolved.storage
-function __default_compmove(src, f, e, t, dst)
-    __lua_table_move(src, f, e, t, dst)
-end
-
 ---@param root evolved.chunk
-function __add_root_chunk(root)
+function __chunk_fns.add_root_chunk(root)
     local root_index = __list_fns.upr(__root_list, root, __chunk_mt.__lt, __root_count)
 
     for sib_root_index = __root_count, root_index, -1 do
@@ -2052,7 +1982,7 @@ function __add_root_chunk(root)
 end
 
 ---@param root evolved.chunk
-function __remove_root_chunk(root)
+function __chunk_fns.remove_root_chunk(root)
     if root.__parent then
         __debug_fns.error_fmt('unexpected root chunk: (%s)',
             tostring(root))
@@ -2080,7 +2010,7 @@ end
 
 ---@param child evolved.chunk
 ---@param parent evolved.chunk
-function __add_child_chunk(child, parent)
+function __chunk_fns.add_child_chunk(child, parent)
     parent.__child_count = __assoc_list_fns.sorted_insert_ex(
         parent.__child_set, parent.__child_list, parent.__child_count,
         child, __chunk_mt.__lt)
@@ -2092,7 +2022,7 @@ function __add_child_chunk(child, parent)
 end
 
 ---@param child evolved.chunk
-function __remove_child_chunk(child)
+function __chunk_fns.remove_child_chunk(child)
     local parent = child.__parent
 
     if not parent then
@@ -2120,7 +2050,7 @@ function __remove_child_chunk(child)
 end
 
 ---@param chunk evolved.chunk
-function __update_chunk_caches(chunk)
+function __chunk_fns.update_chunk_caches(chunk)
     local chunk_parent = chunk.__parent
     local chunk_fragment = chunk.__fragment
 
@@ -2344,7 +2274,7 @@ function __update_chunk_caches(chunk)
 end
 
 ---@param chunk evolved.chunk
-function __update_chunk_queries(chunk)
+function __chunk_fns.update_chunk_queries(chunk)
     local major_queries = __major_queries[chunk.__fragment]
     local major_query_list = major_queries and major_queries.__item_list
     local major_query_count = major_queries and major_queries.__item_count or 0
@@ -2354,7 +2284,7 @@ function __update_chunk_queries(chunk)
         local major_query_chunks = __query_chunks[major_query]
 
         if major_query_chunks then
-            if __query_major_matches(chunk, major_query) then
+            if __chunk_fns.query_major_matches(chunk, major_query) then
                 __assoc_list_fns.sorted_insert(major_query_chunks, chunk, __chunk_mt.__lt)
             else
                 __assoc_list_fns.remove(major_query_chunks, chunk)
@@ -2364,7 +2294,7 @@ function __update_chunk_queries(chunk)
 end
 
 ---@param chunk evolved.chunk
-function __update_chunk_storages(chunk)
+function __chunk_fns.update_chunk_storages(chunk)
     local entity_count = chunk.__entity_count
     local entity_capacity = chunk.__entity_capacity
 
@@ -2546,7 +2476,7 @@ end
 ---@param major evolved.fragment
 ---@param trace fun(chunk: evolved.chunk, ...: any)
 ---@param ... any additional trace arguments
-function __trace_major_chunks(major, trace, ...)
+function __chunk_fns.trace_major_chunks(major, trace, ...)
     local chunk_stack ---@type evolved.chunk[]?
     local chunk_stack_size = 0 ---@type integer
 
@@ -2596,7 +2526,7 @@ end
 ---@param minor evolved.fragment
 ---@param trace fun(chunk: evolved.chunk, ...: any)
 ---@param ... any additional trace arguments
-function __trace_minor_chunks(minor, trace, ...)
+function __chunk_fns.trace_minor_chunks(minor, trace, ...)
     local chunk_stack ---@type evolved.chunk[]?
     local chunk_stack_size = 0
 
@@ -2635,7 +2565,7 @@ end
 ---@param query evolved.query
 ---@return evolved.assoc_list<evolved.chunk>
 ---@nodiscard
-function __cache_query_chunks(query)
+function __chunk_fns.cache_query_chunks(query)
     local query_includes = __sorted_includes[query]
     local query_include_list = query_includes and query_includes.__item_list
     local query_include_count = query_includes and query_includes.__item_count or 0
@@ -2658,7 +2588,7 @@ function __cache_query_chunks(query)
         for major_chunk_index = 1, major_chunk_count do
             local major_chunk = major_chunk_list[major_chunk_index]
 
-            if __query_major_matches(major_chunk, query) then
+            if __chunk_fns.query_major_matches(major_chunk, query) then
                 __assoc_list_fns.insert(query_chunks, major_chunk)
             end
         end
@@ -2685,7 +2615,7 @@ function __cache_query_chunks(query)
             for major_chunk_index = 1, major_chunk_count do
                 local major_chunk = major_chunk_list[major_chunk_index]
 
-                if __query_major_matches(major_chunk, query) then
+                if __chunk_fns.query_major_matches(major_chunk, query) then
                     __assoc_list_fns.insert(query_chunks, major_chunk)
                 end
             end
@@ -2708,7 +2638,7 @@ function __cache_query_chunks(query)
 end
 
 ---@param query evolved.query
-function __reset_query_chunks(query)
+function __chunk_fns.reset_query_chunks(query)
     if not __query_chunks[query] then
         return
     end
@@ -2749,7 +2679,7 @@ end
 ---@param query evolved.query
 ---@return boolean
 ---@nodiscard
-function __query_major_matches(chunk, query)
+function __chunk_fns.query_major_matches(chunk, query)
     local query_includes = __sorted_includes[query]
     local query_include_set = query_includes and query_includes.__item_set
     local query_include_count = query_includes and query_includes.__item_count or 0
@@ -2765,14 +2695,14 @@ function __query_major_matches(chunk, query)
     return (
         (query_include_index ~= nil and query_include_index == query_include_count) or
         (query_variant_index ~= nil and not __chunk_has_any_fragment_list(chunk, query_variant_list, query_variant_index - 1))
-    ) and __query_minor_matches(chunk, query)
+    ) and __chunk_fns.query_minor_matches(chunk, query)
 end
 
 ---@param chunk evolved.chunk
 ---@param query evolved.query
 ---@return boolean
 ---@nodiscard
-function __query_minor_matches(chunk, query)
+function __chunk_fns.query_minor_matches(chunk, query)
     local query_includes = __sorted_includes[query]
     local query_include_set = query_includes and query_includes.__item_set
     local query_include_list = query_includes and query_includes.__item_list
@@ -2825,26 +2755,26 @@ function __query_minor_matches(chunk, query)
 end
 
 ---@param major evolved.fragment
-function __update_major_chunks(major)
+function __chunk_fns.update_major_chunks(major)
     if __defer_depth > 0 then
-        __defer_call_func(__update_major_chunks, 1, major)
+        __defer_call_func(__chunk_fns.update_major_chunks, 1, major)
         return
     end
 
-    __trace_major_chunks(major, __update_major_chunks_trace)
+    __chunk_fns.trace_major_chunks(major, __chunk_fns.update_major_chunks_trace)
 end
 
 ---@param chunk evolved.chunk
-function __update_major_chunks_trace(chunk)
-    __update_chunk_caches(chunk)
-    __update_chunk_queries(chunk)
-    __update_chunk_storages(chunk)
+function __chunk_fns.update_major_chunks_trace(chunk)
+    __chunk_fns.update_chunk_caches(chunk)
+    __chunk_fns.update_chunk_queries(chunk)
+    __chunk_fns.update_chunk_storages(chunk)
 end
 
 ---@param fragment evolved.fragment
-function __update_search_index(fragment)
+function __chunk_fns.update_search_index(fragment)
     if __defer_depth > 0 then
-        __defer_call_func(__update_search_index, 1, fragment)
+        __defer_call_func(__chunk_fns.update_search_index, 1, fragment)
         return
     end
 
@@ -2857,20 +2787,23 @@ function __update_search_index(fragment)
     end
 
     __search_indices[fragment] = nil
-    __update_major_chunks(fragment)
+    __chunk_fns.update_major_chunks(fragment)
 
     if __evolved_has_any(fragment, __INDEX, __LINK) then
         local new_search_index = __search_index_fns.new(fragment)
         __search_indices[fragment] = new_search_index
-        __trace_minor_chunks(fragment, __update_search_index_trace, fragment, new_search_index)
-        __trace_major_chunks(fragment, __update_chunk_caches)
+
+        __chunk_fns.trace_minor_chunks(fragment, __chunk_fns.update_search_index_trace,
+            fragment, new_search_index)
+
+        __chunk_fns.trace_major_chunks(fragment, __chunk_fns.update_chunk_caches)
     end
 end
 
 ---@param chunk evolved.chunk
 ---@param fragment evolved.fragment
 ---@param fragment_search_index evolved.search_index
-function __update_search_index_trace(chunk, fragment, fragment_search_index)
+function __chunk_fns.update_search_index_trace(chunk, fragment, fragment_search_index)
     local chunk_component_index = chunk.__component_indices[fragment]
 
     if chunk_component_index then
@@ -2882,6 +2815,58 @@ function __update_search_index_trace(chunk, fragment, fragment_search_index)
     end
 end
 
+---
+---
+---
+---
+---
+
+---@param id evolved.id
+---@return string
+---@nodiscard
+function __id_name(id)
+    ---@type string?
+    local id_name = __evolved_get(id, __NAME)
+
+    if id_name then
+        return id_name
+    end
+
+    local id_primary, id_secondary = __evolved_unpack(id)
+    return string.format('$%d#%d:%d', id, id_primary, id_secondary)
+end
+
+---@param src? evolved.storage
+---@param src_size integer
+---@param dst_size integer
+---@return evolved.storage?
+function __default_realloc(src, src_size, dst_size)
+    if dst_size == 0 then
+        return
+    end
+
+    if src and dst_size >= src_size then
+        return src
+    end
+
+    local dst = __lua_table_new(dst_size)
+
+    if src then
+        __lua_table_move(src, 1, dst_size, 1, dst)
+    end
+
+    return dst
+end
+
+---@param src evolved.storage
+---@param f integer
+---@param e integer
+---@param t integer
+---@param dst evolved.storage
+function __default_compmove(src, f, e, t, dst)
+    __lua_table_move(src, f, e, t, dst)
+end
+
 ---@param chunk? evolved.chunk
 ---@param fragment evolved.fragment
 ---@return evolved.chunk
@@ -2889,7 +2874,7 @@ end
 function __chunk_with_fragment(chunk, fragment)
     if not chunk then
         local root_chunk = __root_list[__root_set[fragment]]
-        return root_chunk or __new_chunk(nil, fragment)
+        return root_chunk or __chunk_fns.new_chunk(nil, fragment)
     end
 
     if chunk.__fragment_set[fragment] then
@@ -2926,7 +2911,7 @@ function __chunk_with_fragment(chunk, fragment)
         return sib_chunk
     end
 
-    return __new_chunk(chunk, fragment)
+    return __chunk_fns.new_chunk(chunk, fragment)
 end
 
 ---@param chunk? evolved.chunk
@@ -3075,7 +3060,7 @@ end
 ---@nodiscard
 function __chunk_fragments(head_fragment, ...)
     local chunk = __root_list[__root_set[head_fragment]]
-        or __new_chunk(nil, head_fragment)
+        or __chunk_fns.new_chunk(nil, head_fragment)
 
     for tail_fragment_index = 1, __lua_select('#', ...) do
         ---@type evolved.fragment
@@ -3098,7 +3083,7 @@ function __chunk_components(components)
     end
 
     local chunk = __root_list[__root_set[head_fragment]]
-        or __new_chunk(nil, head_fragment)
+        or __chunk_fns.new_chunk(nil, head_fragment)
 
     for tail_fragment in __lua_next, components, head_fragment do
         chunk = chunk.__with_fragment_edges[tail_fragment]
@@ -4040,9 +4025,9 @@ function __purge_chunk(chunk)
     end
 
     if not chunk.__parent then
-        __remove_root_chunk(chunk)
+        __chunk_fns.remove_root_chunk(chunk)
     else
-        __remove_child_chunk(chunk)
+        __chunk_fns.remove_child_chunk(chunk)
     end
 
     do
@@ -7319,7 +7304,7 @@ function __evolved_execute(query)
     local query_variant_count = query_variants and query_variants.__item_count or 0
 
     if query_include_count > 0 or query_variant_count > 0 then
-        local query_chunks = __query_chunks[query] or __cache_query_chunks(query)
+        local query_chunks = __query_chunks[query] or __chunk_fns.cache_query_chunks(query)
         local query_chunk_list = query_chunks and query_chunks.__item_list
         local query_chunk_count = query_chunks and query_chunks.__item_count or 0
 
@@ -7503,7 +7488,8 @@ function __evolved_reindex(...)
             __debug_fns.warning_fmt('the fragment (%s) is not indexed and cannot be reindexed',
                 __id_name(fragment))
         else
-            __trace_minor_chunks(fragment, __update_search_index_trace, fragment, fragment_search_index)
+            __chunk_fns.trace_minor_chunks(fragment, __chunk_fns.update_search_index_trace,
+                fragment, fragment_search_index)
         end
     end
 end
@@ -8525,17 +8511,17 @@ end
 ---
 ---
 
-__evolved_set(__ON_SET, __ON_SET, __update_major_chunks)
-__evolved_set(__ON_SET, __ON_REMOVE, __update_major_chunks)
+__evolved_set(__ON_SET, __ON_SET, __chunk_fns.update_major_chunks)
+__evolved_set(__ON_SET, __ON_REMOVE, __chunk_fns.update_major_chunks)
 
-__evolved_set(__ON_ASSIGN, __ON_SET, __update_major_chunks)
-__evolved_set(__ON_ASSIGN, __ON_REMOVE, __update_major_chunks)
+__evolved_set(__ON_ASSIGN, __ON_SET, __chunk_fns.update_major_chunks)
+__evolved_set(__ON_ASSIGN, __ON_REMOVE, __chunk_fns.update_major_chunks)
 
-__evolved_set(__ON_INSERT, __ON_SET, __update_major_chunks)
-__evolved_set(__ON_INSERT, __ON_REMOVE, __update_major_chunks)
+__evolved_set(__ON_INSERT, __ON_SET, __chunk_fns.update_major_chunks)
+__evolved_set(__ON_INSERT, __ON_REMOVE, __chunk_fns.update_major_chunks)
 
-__evolved_set(__ON_REMOVE, __ON_SET, __update_major_chunks)
-__evolved_set(__ON_REMOVE, __ON_REMOVE, __update_major_chunks)
+__evolved_set(__ON_REMOVE, __ON_SET, __chunk_fns.update_major_chunks)
+__evolved_set(__ON_REMOVE, __ON_REMOVE, __chunk_fns.update_major_chunks)
 
 ---
 ---
@@ -8543,41 +8529,41 @@ __evolved_set(__ON_REMOVE, __ON_REMOVE, __update_major_chunks)
 ---
 ---
 
-__evolved_set(__TAG, __ON_INSERT, __update_search_index)
-__evolved_set(__TAG, __ON_REMOVE, __update_search_index)
+__evolved_set(__TAG, __ON_INSERT, __chunk_fns.update_search_index)
+__evolved_set(__TAG, __ON_REMOVE, __chunk_fns.update_search_index)
 
-__evolved_set(__INDEX, __ON_INSERT, __update_search_index)
-__evolved_set(__INDEX, __ON_REMOVE, __update_search_index)
+__evolved_set(__INDEX, __ON_INSERT, __chunk_fns.update_search_index)
+__evolved_set(__INDEX, __ON_REMOVE, __chunk_fns.update_search_index)
 
-__evolved_set(__LINK, __ON_INSERT, __update_search_index)
-__evolved_set(__LINK, __ON_REMOVE, __update_search_index)
+__evolved_set(__LINK, __ON_INSERT, __chunk_fns.update_search_index)
+__evolved_set(__LINK, __ON_REMOVE, __chunk_fns.update_search_index)
 
-__evolved_set(__LINK_POLICY, __ON_SET, __update_search_index)
-__evolved_set(__LINK_POLICY, __ON_REMOVE, __update_search_index)
+__evolved_set(__LINK_POLICY, __ON_SET, __chunk_fns.update_search_index)
+__evolved_set(__LINK_POLICY, __ON_REMOVE, __chunk_fns.update_search_index)
 
-__evolved_set(__UNIQUE, __ON_INSERT, __update_major_chunks)
-__evolved_set(__UNIQUE, __ON_REMOVE, __update_major_chunks)
+__evolved_set(__UNIQUE, __ON_INSERT, __chunk_fns.update_major_chunks)
+__evolved_set(__UNIQUE, __ON_REMOVE, __chunk_fns.update_major_chunks)
 
-__evolved_set(__EXPLICIT, __ON_INSERT, __update_major_chunks)
-__evolved_set(__EXPLICIT, __ON_REMOVE, __update_major_chunks)
+__evolved_set(__EXPLICIT, __ON_INSERT, __chunk_fns.update_major_chunks)
+__evolved_set(__EXPLICIT, __ON_REMOVE, __chunk_fns.update_major_chunks)
 
-__evolved_set(__INTERNAL, __ON_INSERT, __update_major_chunks)
-__evolved_set(__INTERNAL, __ON_REMOVE, __update_major_chunks)
+__evolved_set(__INTERNAL, __ON_INSERT, __chunk_fns.update_major_chunks)
+__evolved_set(__INTERNAL, __ON_REMOVE, __chunk_fns.update_major_chunks)
 
-__evolved_set(__DEFAULT, __ON_SET, __update_major_chunks)
-__evolved_set(__DEFAULT, __ON_REMOVE, __update_major_chunks)
+__evolved_set(__DEFAULT, __ON_SET, __chunk_fns.update_major_chunks)
+__evolved_set(__DEFAULT, __ON_REMOVE, __chunk_fns.update_major_chunks)
 
-__evolved_set(__DUPLICATE, __ON_SET, __update_major_chunks)
-__evolved_set(__DUPLICATE, __ON_REMOVE, __update_major_chunks)
+__evolved_set(__DUPLICATE, __ON_SET, __chunk_fns.update_major_chunks)
+__evolved_set(__DUPLICATE, __ON_REMOVE, __chunk_fns.update_major_chunks)
 
-__evolved_set(__EXTRACT, __ON_SET, __update_search_index)
-__evolved_set(__EXTRACT, __ON_REMOVE, __update_search_index)
+__evolved_set(__EXTRACT, __ON_SET, __chunk_fns.update_search_index)
+__evolved_set(__EXTRACT, __ON_REMOVE, __chunk_fns.update_search_index)
 
-__evolved_set(__REALLOC, __ON_SET, __update_major_chunks)
-__evolved_set(__REALLOC, __ON_REMOVE, __update_major_chunks)
+__evolved_set(__REALLOC, __ON_SET, __chunk_fns.update_major_chunks)
+__evolved_set(__REALLOC, __ON_REMOVE, __chunk_fns.update_major_chunks)
 
-__evolved_set(__COMPMOVE, __ON_SET, __update_major_chunks)
-__evolved_set(__COMPMOVE, __ON_REMOVE, __update_major_chunks)
+__evolved_set(__COMPMOVE, __ON_SET, __chunk_fns.update_major_chunks)
+__evolved_set(__COMPMOVE, __ON_REMOVE, __chunk_fns.update_major_chunks)
 
 ---
 ---
@@ -8654,7 +8640,7 @@ __evolved_set(__QUERY, __LINK_POLICY, __LINK_POLICY_DESTROY_ENTITY)
 ---@param query evolved.query
 ---@param include_list evolved.fragment[]
 __evolved_set(__INCLUDES, __ON_SET, function(query, _, include_list)
-    __reset_query_chunks(query)
+    __chunk_fns.reset_query_chunks(query)
 
     local include_count = #include_list
 
@@ -8672,7 +8658,7 @@ __evolved_set(__INCLUDES, __ON_SET, function(query, _, include_list)
 end)
 
 __evolved_set(__INCLUDES, __ON_REMOVE, function(query)
-    __reset_query_chunks(query)
+    __chunk_fns.reset_query_chunks(query)
 
     __sorted_includes[query] = nil
 end)
@@ -8686,7 +8672,7 @@ end)
 ---@param query evolved.query
 ---@param exclude_list evolved.fragment[]
 __evolved_set(__EXCLUDES, __ON_SET, function(query, _, exclude_list)
-    __reset_query_chunks(query)
+    __chunk_fns.reset_query_chunks(query)
 
     local exclude_count = #exclude_list
 
@@ -8704,7 +8690,7 @@ __evolved_set(__EXCLUDES, __ON_SET, function(query, _, exclude_list)
 end)
 
 __evolved_set(__EXCLUDES, __ON_REMOVE, function(query)
-    __reset_query_chunks(query)
+    __chunk_fns.reset_query_chunks(query)
 
     __sorted_excludes[query] = nil
 end)
@@ -8718,7 +8704,7 @@ end)
 ---@param query evolved.query
 ---@param variant_list evolved.fragment[]
 __evolved_set(__VARIANTS, __ON_SET, function(query, _, variant_list)
-    __reset_query_chunks(query)
+    __chunk_fns.reset_query_chunks(query)
 
     local variant_count = #variant_list
 
@@ -8736,7 +8722,7 @@ __evolved_set(__VARIANTS, __ON_SET, function(query, _, variant_list)
 end)
 
 __evolved_set(__VARIANTS, __ON_REMOVE, function(query)
-    __reset_query_chunks(query)
+    __chunk_fns.reset_query_chunks(query)
 
     __sorted_variants[query] = nil
 end)
@@ -8764,13 +8750,13 @@ __evolved_set(__REQUIRES, __ON_SET, function(fragment, _, require_list)
         __sorted_requires[fragment] = nil
     end
 
-    __update_major_chunks(fragment)
+    __chunk_fns.update_major_chunks(fragment)
 end)
 
 __evolved_set(__REQUIRES, __ON_REMOVE, function(fragment)
     __sorted_requires[fragment] = nil
 
-    __update_major_chunks(fragment)
+    __chunk_fns.update_major_chunks(fragment)
 end)
 
 ---
