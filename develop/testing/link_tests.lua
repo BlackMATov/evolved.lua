@@ -1006,14 +1006,14 @@ do
 
     do
         local l, c = evo.multi_search(f, t)
-        assert(c == 3 and l[1] == e2 and l[2] == e3 and l[3] == e1)
+        assert(c == 3 and l[1] == e1 and l[2] == e2 and l[3] == e3)
     end
 
     evo.set(e2, f, { t })
 
     do
         local l, c = evo.multi_search(f, t)
-        assert(c == 3 and l[1] == e3 and l[2] == e1 and l[3] == e2)
+        assert(c == 3 and l[1] == e1 and l[2] == e3 and l[3] == e2)
     end
 end
 
@@ -1034,7 +1034,7 @@ do
 
     do
         local l, c = evo.multi_search(f, t2)
-        assert(c == 2 and l[1] == e2 and l[2] == e1)
+        assert(c == 2 and l[1] == e1 and l[2] == e2)
     end
 
     assert(evo.search(f, t3) == e1)
@@ -1065,7 +1065,7 @@ do
 
     do
         local l, c = evo.multi_search(f, t1)
-        assert(c == 3 and l[1] == e1 and l[2] == e3 and l[3] == e2)
+        assert(c == 3 and l[1] == e1 and l[2] == e2 and l[3] == e3)
     end
 
     assert(evo.search(f, t2) == e2)
@@ -1891,5 +1891,119 @@ do
 
         evo.destroy(t)
         assert(evo.alive(e1) and not evo.alive(e2))
+    end
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t1, t2, t3, t4, t5, t6, t7 = evo.id(7)
+    local targets = { t1, t2, t3, t4, t5, t6, t7 }
+
+    local e1 = evo.builder():set(f, { t1, t2, t3 }):build()
+    local e2 = evo.builder():set(f, { t1, t2, t3 }):build()
+
+    local function has_target(e, t)
+        local l = evo.get(e, f)
+        for i = 1, #l do
+            if l[i] == t then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function check()
+        for _, t in ipairs(targets) do
+            local expected_count = 0
+            if has_target(e1, t) then expected_count = expected_count + 1 end
+            if has_target(e2, t) then expected_count = expected_count + 1 end
+
+            local l, c = evo.multi_search(f, t)
+            assert(c == expected_count)
+
+            for i = 1, c do
+                assert(has_target(l[i], t))
+            end
+
+            if c == 2 then
+                assert(l[1] ~= l[2])
+            end
+        end
+    end
+
+    check()
+
+    evo.set(e1, f, { t1, t2, t3, t4 })
+    check()
+    assert(evo.search(f, t1) == e1 and evo.search(f, t3) == e1)
+
+    evo.set(e1, f, { t5, t1, t2, t3, t4 })
+    check()
+    assert(evo.search(f, t1) == e1 and evo.search(f, t3) == e1)
+
+    evo.set(e1, f, { t5, t1, t3, t4 })
+    check()
+    assert(evo.search(f, t1) == e1 and evo.search(f, t2) == e2)
+
+    evo.set(e1, f, { t5, t1, t3, t4, t1 })
+    check()
+    assert(evo.search(f, t1) == e1)
+
+    evo.set(e1, f, { t5, t3, t4, t1 })
+    check()
+    assert(evo.search(f, t1) == e1)
+
+    evo.set(e1, f, { t4, t3 })
+    check()
+    assert(evo.search(f, t1) == e2 and evo.search(f, t3) == e1)
+
+    evo.set(e1, f, { t1, t2, t3, t4, t5, t6, t7 })
+    check()
+    assert(evo.search(f, t3) == e1)
+
+    evo.set(e1, f, { t7, t6, t5, t4, t3, t2, t1 })
+    check()
+    assert(evo.search(f, t1) == e2 and evo.search(f, t3) == e2)
+
+    evo.set(e1, f, { t6, t6, t6, t6, t6, t6 })
+    check()
+    assert(evo.search(f, t6) == e1)
+
+    evo.set(e1, f, { t1, t2, t3, t4, t5, t6, t1, t2, t3, t4, t5, t6 })
+    check()
+
+    evo.set(e1, f, { t7 })
+    check()
+
+    evo.set(e1, f, { t1, t2, t3, t4, t5, t1 })
+    check()
+
+    evo.set(e1, f, { t1, t6, t7, t5, t4, t3 })
+    check()
+
+    evo.set(e1, f, { t1, t2, t3, t4, t6, t5, t6 })
+    check()
+
+    evo.set(e1, f, { t5, t4, t3, t2, t7, t6 })
+    check()
+
+    do
+        local q = evo.builder():include(f):build()
+
+        evo.batch_set(q, f, { t2, t3, t4 })
+        check()
+
+        evo.batch_set(q, f, { t2, t4, t5, t6, t7, t1 })
+        check()
+    end
+
+    do
+        local l = evo.get(e1, f)
+        l[#l + 1] = t3
+        l[1] = t1
+
+        evo.reindex(f)
+        check()
     end
 end

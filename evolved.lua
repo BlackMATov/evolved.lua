@@ -925,30 +925,6 @@ end
 ---@param size_b? integer
 ---@return boolean
 ---@nodiscard
-function __list_fns.eq(list_a, list_b, size_a, size_b)
-    size_a = size_a or #list_a
-    size_b = size_b or #list_b
-
-    if size_a ~= size_b then
-        return false
-    end
-
-    for list_index = 1, size_a do
-        if list_a[list_index] ~= list_b[list_index] then
-            return false
-        end
-    end
-
-    return true
-end
-
----@generic V
----@param list_a V[]
----@param list_b V[]
----@param size_a? integer
----@param size_b? integer
----@return boolean
----@nodiscard
 function __list_fns.lt(list_a, list_b, size_a, size_b)
     size_a = size_a or #list_a
     size_b = size_b or #list_b
@@ -1613,9 +1589,8 @@ function __search_index_fns.assign(index, entity, component)
     elseif target_fragment
         and __lua_type(new_component) == 'table'
         and __lua_type(old_component) == 'table'
-        and __list_fns.eq(new_component, old_component)
     then
-        -- the list has the same targets, nothing to reassign
+        __search_index_fns.assign_targets(index, entity, new_component)
     else
         __search_index_fns.remove(index, entity)
         __search_index_fns.insert(index, entity, new_component)
@@ -1642,13 +1617,98 @@ function __search_index_fns.multi_assign(index, entity_list, component_list, fir
         elseif target_fragment
             and __lua_type(new_component) == 'table'
             and __lua_type(old_component) == 'table'
-            and __list_fns.eq(new_component, old_component)
         then
-            -- the list has the same targets, nothing to reassign
+            __search_index_fns.assign_targets(index, entity, new_component)
         else
             __search_index_fns.remove(index, entity)
             __search_index_fns.insert(index, entity, new_component)
         end
+    end
+end
+
+---@param index evolved.search_index
+---@param entity evolved.entity
+---@param new_target_list evolved.entity[]
+function __search_index_fns.assign_targets(index, entity, new_target_list)
+    local entity_primary = entity % 1048576
+
+    ---@type evolved.entity[]
+    local old_target_list = index.__entity_components[entity_primary]
+
+    local old_target_count = #old_target_list
+    local new_target_count = #new_target_list
+
+    local min_target_count = old_target_count < new_target_count
+        and old_target_count
+        or new_target_count
+
+    local prefix_count = 0
+
+    while prefix_count < min_target_count
+        and old_target_list[prefix_count + 1] == new_target_list[prefix_count + 1]
+    do
+        prefix_count = prefix_count + 1
+    end
+
+    if prefix_count == old_target_count and prefix_count == new_target_count then
+        return
+    end
+
+    local suffix_count = 0
+
+    while prefix_count + suffix_count < min_target_count
+        and old_target_list[old_target_count - suffix_count] == new_target_list[new_target_count - suffix_count]
+    do
+        suffix_count = suffix_count + 1
+    end
+
+    local old_middle_last = old_target_count - suffix_count
+    local new_middle_last = new_target_count - suffix_count
+
+    if old_middle_last - prefix_count <= 4 then
+        for old_target_index = prefix_count + 1, old_middle_last do
+            local old_target = old_target_list[old_target_index]
+
+            local new_target_index = 1
+
+            while new_target_index <= new_target_count
+                and new_target_list[new_target_index] ~= old_target
+            do
+                new_target_index = new_target_index + 1
+            end
+
+            if new_target_index > new_target_count then
+                __search_index_fns.remove_node(index, entity, old_target)
+            end
+        end
+
+        for new_target_index = prefix_count + 1, new_middle_last do
+            __search_index_fns.insert_node(index, entity, new_target_list[new_target_index])
+        end
+    else
+        for old_target_index = prefix_count + 1, old_middle_last do
+            __search_index_fns.remove_node(index, entity, old_target_list[old_target_index])
+        end
+
+        for new_target_index = prefix_count + 1, new_middle_last do
+            __search_index_fns.insert_node(index, entity, new_target_list[new_target_index])
+        end
+
+        for new_target_index = 1, prefix_count do
+            __search_index_fns.insert_node(index, entity, new_target_list[new_target_index])
+        end
+
+        for new_target_index = new_middle_last + 1, new_target_count do
+            __search_index_fns.insert_node(index, entity, new_target_list[new_target_index])
+        end
+    end
+
+    __lua_table_move(
+        new_target_list, prefix_count + 1, new_target_count,
+        prefix_count + 1, old_target_list)
+
+    for old_target_index = new_target_count + 1, old_target_count do
+        old_target_list[old_target_index] = nil
     end
 end
 
