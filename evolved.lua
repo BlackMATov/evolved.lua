@@ -1567,6 +1567,60 @@ end
 ---@param index evolved.search_index
 ---@param entity evolved.entity
 ---@param component evolved.component
+function __search_index_fns.assign(index, entity, component)
+    local target_fragment = index.__target_fragment
+    local entity_components = index.__entity_components
+
+    local new_component = component
+    local old_component = entity_components[entity % 1048576]
+
+    if new_component == old_component then
+        -- nothing to reassign
+    elseif target_fragment
+        and __lua_type(new_component) == 'table'
+        and __lua_type(old_component) == 'table'
+        and __list_fns.eq(new_component, old_component)
+    then
+        -- the list has the same targets, nothing to reassign
+    else
+        __search_index_fns.remove(index, entity)
+        __search_index_fns.insert(index, entity, new_component)
+    end
+end
+
+---@param index evolved.search_index
+---@param entity_list evolved.entity[]
+---@param component_list evolved.component[]
+---@param first integer
+---@param last integer
+function __search_index_fns.multi_assign(index, entity_list, component_list, first, last)
+    local target_fragment = index.__target_fragment
+    local entity_components = index.__entity_components
+
+    for place = first, last do
+        local entity = entity_list[place]
+
+        local new_component = component_list[place]
+        local old_component = entity_components[entity % 1048576]
+
+        if new_component == old_component then
+            -- nothing to reassign
+        elseif target_fragment
+            and __lua_type(new_component) == 'table'
+            and __lua_type(old_component) == 'table'
+            and __list_fns.eq(new_component, old_component)
+        then
+            -- the list has the same targets, nothing to reassign
+        else
+            __search_index_fns.remove(index, entity)
+            __search_index_fns.insert(index, entity, new_component)
+        end
+    end
+end
+
+---@param index evolved.search_index
+---@param entity evolved.entity
+---@param component evolved.component
 function __search_index_fns.insert(index, entity, component)
     if component ~= component then
         -- NaN components cannot be indexed
@@ -1589,6 +1643,17 @@ function __search_index_fns.insert(index, entity, component)
     else
         __search_index_fns.insert_node(index, entity, component)
         index.__entity_components[entity % 1048576] = component
+    end
+end
+
+---@param index evolved.search_index
+---@param entity_list evolved.entity[]
+---@param component_list evolved.component[]
+---@param first integer
+---@param last integer
+function __search_index_fns.multi_insert(index, entity_list, component_list, first, last)
+    for place = first, last do
+        __search_index_fns.insert(index, entity_list[place], component_list[place])
     end
 end
 
@@ -1667,6 +1732,16 @@ function __search_index_fns.remove(index, entity)
 end
 
 ---@param index evolved.search_index
+---@param entity_list evolved.entity[]
+---@param first integer
+---@param last integer
+function __search_index_fns.multi_remove(index, entity_list, first, last)
+    for place = first, last do
+        __search_index_fns.remove(index, entity_list[place])
+    end
+end
+
+---@param index evolved.search_index
 ---@param entity evolved.entity
 ---@param component evolved.component
 function __search_index_fns.remove_node(index, entity, component)
@@ -1717,81 +1792,6 @@ function __search_index_fns.remove_node(index, entity, component)
 
     prev_entities[entity_key] = nil
     next_entities[entity_key] = nil
-end
-
----@param index evolved.search_index
----@param entity evolved.entity
----@param component evolved.component
-function __search_index_fns.assign(index, entity, component)
-    local target_fragment = index.__target_fragment
-    local entity_components = index.__entity_components
-
-    local new_component = component
-    local old_component = entity_components[entity % 1048576]
-
-    if new_component == old_component then
-        -- nothing to reassign
-    elseif target_fragment
-        and __lua_type(new_component) == 'table'
-        and __lua_type(old_component) == 'table'
-        and __list_fns.eq(new_component, old_component)
-    then
-        -- the list has the same targets, nothing to reassign
-    else
-        __search_index_fns.remove(index, entity)
-        __search_index_fns.insert(index, entity, new_component)
-    end
-end
-
----@param index evolved.search_index
----@param entity_list evolved.entity[]
----@param component_list evolved.component[]
----@param first integer
----@param last integer
-function __search_index_fns.multi_assign(index, entity_list, component_list, first, last)
-    local target_fragment = index.__target_fragment
-    local entity_components = index.__entity_components
-
-    for place = first, last do
-        local entity = entity_list[place]
-
-        local new_component = component_list[place]
-        local old_component = entity_components[entity % 1048576]
-
-        if new_component == old_component then
-            -- nothing to reassign
-        elseif target_fragment
-            and __lua_type(new_component) == 'table'
-            and __lua_type(old_component) == 'table'
-            and __list_fns.eq(new_component, old_component)
-        then
-            -- the list has the same targets, nothing to reassign
-        else
-            __search_index_fns.remove(index, entity)
-            __search_index_fns.insert(index, entity, new_component)
-        end
-    end
-end
-
----@param index evolved.search_index
----@param entity_list evolved.entity[]
----@param component_list evolved.component[]
----@param first integer
----@param last integer
-function __search_index_fns.multi_insert(index, entity_list, component_list, first, last)
-    for place = first, last do
-        __search_index_fns.insert(index, entity_list[place], component_list[place])
-    end
-end
-
----@param index evolved.search_index
----@param entity_list evolved.entity[]
----@param first integer
----@param last integer
-function __search_index_fns.multi_remove(index, entity_list, first, last)
-    for place = first, last do
-        __search_index_fns.remove(index, entity_list[place])
-    end
 end
 
 ---
