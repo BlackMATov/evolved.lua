@@ -42,7 +42,6 @@ local evolved = {
 
 ---@alias evolved.default evolved.component
 ---@alias evolved.duplicate fun(component: evolved.component): evolved.component
----@alias evolved.extract fun(component: evolved.component): evolved.component?
 
 ---@alias evolved.realloc fun(src?: evolved.storage, src_size: integer, dst_size: integer): evolved.storage?
 ---@alias evolved.compmove fun(src: evolved.storage, f: integer, e: integer, t: integer, dst: evolved.storage)
@@ -1289,7 +1288,6 @@ local __INTERNAL = __acquire_id()
 
 local __DEFAULT = __acquire_id()
 local __DUPLICATE = __acquire_id()
-local __EXTRACT = __acquire_id()
 
 local __REALLOC = __acquire_id()
 local __COMPMOVE = __acquire_id()
@@ -1486,10 +1484,9 @@ local __safe_tbls = {
 ---@field package __head_entities table<evolved.component, evolved.entity>
 ---@field package __prev_entities table<integer, evolved.entity>
 ---@field package __next_entities table<integer, evolved.entity>
----@field package __entity_extracts table<integer, evolved.component>
+---@field package __entity_components table<integer, evolved.component>
 ---@field package __link_policy? evolved.id
 ---@field package __target_fragment? evolved.fragment
----@field package __extract_component? evolved.extract
 
 local __search_index_fns = {}
 
@@ -1503,10 +1500,9 @@ function __search_index_fns.new(fragment)
         __head_entities = {},
         __prev_entities = {},
         __next_entities = {},
-        __entity_extracts = {},
+        __entity_components = {},
         __link_policy = __evolved_get(fragment, __LINK_POLICY),
         __target_fragment = __evolved_has(fragment, __LINK) and fragment or nil,
-        __extract_component = __evolved_get(fragment, __EXTRACT),
     }
 end
 
@@ -1516,7 +1512,7 @@ function __search_index_fns.combine_keys(index)
         return
     end
 
-    local entity_extracts = index.__entity_extracts
+    local entity_components = index.__entity_components
 
     local old_prev_entities = index.__prev_entities
     local old_next_entities = index.__next_entities
@@ -1525,9 +1521,9 @@ function __search_index_fns.combine_keys(index)
     local new_next_entities = {} ---@type table<integer, evolved.entity>
 
     for entity_primary, prev_entity in __lua_next, old_prev_entities do
-        local extracted = entity_extracts[entity_primary]
+        local component = entity_components[entity_primary]
 
-        local key_offset = extracted % 1048576 * 1048576
+        local key_offset = component % 1048576 * 1048576
         local entity_key = key_offset + entity_primary
 
         new_prev_entities[entity_key] = prev_entity
@@ -1572,52 +1568,37 @@ end
 ---@param entity evolved.entity
 ---@param component evolved.component
 function __search_index_fns.insert(index, entity, component)
-    local extract_component = index.__extract_component
-
-    local extracted = component
-
-    if extract_component then
-        extracted = extract_component(extracted)
-    end
-
-    __search_index_fns.insert_extracted(index, entity, extracted)
-end
-
----@param index evolved.search_index
----@param entity evolved.entity
----@param extracted? evolved.component
-function __search_index_fns.insert_extracted(index, entity, extracted)
-    if extracted == nil or extracted ~= extracted then
-        -- nil and NaN values cannot be indexed
+    if component ~= component then
+        -- NaN components cannot be indexed
         return
     end
 
-    if index.__target_fragment and __lua_type(extracted) == 'table' then
+    if index.__target_fragment and __lua_type(component) == 'table' then
         if not index.__combined_keys then
             __search_index_fns.combine_keys(index)
         end
 
         ---@type evolved.entity[], integer
-        local target_list, target_count = __list_fns.dup(extracted)
+        local target_list, target_count = __list_fns.dup(component)
 
         for target_index = 1, target_count do
             __search_index_fns.insert_node(index, entity, target_list[target_index])
         end
 
-        index.__entity_extracts[entity % 1048576] = target_list
+        index.__entity_components[entity % 1048576] = target_list
     else
-        __search_index_fns.insert_node(index, entity, extracted)
-        index.__entity_extracts[entity % 1048576] = extracted
+        __search_index_fns.insert_node(index, entity, component)
+        index.__entity_components[entity % 1048576] = component
     end
 end
 
 ---@param index evolved.search_index
 ---@param entity evolved.entity
----@param extracted evolved.component
-function __search_index_fns.insert_node(index, entity, extracted)
+---@param component evolved.component
+function __search_index_fns.insert_node(index, entity, component)
     local target_fragment = index.__target_fragment
 
-    local key_offset = index.__combined_keys and extracted % 1048576 * 1048576 or 0
+    local key_offset = index.__combined_keys and component % 1048576 * 1048576 or 0
     local entity_key = key_offset + entity % 1048576
 
     local head_entities = index.__head_entities
@@ -1625,7 +1606,7 @@ function __search_index_fns.insert_node(index, entity, extracted)
     local next_entities = index.__next_entities
 
     ---@type evolved.entity?
-    local head_entity = head_entities[extracted]
+    local head_entity = head_entities[component]
 
     if head_entity then
         if prev_entities[entity_key] then
@@ -1643,18 +1624,18 @@ function __search_index_fns.insert_node(index, entity, extracted)
 
         prev_entities[head_entity_key] = entity
         next_entities[tail_entity_key] = entity
-    elseif not target_fragment or __freelist_ids[extracted % 1048576] == extracted then
-        head_entities[extracted] = entity
+    elseif not target_fragment or __freelist_ids[component % 1048576] == component then
+        head_entities[component] = entity
 
         prev_entities[entity_key] = entity
         next_entities[entity_key] = entity
 
         if target_fragment then
-            __search_index_fns.link(extracted, target_fragment)
+            __search_index_fns.link(component, target_fragment)
         end
     elseif __debug_mode and target_fragment then
         __debug_fns.error_fmt('the target (%s) of the linked fragment (%s) is not alive',
-            __id_name(extracted), __id_name(target_fragment))
+            __id_name(component), __id_name(target_fragment))
     end
 end
 
@@ -1664,34 +1645,34 @@ function __search_index_fns.remove(index, entity)
     local entity_primary = entity % 1048576
 
     ---@type evolved.component?
-    local extracted = index.__entity_extracts[entity_primary]
+    local component = index.__entity_components[entity_primary]
 
-    if extracted == nil then
+    if component == nil then
         return
     end
 
-    if index.__target_fragment and __lua_type(extracted) == 'table' then
+    if index.__target_fragment and __lua_type(component) == 'table' then
         ---@type evolved.entity[], integer
-        local target_list, target_count = extracted, #extracted
+        local target_list, target_count = component, #component
 
         for target_index = 1, target_count do
             __search_index_fns.remove_node(index, entity, target_list[target_index])
         end
 
-        index.__entity_extracts[entity_primary] = nil
+        index.__entity_components[entity_primary] = nil
     else
-        __search_index_fns.remove_node(index, entity, extracted)
-        index.__entity_extracts[entity_primary] = nil
+        __search_index_fns.remove_node(index, entity, component)
+        index.__entity_components[entity_primary] = nil
     end
 end
 
 ---@param index evolved.search_index
 ---@param entity evolved.entity
----@param extracted evolved.component
-function __search_index_fns.remove_node(index, entity, extracted)
+---@param component evolved.component
+function __search_index_fns.remove_node(index, entity, component)
     local target_fragment = index.__target_fragment
 
-    local key_offset = index.__combined_keys and extracted % 1048576 * 1048576 or 0
+    local key_offset = index.__combined_keys and component % 1048576 * 1048576 or 0
     local entity_key = key_offset + entity % 1048576
 
     local head_entities = index.__head_entities
@@ -1699,7 +1680,7 @@ function __search_index_fns.remove_node(index, entity, extracted)
     local next_entities = index.__next_entities
 
     ---@type evolved.entity?
-    local head_entity = head_entities[extracted]
+    local head_entity = head_entities[component]
 
     if not head_entity then
         -- this target is dead or has no links anymore
@@ -1715,10 +1696,10 @@ function __search_index_fns.remove_node(index, entity, extracted)
     end
 
     if next_entity == entity then
-        head_entities[extracted] = nil
+        head_entities[component] = nil
 
         if target_fragment then
-            __search_index_fns.unlink(extracted, target_fragment)
+            __search_index_fns.unlink(component, target_fragment)
         end
     else
         local prev_entity = prev_entities[entity_key]
@@ -1730,7 +1711,7 @@ function __search_index_fns.remove_node(index, entity, extracted)
         next_entities[prev_entity_key] = next_entity
 
         if head_entity == entity then
-            head_entities[extracted] = next_entity
+            head_entities[component] = next_entity
         end
     end
 
@@ -1743,33 +1724,53 @@ end
 ---@param component evolved.component
 function __search_index_fns.assign(index, entity, component)
     local target_fragment = index.__target_fragment
-    local extract_component = index.__extract_component
-    local entity_extracts = index.__entity_extracts
+    local entity_components = index.__entity_components
 
-    local new_extracted = component
+    local new_component = component
+    local old_component = entity_components[entity % 1048576]
 
-    if extract_component then
-        new_extracted = extract_component(new_extracted)
-    end
-
-    local old_extracted = entity_extracts[entity % 1048576]
-
-    if new_extracted == old_extracted then
+    if new_component == old_component then
         -- nothing to reassign
-        return
-    end
-
-    if target_fragment
-        and __lua_type(new_extracted) == 'table'
-        and __lua_type(old_extracted) == 'table'
-        and __list_fns.eq(new_extracted, old_extracted)
+    elseif target_fragment
+        and __lua_type(new_component) == 'table'
+        and __lua_type(old_component) == 'table'
+        and __list_fns.eq(new_component, old_component)
     then
         -- the list has the same targets, nothing to reassign
-        return
+    else
+        __search_index_fns.remove(index, entity)
+        __search_index_fns.insert(index, entity, new_component)
     end
+end
 
-    __search_index_fns.remove(index, entity)
-    __search_index_fns.insert_extracted(index, entity, new_extracted)
+---@param index evolved.search_index
+---@param entity_list evolved.entity[]
+---@param component_list evolved.component[]
+---@param first integer
+---@param last integer
+function __search_index_fns.multi_assign(index, entity_list, component_list, first, last)
+    local target_fragment = index.__target_fragment
+    local entity_components = index.__entity_components
+
+    for place = first, last do
+        local entity = entity_list[place]
+
+        local new_component = component_list[place]
+        local old_component = entity_components[entity % 1048576]
+
+        if new_component == old_component then
+            -- nothing to reassign
+        elseif target_fragment
+            and __lua_type(new_component) == 'table'
+            and __lua_type(old_component) == 'table'
+            and __list_fns.eq(new_component, old_component)
+        then
+            -- the list has the same targets, nothing to reassign
+        else
+            __search_index_fns.remove(index, entity)
+            __search_index_fns.insert(index, entity, new_component)
+        end
+    end
 end
 
 ---@param index evolved.search_index
@@ -1790,43 +1791,6 @@ end
 function __search_index_fns.multi_remove(index, entity_list, first, last)
     for place = first, last do
         __search_index_fns.remove(index, entity_list[place])
-    end
-end
-
----@param index evolved.search_index
----@param entity_list evolved.entity[]
----@param component_list evolved.component[]
----@param first integer
----@param last integer
-function __search_index_fns.multi_assign(index, entity_list, component_list, first, last)
-    local target_fragment = index.__target_fragment
-    local extract_component = index.__extract_component
-    local entity_extracts = index.__entity_extracts
-
-    for place = first, last do
-        local entity = entity_list[place]
-        local component = component_list[place]
-
-        local new_extracted = component
-
-        if extract_component then
-            new_extracted = extract_component(new_extracted)
-        end
-
-        local old_extracted = entity_extracts[entity % 1048576]
-
-        if new_extracted == old_extracted then
-            -- nothing to reassign
-        elseif target_fragment
-            and __lua_type(new_extracted) == 'table'
-            and __lua_type(old_extracted) == 'table'
-            and __list_fns.eq(new_extracted, old_extracted)
-        then
-            -- the list has the same targets, nothing to reassign
-        else
-            __search_index_fns.remove(index, entity)
-            __search_index_fns.insert_extracted(index, entity, new_extracted)
-        end
     end
 end
 
@@ -8311,12 +8275,6 @@ function __builder_mt:duplicate(duplicate)
     return self:set(__DUPLICATE, duplicate)
 end
 
----@param extract evolved.extract
----@return evolved.builder builder
-function __builder_mt:extract(extract)
-    return self:set(__EXTRACT, extract)
-end
-
 ---@param realloc evolved.realloc
 ---@return evolved.builder builder
 function __builder_mt:realloc(realloc)
@@ -8556,9 +8514,6 @@ __evolved_set(__DEFAULT, __ON_REMOVE, __chunk_fns.update_major_chunks)
 __evolved_set(__DUPLICATE, __ON_SET, __chunk_fns.update_major_chunks)
 __evolved_set(__DUPLICATE, __ON_REMOVE, __chunk_fns.update_major_chunks)
 
-__evolved_set(__EXTRACT, __ON_SET, __chunk_fns.update_search_index)
-__evolved_set(__EXTRACT, __ON_REMOVE, __chunk_fns.update_search_index)
-
 __evolved_set(__REALLOC, __ON_SET, __chunk_fns.update_major_chunks)
 __evolved_set(__REALLOC, __ON_REMOVE, __chunk_fns.update_major_chunks)
 
@@ -8776,7 +8731,6 @@ __evolved_set(__INTERNAL, __NAME, '__INTERNAL')
 
 __evolved_set(__DEFAULT, __NAME, '__DEFAULT')
 __evolved_set(__DUPLICATE, __NAME, '__DUPLICATE')
-__evolved_set(__EXTRACT, __NAME, '__EXTRACT')
 
 __evolved_set(__REALLOC, __NAME, '__REALLOC')
 __evolved_set(__COMPMOVE, __NAME, '__COMPMOVE')
@@ -8827,7 +8781,6 @@ __evolved_set(__INTERNAL, __INTERNAL)
 
 __evolved_set(__DEFAULT, __INTERNAL)
 __evolved_set(__DUPLICATE, __INTERNAL)
-__evolved_set(__EXTRACT, __INTERNAL)
 
 __evolved_set(__REALLOC, __INTERNAL)
 __evolved_set(__COMPMOVE, __INTERNAL)
@@ -8878,7 +8831,6 @@ evolved.INTERNAL = __INTERNAL
 
 evolved.DEFAULT = __DEFAULT
 evolved.DUPLICATE = __DUPLICATE
-evolved.EXTRACT = __EXTRACT
 
 evolved.REALLOC = __REALLOC
 evolved.COMPMOVE = __COMPMOVE
