@@ -1425,3 +1425,471 @@ do
 
     evo.debug_mode(true)
 end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    assert(evo.get(f, evo.LINK_POLICY) == evo.LINK_POLICY_UNLINK_TARGET)
+
+    local t1, t2, t3 = evo.id(3)
+
+    local l = { t1, t2, t3 }
+    local e = evo.builder():set(f, l):build()
+
+    evo.destroy(t2)
+    assert(evo.alive(e))
+
+    do
+        local nl = evo.get(e, f)
+        assert(nl ~= l and #nl == 2 and nl[1] == t1 and nl[2] == t3)
+        assert(#l == 3 and l[1] == t1 and l[2] == t2 and l[3] == t3)
+    end
+
+    assert(evo.search(f, t1) == e)
+    assert(evo.search(f, t2) == nil)
+    assert(evo.search(f, t3) == e)
+
+    evo.destroy(t1)
+
+    do
+        local nl = evo.get(e, f)
+        assert(#nl == 1 and nl[1] == t3)
+    end
+
+    evo.destroy(t3)
+    assert(evo.alive(e) and not evo.has(e, f))
+    assert(evo.search(f, t3) == nil)
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local g = evo.id()
+
+    local t1, t2 = evo.id(2)
+
+    local e1 = evo.builder():set(f, t1):set(g, 42):build()
+    local e2 = evo.builder():set(f, { t1, t2 }):build()
+    local e3 = evo.builder():set(f, { t1 }):build()
+    local e4 = evo.builder():set(f, {}):build()
+
+    evo.destroy(t1)
+    assert(evo.alive_all(e1, e2, e3, e4))
+
+    assert(not evo.has(e1, f) and evo.get(e1, g) == 42)
+    assert(not evo.has(e3, f))
+
+    do
+        local l2 = evo.get(e2, f)
+        assert(#l2 == 1 and l2[1] == t2)
+
+        local l4 = evo.get(e4, f)
+        assert(#l4 == 0)
+    end
+
+    assert(evo.search(f, t1) == nil)
+    assert(evo.search(f, t2) == e2)
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+
+    local t1, t2, t3, t4 = evo.id(4)
+    local e = evo.builder():set(f, { t1, t2, t3, t4 }):build()
+
+    evo.destroy(t1, t3)
+
+    do
+        local l = evo.get(e, f)
+        assert(#l == 2 and l[1] == t2 and l[2] == t4)
+    end
+
+    evo.destroy(t2, t4)
+    assert(evo.alive(e) and not evo.has(e, f))
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+
+    local t1, t2 = evo.id(2)
+    local e = evo.builder():set(f, { t1, t2, t1, t2, t1 }):build()
+
+    evo.destroy(t1)
+
+    do
+        local l = evo.get(e, f)
+        assert(#l == 2 and l[1] == t2 and l[2] == t2)
+    end
+
+    assert(evo.search(f, t2) == e)
+
+    evo.destroy(t2)
+    assert(evo.alive(e) and not evo.has(e, f))
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+
+    local t1, t2 = evo.id(2)
+
+    local l = { t1, t2 }
+    local e1 = evo.builder():set(f, l):build()
+    local e2 = evo.builder():set(f, l):build()
+
+    evo.destroy(t1)
+
+    do
+        local l1, l2 = evo.get(e1, f), evo.get(e2, f)
+        assert(l1 ~= l and #l1 == 1 and l1[1] == t2)
+        assert(l2 ~= l and #l2 == 1 and l2[1] == t2)
+        assert(#l == 2 and l[1] == t1 and l[2] == t2)
+    end
+
+    do
+        local rl, rc = evo.multi_search(f, t2)
+        assert(rc == 2 and rl[1] == e1 and rl[2] == e2)
+    end
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+
+    local t1, t2 = evo.id(2)
+    local e1 = evo.builder():set(f, { t1, t2 }):build()
+    local e2 = evo.builder():set(f, { t1, t2 }):build()
+
+    evo.destroy(t1, e1)
+    assert(not evo.alive_any(t1, e1))
+    assert(evo.alive(e2))
+
+    do
+        local l = evo.get(e2, f)
+        assert(#l == 1 and l[1] == t2)
+    end
+
+    assert(evo.search(f, t2) == e2)
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+
+    local t1, t2 = evo.id(2)
+    local e = evo.builder():set(f, { t1, t2 }):build()
+
+    evo.destroy(f, t1)
+    assert(not evo.alive_any(f, t1))
+    assert(evo.alive(e) and not evo.has(e, f))
+end
+
+do
+    local g = evo.builder():build()
+
+    local set_count, assign_count, remove_count = 0, 0, 0
+
+    local f = evo.builder()
+        :link()
+        :link_policy(evo.LINK_POLICY_UNLINK_TARGET)
+        :on_set(function(e, _, nl, ol)
+            assert(evo.alive(e))
+            if ol then
+                assert(#ol == 3 and #nl == 1)
+                for _, t in ipairs(ol) do assert(evo.alive(t) and evo.get(t, g) == 42) end
+                set_count = set_count + 1
+            end
+        end)
+        :on_assign(function(_, _, nl, ol)
+            assert(#ol == 3 and #nl == 1)
+            assign_count = assign_count + 1
+        end)
+        :on_remove(function(_, _, ol)
+            assert(#ol == 1)
+            remove_count = remove_count + 1
+        end)
+        :build()
+
+    local t1 = evo.builder():set(g, 42):build()
+    local t2 = evo.builder():set(g, 42):build()
+    local t3 = evo.builder():set(g, 42):build()
+
+    local e = evo.builder():set(f, { t1, t2, t3 }):build()
+
+    evo.destroy(t1, t3)
+    assert(set_count == 1 and assign_count == 1 and remove_count == 0)
+
+    evo.destroy(t2)
+    assert(set_count == 1 and assign_count == 1 and remove_count == 1)
+    assert(evo.alive(e) and not evo.has(e, f))
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+
+    local t1, t2, t3 = evo.id(3)
+    local e = evo.builder():set(f, { t1, t2, t3 }):build()
+
+    evo.defer()
+    do
+        evo.destroy(t1)
+        evo.destroy(t3)
+
+        local l = evo.get(e, f)
+        assert(#l == 3)
+    end
+    evo.commit()
+
+    do
+        local l = evo.get(e, f)
+        assert(#l == 1 and l[1] == t2)
+    end
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+
+    local t1, t2, t3 = evo.id(3)
+    local e = evo.builder():set(f, { t1, t2 }):build()
+
+    evo.defer()
+    do
+        evo.destroy(t1)
+        evo.set(e, f, { t2, t3 })
+    end
+    evo.commit()
+
+    do
+        local l = evo.get(e, f)
+        assert(#l == 2 and l[1] == t2 and l[2] == t3)
+    end
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local g = evo.builder():tag():build()
+
+    local t1 = evo.builder():set(g):build()
+    local t2 = evo.builder():build()
+    local t3 = evo.builder():set(g):build()
+
+    local e = evo.builder():set(f, { t1, t2, t3 }):build()
+
+    local q = evo.builder():include(g):build()
+
+    evo.batch_destroy(q)
+    assert(not evo.alive_any(t1, t3))
+
+    do
+        local l = evo.get(e, f)
+        assert(#l == 1 and l[1] == t2)
+    end
+end
+
+do
+    local f = evo.builder():link():build()
+
+    local t1, t2, t3 = evo.id(3)
+    local e = evo.builder():set(f, { t1, t2, t3 }):build()
+
+    evo.set(f, evo.LINK_POLICY, evo.LINK_POLICY_UNLINK_TARGET)
+
+    evo.destroy(t2)
+
+    do
+        local l = evo.get(e, f)
+        assert(#l == 2 and l[1] == t1 and l[2] == t3)
+    end
+
+    evo.remove(f, evo.LINK_POLICY)
+
+    evo.destroy(t3)
+    assert(evo.alive(e) and not evo.has(e, f))
+end
+
+do
+    local parent = evo.builder()
+        :link()
+        :link_policy(evo.LINK_POLICY_DESTROY_ENTITY)
+        :build()
+
+    local children = evo.builder()
+        :link()
+        :link_policy(evo.LINK_POLICY_UNLINK_TARGET)
+        :build()
+
+    local root = evo.id()
+
+    local c1 = evo.builder():set(parent, root):build()
+    local c2 = evo.builder():set(parent, root):build()
+    local c3 = evo.builder():set(parent, root):build()
+
+    evo.set(root, children, { c1, c2, c3 })
+
+    local gc1 = evo.builder():set(parent, c2):build()
+    local gc2 = evo.builder():set(parent, c2):build()
+
+    evo.set(c2, children, { gc1, gc2 })
+
+    evo.destroy(c2)
+    assert(not evo.alive_any(c2, gc1, gc2))
+    assert(evo.alive_all(root, c1, c3))
+
+    do
+        local l = evo.get(root, children)
+        assert(#l == 2 and l[1] == c1 and l[2] == c3)
+    end
+
+    evo.destroy(c1, c3)
+    assert(evo.alive(root) and not evo.has(root, children))
+
+    local c4 = evo.builder():set(parent, root):build()
+    evo.set(root, children, { c4 })
+
+    evo.destroy(root)
+    assert(not evo.alive_any(root, c4))
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+
+    local e1, e2, e3 = evo.id(3)
+    evo.set(e1, f, { e2, e3 })
+    evo.set(e2, f, { e1, e3 })
+    evo.set(e3, f, { e1, e2 })
+
+    evo.destroy(e2)
+    assert(evo.alive_all(e1, e3))
+
+    do
+        local l1, l3 = evo.get(e1, f), evo.get(e3, f)
+        assert(#l1 == 1 and l1[1] == e3)
+        assert(#l3 == 1 and l3[1] == e1)
+    end
+
+    evo.destroy(e1)
+    assert(evo.alive(e3) and not evo.has(e3, f))
+end
+
+do
+    local removed_list = {}
+    local assigned_list = {}
+
+    local f1 = evo.builder()
+        :link()
+        :on_remove(function(e) removed_list[#removed_list + 1] = e end)
+        :build()
+
+    local f2 = evo.builder()
+        :link()
+        :link_policy(evo.LINK_POLICY_UNLINK_TARGET)
+        :on_assign(function(e) assigned_list[#assigned_list + 1] = e end)
+        :build()
+
+    local t1, t2 = evo.id(2)
+
+    local e1 = evo.builder():set(f1, t1):set(f2, { t1, t2 }):build()
+    local e2 = evo.builder():set(f1, t1):set(f2, { t1, t2 }):build()
+    local e3 = evo.builder():set(f1, t1):set(f2, { t1, t2 }):build()
+
+    evo.destroy(t1)
+
+    assert(#removed_list == 3)
+    assert(removed_list[1] == e1 and removed_list[2] == e2 and removed_list[3] == e3)
+
+    assert(#assigned_list == 3)
+    assert(assigned_list[1] == e1 and assigned_list[2] == e2 and assigned_list[3] == e3)
+
+    do
+        local l, c = evo.multi_search(f2, t2)
+        assert(c == 3 and l[1] == e1 and l[2] == e2 and l[3] == e3)
+    end
+end
+
+do
+    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+
+    local t1, t2, t3 = evo.id(3)
+
+    local e1 = evo.builder():set(f, { t1, t2, t3 }):build()
+    local e2 = evo.builder():set(f, { t2, t3 }):build()
+    local e3 = evo.builder():set(f, { t3, t1, t2 }):build()
+    local e4 = evo.builder():set(f, { t2 }):build()
+
+    evo.destroy(t1)
+
+    do
+        local l1, l3 = evo.get(e1, f), evo.get(e3, f)
+        assert(#l1 == 2 and l1[1] == t2 and l1[2] == t3)
+        assert(#l3 == 2 and l3[1] == t3 and l3[2] == t2)
+    end
+
+    do
+        local l, c = evo.multi_search(f, t2)
+        assert(c == 4 and l[1] == e1 and l[2] == e2 and l[3] == e3 and l[4] == e4)
+    end
+
+    do
+        local l, c = evo.multi_search(f, t3)
+        assert(c == 3 and l[1] == e1 and l[2] == e2 and l[3] == e3)
+    end
+
+    evo.destroy(t3)
+
+    do
+        local l, c = evo.multi_search(f, t2)
+        assert(c == 4 and l[1] == e1 and l[2] == e2 and l[3] == e3 and l[4] == e4)
+    end
+end
+
+do
+    local f1 = evo.builder():link():build()
+    local f2 = evo.builder():link():link_policy(evo.LINK_POLICY_DESTROY_ENTITY):build()
+    local f3 = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+
+    do
+        local t1, t2 = evo.id(2)
+
+        local e1 = evo.builder():set(f1, t1):build()
+        local e2 = evo.builder():set(f2, t1):build()
+        local e3 = evo.builder():set(f3, { t1, t2 }):build()
+        local e4 = evo.builder():set(f2, t1):build()
+
+        evo.remove(e2, f2)
+
+        evo.destroy(t1)
+        assert(evo.alive_all(e1, e2, e3) and not evo.alive(e4))
+        assert(not evo.has(e1, f1) and not evo.has(e2, f2))
+
+        do
+            local l = evo.get(e3, f3)
+            assert(#l == 1 and l[1] == t2)
+        end
+    end
+
+    do
+        local t = evo.id()
+
+        local e1 = evo.builder():set(f1, t):build()
+        local e2 = evo.builder():set(f2, t):build()
+
+        evo.remove(e1, f1)
+        evo.remove(e2, f2)
+
+        local e3 = evo.builder():set(f2, t):build()
+        local e4 = evo.builder():set(f1, t):build()
+
+        evo.remove(e3, f2)
+
+        evo.destroy(t)
+        assert(evo.alive_all(e1, e2, e3, e4))
+        assert(not evo.has(e4, f1))
+    end
+
+    do
+        local t = evo.id()
+
+        local e1 = evo.builder():set(f1, t):build()
+        evo.remove(e1, f1)
+
+        local e2 = evo.builder():set(f2, t):build()
+
+        evo.destroy(t)
+        assert(evo.alive(e1) and not evo.alive(e2))
+    end
+end

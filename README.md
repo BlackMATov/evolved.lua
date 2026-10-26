@@ -1233,38 +1233,11 @@ evolved.reindex(team)
 assert(evolved.search(team, 'blue') == unit)
 ```
 
-Sometimes the component itself is not a good key. For example, a component can be a table, and you want to find entities by one of its fields, or names should be found regardless of their case. In such cases, use the [`evolved.EXTRACT`](#evolvedextract) fragment trait. This trait expects a function that takes a component and returns a value to be indexed instead of it. Components themselves are stored as is, only the index uses the extracted values. If the function returns `nil`, the entity is not indexed at all.
-
-```lua
-local evolved = require 'evolved'
-
-local unit_info = evolved.builder()
-    :index()
-    :extract(function(info) return info.team end)
-    :build()
-
-local unit1 = evolved.builder()
-    :set(unit_info, { team = 'red', health = 100 })
-    :build()
-
-local unit2 = evolved.builder()
-    :set(unit_info, { team = 'blue', health = 50 })
-    :build()
-
-assert(evolved.search(unit_info, 'red') == unit1)
-assert(evolved.search(unit_info, 'blue') == unit2)
-```
-
-The function is called every time a component of the fragment is inserted or assigned, including reindexing, and the index remembers the extracted values. Removals and destructions use these remembered values, so the function is not called for them. The trait can be added, changed, or removed at any time, and the index is rebuilt each time.
-
-> [!NOTE]
-> The extracted value must depend only on the component itself. The index is not updated when other fragments of the entity change, so a function that reads them will leave the index outdated. For the same reason, the function should not call any library functions. Tables changed in place bypass the index too, so set them again or use the [`evolved.reindex`](#evolvedreindex) function after such changes.
-
 > [!NOTE]
 > Searching by a fragment without the [`evolved.INDEX`](#evolvedindex) or [`evolved.LINK`](#evolvedlink) trait finds nothing and prints a warning. The [`evolved.reindex`](#evolvedreindex) function prints a warning for such fragments too and skips them.
 
 > [!NOTE]
-> Components, or values extracted from them, are used as keys in the index, so table keys are indexed by reference, and searching by another table with the same content will not find anything. Also, [Fragment Tags](#fragment-tags) are not indexed at all, and neither are `nil` and `NaN` keys.
+> Components are used as keys in the index, so table components are indexed by reference, and searching by another table with the same content will not find anything. Also, [Fragment Tags](#fragment-tags) and `NaN` components are not indexed at all.
 
 > [!NOTE]
 > The index is not free. Every indexed entity takes some additional memory, and all operations that change indexed components, such as spawning, cloning, setting, removing, or destroying, become slower because they have to update the index too. So mark only the fragments you are actually going to search by.
@@ -1436,6 +1409,8 @@ assert(evolved.alive(sword) and not evolved.has(sword, owner))
 
 You can change this behavior by using the [`evolved.LINK_POLICY`](#evolvedlink_policy) fragment trait. This trait expects one of the following predefined identifiers:
 
+- [`evolved.LINK_POLICY_UNLINK_TARGET`](#evolvedlink_policy_unlink_target) will remove only the destroyed entity from lists of entities that link to it, see the example with children below. Single links are removed together with the linked fragment, as with the default policy.
+
 - [`evolved.LINK_POLICY_DESTROY_ENTITY`](#evolvedlink_policy_destroy_entity) will destroy any entity that links to the destroyed entity. Links of destroyed entities are resolved too, so this is useful for hierarchies, where all descendants should be destroyed together with their root.
 
 - [`evolved.LINK_POLICY_REMOVE_FRAGMENT`](#evolvedlink_policy_remove_fragment) will remove the linked fragment from all entities that link to the destroyed entity. This is the default behavior, so you don't have to set it explicitly, but you can if you want.
@@ -1520,30 +1495,46 @@ evolved.destroy(pillar1)
 assert(evolved.alive(rope) and not evolved.has(rope, attached_to))
 ```
 
-The [`evolved.EXTRACT`](#evolvedextract) fragment trait works with linked fragments too, so components can store links among other data. In this case, the function should return an entity or a list of entities to link to, or `nil` if the component does not link to anything. Link policies are still applied to whole components, so with the default policy, the whole component is removed, not only the link inside it.
+Removing the whole list is not always what you want. For example, a parent can store the list of its children, and destroying one child should not take the other children away from it. In such cases, use the [`evolved.LINK_POLICY_UNLINK_TARGET`](#evolvedlink_policy_unlink_target) policy. With this policy, the destroyed entity is removed from the list, and the other entities stay there in the same order. If the list becomes empty, the linked fragment is removed, as if it were a single link.
 
 ```lua
 local evolved = require 'evolved'
 
-local equipment = evolved.builder()
+local parent = evolved.builder()
     :link()
-    :extract(function(item) return item.owner end)
+    :link_policy(evolved.LINK_POLICY_DESTROY_ENTITY)
     :build()
 
-local player = evolved.builder()
+local children = evolved.builder()
+    :link()
+    :link_policy(evolved.LINK_POLICY_UNLINK_TARGET)
     :build()
 
-local sword = evolved.builder()
-    :set(equipment, { owner = player, slot = 'hand' })
+local root = evolved.builder()
     :build()
 
-assert(evolved.search(equipment, player) == sword)
+local child1 = evolved.builder()
+    :set(parent, root)
+    :build()
 
--- destroy the player that the sword links to
-evolved.destroy(player)
+local child2 = evolved.builder()
+    :set(parent, root)
+    :build()
 
--- the whole equipment component is removed, not only the owner field
-assert(evolved.alive(sword) and not evolved.has(sword, equipment))
+evolved.set(root, children, { child1, child2 })
+
+-- destroy one of the children of the root
+evolved.destroy(child1)
+
+-- the root is still alive and still has the other child
+local child_list = evolved.get(root, children)
+assert(#child_list == 1 and child_list[1] == child2)
+
+-- destroy the last child of the root
+evolved.destroy(child2)
+
+-- the empty list is removed together with the children fragment
+assert(evolved.alive(root) and not evolved.has(root, children))
 ```
 
 The [`evolved.INCLUDES`](#evolvedincludes), [`evolved.EXCLUDES`](#evolvedexcludes), [`evolved.VARIANTS`](#evolvedvariants), and [`evolved.REQUIRES`](#evolvedrequires) fragments are linked this way with the [`evolved.LINK_POLICY_DESTROY_ENTITY`](#evolvedlink_policy_destroy_entity) policy. So you can also find all queries that use some fragment, or all fragments that require it.
@@ -1814,7 +1805,6 @@ component_mapper :: {chunk, integer, integer}
 
 default :: component
 duplicate :: {component -> component}
-extract :: {component -> component?}
 
 realloc :: {storage?, integer, integer -> storage?}
 compmove :: {storage, integer, integer, integer, storage}
@@ -1849,7 +1839,6 @@ INTERNAL :: fragment
 
 DEFAULT :: fragment
 DUPLICATE :: fragment
-EXTRACT :: fragment
 
 REALLOC :: fragment
 COMPMOVE :: fragment
@@ -1876,6 +1865,7 @@ PROLOGUE :: fragment
 EPILOGUE :: fragment
 
 LINK_POLICY :: fragment
+LINK_POLICY_UNLINK_TARGET :: id
 LINK_POLICY_DESTROY_ENTITY :: id
 LINK_POLICY_REMOVE_FRAGMENT :: id
 
@@ -2015,7 +2005,6 @@ builder_mt:internal :: builder
 
 builder_mt:default :: component -> builder
 builder_mt:duplicate :: {component -> component} -> builder
-builder_mt:extract :: {component -> component?} -> builder
 
 builder_mt:realloc :: {storage?, integer, integer -> storage?} -> builder
 builder_mt:compmove :: {storage, integer, integer, integer, storage} -> builder
@@ -2051,7 +2040,6 @@ builder_mt:destruction_policy :: id -> builder
 
 - Added the new [`LINK`](#evolvedlink) and [`LINK_POLICY`](#evolvedlink_policy) fragment traits that resolve links to destroyed entities, see the [Linked Fragments](#linked-fragments) section
 - The [`GROUP`](#evolvedgroup), [`QUERY`](#evolvedquery), [`INCLUDES`](#evolvedincludes), [`EXCLUDES`](#evolvedexcludes), [`VARIANTS`](#evolvedvariants), and [`REQUIRES`](#evolvedrequires) fragments are now linked
-- Added the new [`EXTRACT`](#evolvedextract) fragment trait that allows indexing and linking by values extracted from components
 - Query iteration order no longer depends on the order in which chunks were created
 - The [`NAME`](#evolvedname) fragment is now marked as [UNIQUE](#unique-fragments), so clones no longer inherit the names of their prefabs
 - The [`search`](#evolvedsearch) and [`reindex`](#evolvedreindex) functions now print a warning instead of throwing an error for non-indexed fragments
@@ -2166,8 +2154,6 @@ builder_mt:destruction_policy :: id -> builder
 
 ### `evolved.DUPLICATE`
 
-### `evolved.EXTRACT`
-
 ### `evolved.REALLOC`
 
 ### `evolved.COMPMOVE`
@@ -2203,6 +2189,8 @@ builder_mt:destruction_policy :: id -> builder
 ### `evolved.EPILOGUE`
 
 ### `evolved.LINK_POLICY`
+
+### `evolved.LINK_POLICY_UNLINK_TARGET`
 
 ### `evolved.LINK_POLICY_DESTROY_ENTITY`
 
@@ -3003,14 +2991,6 @@ function evolved.builder_mt:default(default) end
 ---@param duplicate evolved.duplicate
 ---@return evolved.builder builder
 function evolved.builder_mt:duplicate(duplicate) end
-```
-
-#### `evolved.builder_mt:extract`
-
-```lua
----@param extract evolved.extract
----@return evolved.builder builder
-function evolved.builder_mt:extract(extract) end
 ```
 
 #### `evolved.builder_mt:realloc`

@@ -25,6 +25,9 @@ local destroying_query = evo.builder():include(destroying_mark):build()
 local remove_hook_calls = {} ---@type table<evolved.entity, table<evolved.fragment, integer>>
 local hooked_link_fragment_set = {} ---@type table<evolved.fragment, boolean>
 
+local assign_hook_calls = {} ---@type table<evolved.entity, table<evolved.fragment, integer>>
+local assign_hooked_link_fragment_set = {} ---@type table<evolved.fragment, boolean>
+
 ---@param entity evolved.entity
 ---@param fragment evolved.fragment
 local function remove_hook(entity, fragment)
@@ -40,6 +43,21 @@ local function remove_hook(entity, fragment)
     entity_calls[fragment] = (entity_calls[fragment] or 0) + 1
 end
 
+---@param entity evolved.entity
+---@param fragment evolved.fragment
+local function assign_hook(entity, fragment)
+    assert(evo.alive(entity) and evo.alive(fragment))
+
+    local entity_calls = assign_hook_calls[entity]
+
+    if not entity_calls then
+        entity_calls = {}
+        assign_hook_calls[entity] = entity_calls
+    end
+
+    entity_calls[fragment] = (entity_calls[fragment] or 0) + 1
+end
+
 local all_link_fragment_list = {} ---@type evolved.fragment[]
 
 for i = 1, math.random(1, 4) do
@@ -49,11 +67,17 @@ for i = 1, math.random(1, 4) do
         builder:on_remove(remove_hook)
     end
 
-    local r = math.random(1, 3)
+    if math.random(1, 2) == 1 then
+        builder:on_assign(assign_hook)
+    end
+
+    local r = math.random(1, 4)
 
     if r == 1 then
-        builder:link_policy(evo.LINK_POLICY_DESTROY_ENTITY)
+        builder:link_policy(evo.LINK_POLICY_UNLINK_TARGET)
     elseif r == 2 then
+        builder:link_policy(evo.LINK_POLICY_DESTROY_ENTITY)
+    elseif r == 3 then
         builder:link_policy(evo.LINK_POLICY_REMOVE_FRAGMENT)
     end
 
@@ -65,6 +89,10 @@ for i = 1, math.random(1, 4) do
 
     if evo.has(all_link_fragment_list[i], evo.ON_REMOVE) then
         hooked_link_fragment_set[all_link_fragment_list[i]] = true
+    end
+
+    if evo.has(all_link_fragment_list[i], evo.ON_ASSIGN) then
+        assign_hooked_link_fragment_set[all_link_fragment_list[i]] = true
     end
 end
 
@@ -204,9 +232,11 @@ repeat
 until not has_new_destroyed_entities
 
 local entity_link_target_lists = {} ---@type table<evolved.entity, table<evolved.fragment, evolved.entity[]>>
+local entity_link_components = {} ---@type table<evolved.entity, table<evolved.fragment, evolved.entity | evolved.entity[]>>
 
 for _, entity in ipairs(all_entity_list) do
     local entity_link_target_list = {}
+    local entity_link_component_list = {}
 
     for _, link_fragment in ipairs(all_link_fragment_list) do
         local link_component = evo.get(entity, link_fragment)
@@ -219,22 +249,27 @@ for _, entity in ipairs(all_entity_list) do
             end
 
             entity_link_target_list[link_fragment] = link_target_list
+            entity_link_component_list[link_fragment] = link_component
         end
     end
 
     entity_link_target_lists[entity] = entity_link_target_list
+    entity_link_components[entity] = entity_link_component_list
 end
 
 remove_hook_calls = {}
+assign_hook_calls = {}
 
 ---
 ---
 ---
 ---
 ---
+
+local destroying_mode = math.random(1, 6)
 
 do
-    local r = math.random(1, 6)
+    local r = destroying_mode
 
     if r == 1 then
         evo.destroy(__table_unpack(destroying_entity_list))
@@ -349,6 +384,49 @@ for _, link_fragment in ipairs(all_link_fragment_list) do
     end
 end
 
+---@param entity evolved.entity
+---@param link_fragment evolved.fragment
+---@return evolved.entity[] alive_target_list, boolean is_unlinked_list
+local function expected_link_targets(entity, link_fragment)
+    local link_target_list = entity_link_target_lists[entity][link_fragment]
+    local link_component = entity_link_components[entity][link_fragment]
+
+    local alive_target_list = {}
+
+    for _, link_target in ipairs(link_target_list) do
+        if not should_be_destroyed_entity_set[link_target] then
+            alive_target_list[#alive_target_list + 1] = link_target
+        end
+    end
+
+    local is_unlinked_list = type(link_component) == 'table'
+        and evo.get(link_fragment, evo.LINK_POLICY) == evo.LINK_POLICY_UNLINK_TARGET
+        and #alive_target_list < #link_target_list
+
+    return alive_target_list, is_unlinked_list
+end
+
+for _, entity in ipairs(all_entity_list) do
+    if evo.alive(entity) then
+        for link_fragment, link_target_list in pairs(entity_link_target_lists[entity]) do
+            local alive_target_list, is_unlinked_list = expected_link_targets(entity, link_fragment)
+
+            if #alive_target_list == #link_target_list then
+                assert(evo.get(entity, link_fragment) == entity_link_components[entity][link_fragment])
+            elseif is_unlinked_list and #alive_target_list > 0 then
+                local link_component = evo.get(entity, link_fragment)
+                assert(type(link_component) == 'table' and #link_component == #alive_target_list)
+
+                for i, link_target in ipairs(alive_target_list) do
+                    assert(link_component[i] == link_target)
+                end
+            else
+                assert(not evo.has(entity, link_fragment))
+            end
+        end
+    end
+end
+
 for _, entity in ipairs(all_entity_list) do
     local entity_calls = remove_hook_calls[entity] or {}
 
@@ -356,10 +434,12 @@ for _, entity in ipairs(all_entity_list) do
         local expected_call_count = 0
 
         if hooked_link_fragment_set[link_fragment] then
+            local alive_target_list, is_unlinked_list = expected_link_targets(entity, link_fragment)
+
             local is_link_removed = should_be_destroyed_entity_set[entity]
 
-            for _, link_target in ipairs(link_target_list) do
-                if should_be_destroyed_entity_set[link_target] then
+            if #alive_target_list < #link_target_list then
+                if not is_unlinked_list or #alive_target_list == 0 then
                     is_link_removed = true
                 end
             end
@@ -378,6 +458,41 @@ for _, entity in ipairs(all_entity_list) do
 end
 
 for entity in pairs(remove_hook_calls) do
+    assert(entity_link_target_lists[entity])
+end
+
+for _, entity in ipairs(all_entity_list) do
+    local entity_calls = assign_hook_calls[entity] or {}
+
+    for link_fragment in pairs(entity_link_target_lists[entity]) do
+        if assign_hooked_link_fragment_set[link_fragment] then
+            local alive_target_list, is_unlinked_list = expected_link_targets(entity, link_fragment)
+
+            local call_count = entity_calls[link_fragment] or 0
+
+            local is_link_assigned = is_unlinked_list
+                and #alive_target_list > 0
+                and not should_be_destroyed_entity_set[entity]
+
+            if destroying_mode == 3 or destroying_mode == 4 then
+                -- each target is destroyed separately, so lists can be assigned several times
+                if is_link_assigned then
+                    assert(call_count >= 1)
+                elseif not is_unlinked_list then
+                    assert(call_count == 0)
+                end
+            else
+                assert(call_count == (is_link_assigned and 1 or 0))
+            end
+        end
+    end
+
+    for link_fragment in pairs(entity_calls) do
+        assert(entity_link_target_lists[entity][link_fragment])
+    end
+end
+
+for entity in pairs(assign_hook_calls) do
     assert(entity_link_target_lists[entity])
 end
 

@@ -637,7 +637,7 @@ local __entity_chunks = {} ---@type (evolved.chunk|false)[]
 local __entity_places = {} ---@type integer[]
 
 local __search_indices = {} ---@type table<evolved.fragment, evolved.search_index>
-local __target_fragments = {} ---@type table<evolved.entity, evolved.assoc_list<evolved.fragment>>
+local __target_fragments = {} ---@type table<evolved.entity, evolved.fragment | evolved.assoc_list<evolved.fragment>>
 
 local __sorted_includes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
 local __sorted_excludes = {} ---@type table<evolved.query, evolved.assoc_list<evolved.fragment>>
@@ -1314,6 +1314,7 @@ local __PROLOGUE = __acquire_id()
 local __EPILOGUE = __acquire_id()
 
 local __LINK_POLICY = __acquire_id()
+local __LINK_POLICY_UNLINK_TARGET = __acquire_id()
 local __LINK_POLICY_DESTROY_ENTITY = __acquire_id()
 local __LINK_POLICY_REMOVE_FRAGMENT = __acquire_id()
 
@@ -1440,6 +1441,7 @@ local __shrink_chunk
 local __clear_entity_one
 local __destroy_entity_one
 local __destroy_entity_stack
+local __unlink_entity_targets
 local __remove_entity_fragments
 
 local __chunk_assign
@@ -1542,12 +1544,12 @@ function __search_index_fns.link(target, fragment)
     local target_fragments = __target_fragments[target]
 
     if not target_fragments then
-        ---@type evolved.assoc_list<evolved.fragment>
-        target_fragments = __assoc_list_fns.new(1)
-        __target_fragments[target] = target_fragments
+        __target_fragments[target] = fragment
+    elseif __lua_type(target_fragments) == 'table' then
+        __assoc_list_fns.insert(target_fragments, fragment)
+    elseif target_fragments ~= fragment then
+        __target_fragments[target] = __assoc_list_fns.from(target_fragments, fragment)
     end
-
-    __assoc_list_fns.insert(target_fragments, fragment)
 end
 
 ---@param target evolved.entity
@@ -1559,8 +1561,40 @@ function __search_index_fns.unlink(target, fragment)
         return
     end
 
-    if __assoc_list_fns.unordered_remove(target_fragments, fragment) == 0 then
+    if __lua_type(target_fragments) == 'table' then
+        if __assoc_list_fns.remove(target_fragments, fragment) == 0 then
+            __target_fragments[target] = nil
+        end
+    elseif target_fragments == fragment then
         __target_fragments[target] = nil
+    end
+end
+
+---@param index evolved.search_index
+---@param entity evolved.entity
+---@param remove table<evolved.entity, boolean>
+function __search_index_fns.filter(index, entity, remove)
+    local entity_primary = entity % 1048576
+
+    ---@type evolved.entity[]
+    local target_list = index.__entity_components[entity_primary]
+    local target_count = #target_list
+
+    local kept_count = 0
+
+    for target_index = 1, target_count do
+        local target = target_list[target_index]
+
+        if remove[target] then
+            __search_index_fns.remove_node(index, entity, target)
+        else
+            kept_count = kept_count + 1
+            target_list[kept_count] = target
+        end
+    end
+
+    for target_index = kept_count + 1, target_count do
+        target_list[target_index] = nil
     end
 end
 
@@ -4454,11 +4488,18 @@ function __destroy_entity_stack(chunk_stack, chunk_stack_size, entity_stack, ent
                     if entity_target_fragments then
                         target_fragments[entity] = nil
 
-                        local target_fragment_list = entity_target_fragments.__item_list
-                        local target_fragment_count = entity_target_fragments.__item_count
+                        ---@type evolved.fragment[]?, integer
+                        local target_fragment_list, target_fragment_count = nil, 1
+
+                        if __lua_type(entity_target_fragments) == 'table' then
+                            target_fragment_list = entity_target_fragments.__item_list
+                            target_fragment_count = entity_target_fragments.__item_count
+                        end
 
                         for target_fragment_index = 1, target_fragment_count do
-                            local target_fragment = target_fragment_list[target_fragment_index]
+                            local target_fragment = target_fragment_list
+                                and target_fragment_list[target_fragment_index]
+                                or entity_target_fragments
                             local target_fragment_search_index = search_indices[target_fragment]
 
                             if target_fragment_search_index
@@ -4472,7 +4513,9 @@ function __destroy_entity_stack(chunk_stack, chunk_stack_size, entity_stack, ent
                                     entity_stack_size = entity_stack_size + __evolved_multi_search_to(
                                         entity_stack, entity_stack_size + 1, target_fragment, entity)
                                 else
-                                    if link_policy ~= __LINK_POLICY_REMOVE_FRAGMENT then
+                                    if link_policy ~= __LINK_POLICY_UNLINK_TARGET
+                                        and link_policy ~= __LINK_POLICY_REMOVE_FRAGMENT
+                                    then
                                         __debug_fns.warning_fmt('unknown LINK_POLICY (%s) on (%s), %s is used instead',
                                             __id_name(link_policy), __id_name(target_fragment),
                                             __id_name(__LINK_POLICY_REMOVE_FRAGMENT))
@@ -4506,16 +4549,20 @@ function __destroy_entity_stack(chunk_stack, chunk_stack_size, entity_stack, ent
             local fragment = removing_fragment_list[removing_index]
 
             if target then
+                local link_policy = search_indices[fragment].__link_policy
                 local referrer_count = __evolved_multi_search_to(entity_stack, 1, fragment, target)
 
-                while referrer_count > 0 do
-                    local referrer = entity_stack[referrer_count]
+                for referrer_index = 1, referrer_count do
+                    local referrer = entity_stack[referrer_index]
 
-                    entity_stack[referrer_count] = nil
-                    referrer_count = referrer_count - 1
+                    entity_stack[referrer_index] = nil
 
                     if not processed_entity_set[referrer] then
-                        __remove_entity_fragments(referrer, fragment)
+                        if link_policy == __LINK_POLICY_UNLINK_TARGET then
+                            __unlink_entity_targets(referrer, fragment, processed_entity_set)
+                        else
+                            __remove_entity_fragments(referrer, fragment)
+                        end
                     end
                 end
             else
@@ -4612,6 +4659,89 @@ function __destroy_entity_stack(chunk_stack, chunk_stack_size, entity_stack, ent
     __release_table(__table_pool_tag.entity_list, releasing_entity_list, false, true)
     __release_table(__table_pool_tag.entity_list, processed_entity_list, false, true)
     __release_table(__table_pool_tag.fragment_set, processed_entity_set, true, false)
+end
+
+---@param entity evolved.entity
+---@param fragment evolved.fragment
+---@param destroying_entity_set table<evolved.entity, boolean>
+function __unlink_entity_targets(entity, fragment, destroying_entity_set)
+    if __defer_depth <= 0 then
+        __debug_fns.error_fmt('this operation should be deferred')
+    end
+
+    local entity_primary = entity % 1048576
+
+    if __freelist_ids[entity_primary] ~= entity then
+        -- nothing to unlink from non-alive entities
+        return
+    end
+
+    local chunk = __entity_chunks[entity_primary]
+    local place = __entity_places[entity_primary]
+
+    if not chunk then
+        return
+    end
+
+    local component_indices = chunk.__component_indices
+    local component_index = component_indices[fragment]
+
+    if not component_index then
+        return
+    end
+
+    local component_storages = chunk.__component_storages
+    local component_storage = component_storages[component_index]
+
+    ---@type evolved.entity[]
+    local old_target_list = component_storage[place]
+    local old_target_count = __lua_type(old_target_list) == 'table' and #old_target_list or 0
+
+    if old_target_count == 0 then
+        __remove_entity_fragments(entity, fragment)
+        return
+    end
+
+    ---@type evolved.entity[]
+    local new_target_list = __lua_table_new(old_target_count)
+    local new_target_count = 0
+
+    for old_target_index = 1, old_target_count do
+        local old_target = old_target_list[old_target_index]
+
+        if not destroying_entity_set[old_target] then
+            new_target_count = new_target_count + 1
+            new_target_list[new_target_count] = old_target
+        end
+    end
+
+    if new_target_count == 0 then
+        __remove_entity_fragments(entity, fragment)
+        return
+    end
+
+    component_storage[place] = new_target_list
+
+    local fragment_search_index = chunk.__has_index_fragments
+        and __search_indices[fragment]
+        or nil
+
+    if fragment_search_index then
+        __search_index_fns.filter(fragment_search_index, entity, destroying_entity_set)
+    end
+
+    if chunk.__has_assign_hooks then
+        local fragment_set = chunk.__component_sets[component_index]
+        local fragment_assign = chunk.__component_assigns[component_index]
+
+        if fragment_set then
+            fragment_set(entity, fragment, new_target_list, old_target_list)
+        end
+
+        if fragment_assign then
+            fragment_assign(entity, fragment, new_target_list, old_target_list)
+        end
+    end
 end
 
 ---@param entity evolved.entity
@@ -8757,6 +8887,7 @@ __evolved_set(__PROLOGUE, __NAME, '__PROLOGUE')
 __evolved_set(__EPILOGUE, __NAME, '__EPILOGUE')
 
 __evolved_set(__LINK_POLICY, __NAME, '__LINK_POLICY')
+__evolved_set(__LINK_POLICY_UNLINK_TARGET, __NAME, '__LINK_POLICY_UNLINK_TARGET')
 __evolved_set(__LINK_POLICY_DESTROY_ENTITY, __NAME, '__LINK_POLICY_DESTROY_ENTITY')
 __evolved_set(__LINK_POLICY_REMOVE_FRAGMENT, __NAME, '__LINK_POLICY_REMOVE_FRAGMENT')
 
@@ -8807,6 +8938,7 @@ __evolved_set(__PROLOGUE, __INTERNAL)
 __evolved_set(__EPILOGUE, __INTERNAL)
 
 __evolved_set(__LINK_POLICY, __INTERNAL)
+__evolved_set(__LINK_POLICY_UNLINK_TARGET, __INTERNAL)
 __evolved_set(__LINK_POLICY_DESTROY_ENTITY, __INTERNAL)
 __evolved_set(__LINK_POLICY_REMOVE_FRAGMENT, __INTERNAL)
 
@@ -8857,6 +8989,7 @@ evolved.PROLOGUE = __PROLOGUE
 evolved.EPILOGUE = __EPILOGUE
 
 evolved.LINK_POLICY = __LINK_POLICY
+evolved.LINK_POLICY_UNLINK_TARGET = __LINK_POLICY_UNLINK_TARGET
 evolved.LINK_POLICY_DESTROY_ENTITY = __LINK_POLICY_DESTROY_ENTITY
 evolved.LINK_POLICY_REMOVE_FRAGMENT = __LINK_POLICY_REMOVE_FRAGMENT
 
