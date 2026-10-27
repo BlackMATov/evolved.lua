@@ -1864,6 +1864,12 @@ EXECUTE :: fragment
 PROLOGUE :: fragment
 EPILOGUE :: fragment
 
+INDEX_POLICY :: fragment
+INDEX_POLICY_SELF :: id
+INDEX_POLICY_LIST :: id
+INDEX_POLICY_KEYS :: id
+INDEX_POLICY_VALUES :: id
+
 LINK_POLICY :: fragment
 LINK_POLICY_UNLINK_TARGET :: id
 LINK_POLICY_DESTROY_ENTITY :: id
@@ -2030,6 +2036,7 @@ builder_mt:execute :: {chunk, entity[], integer, any...} -> builder
 builder_mt:prologue :: {any...} -> builder
 builder_mt:epilogue :: {any...} -> builder
 
+builder_mt:index_policy :: id -> builder
 builder_mt:link_policy :: id -> builder
 builder_mt:destruction_policy :: id -> builder
 ```
@@ -2187,6 +2194,16 @@ builder_mt:destruction_policy :: id -> builder
 ### `evolved.PROLOGUE`
 
 ### `evolved.EPILOGUE`
+
+### `evolved.INDEX_POLICY`
+
+### `evolved.INDEX_POLICY_SELF`
+
+### `evolved.INDEX_POLICY_LIST`
+
+### `evolved.INDEX_POLICY_KEYS`
+
+### `evolved.INDEX_POLICY_VALUES`
 
 ### `evolved.LINK_POLICY`
 
@@ -3125,6 +3142,14 @@ function evolved.builder_mt:prologue(prologue) end
 ---@param epilogue evolved.epilogue
 ---@return evolved.builder builder
 function evolved.builder_mt:epilogue(epilogue) end
+```
+
+#### `evolved.builder_mt:index_policy`
+
+```lua
+---@param index_policy evolved.id
+---@return evolved.builder builder
+function evolved.builder_mt:index_policy(index_policy) end
 ```
 
 #### `evolved.builder_mt:link_policy`

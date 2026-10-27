@@ -140,6 +140,7 @@
         prologue: function(self: Builder, prologue: function(...: any)): Builder
         epilogue: function(self: Builder, epilogue: function(...: any)): Builder
 
+        index_policy: function(self: Builder, index_policy: Id): Builder
         link_policy: function(self: Builder, link_policy: Id): Builder
         destruction_policy: function(self: Builder, destruction_policy: Id): Builder
     end
@@ -178,6 +179,12 @@
     EXECUTE: Fragment
     PROLOGUE: Fragment
     EPILOGUE: Fragment
+
+    INDEX_POLICY: Fragment
+    INDEX_POLICY_SELF: Id
+    INDEX_POLICY_LIST: Id
+    INDEX_POLICY_KEYS: Id
+    INDEX_POLICY_VALUES: Id
 
     LINK_POLICY: Fragment
     LINK_POLICY_UNLINK_TARGET: Id

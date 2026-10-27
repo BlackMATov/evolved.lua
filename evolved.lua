@@ -1289,6 +1289,12 @@ local __EXECUTE = __acquire_id()
 local __PROLOGUE = __acquire_id()
 local __EPILOGUE = __acquire_id()
 
+local __INDEX_POLICY = __acquire_id()
+local __INDEX_POLICY_SELF = __acquire_id()
+local __INDEX_POLICY_LIST = __acquire_id()
+local __INDEX_POLICY_KEYS = __acquire_id()
+local __INDEX_POLICY_VALUES = __acquire_id()
+
 local __LINK_POLICY = __acquire_id()
 local __LINK_POLICY_UNLINK_TARGET = __acquire_id()
 local __LINK_POLICY_DESTROY_ENTITY = __acquire_id()
@@ -8641,6 +8647,12 @@ function __builder_mt:epilogue(epilogue)
     return self:set(__EPILOGUE, epilogue)
 end
 
+---@param index_policy evolved.id
+---@return evolved.builder builder
+function __builder_mt:index_policy(index_policy)
+    return self:set(__INDEX_POLICY, index_policy)
+end
+
 ---@param link_policy evolved.id
 ---@return evolved.builder builder
 function __builder_mt:link_policy(link_policy)
@@ -8685,6 +8697,9 @@ __evolved_set(__INDEX, __ON_REMOVE, __chunk_fns.update_search_index)
 
 __evolved_set(__LINK, __ON_INSERT, __chunk_fns.update_search_index)
 __evolved_set(__LINK, __ON_REMOVE, __chunk_fns.update_search_index)
+
+__evolved_set(__INDEX_POLICY, __ON_SET, __chunk_fns.update_search_index)
+__evolved_set(__INDEX_POLICY, __ON_REMOVE, __chunk_fns.update_search_index)
 
 __evolved_set(__LINK_POLICY, __ON_SET, __chunk_fns.update_search_index)
 __evolved_set(__LINK_POLICY, __ON_REMOVE, __chunk_fns.update_search_index)
@@ -8746,21 +8761,25 @@ __evolved_set(__DISABLED, __EXPLICIT)
 __evolved_set(__INCLUDES, __DEFAULT, __list_fns.new())
 __evolved_set(__INCLUDES, __DUPLICATE, __list_fns.dup)
 __evolved_set(__INCLUDES, __LINK)
+__evolved_set(__INCLUDES, __INDEX_POLICY, __INDEX_POLICY_LIST)
 __evolved_set(__INCLUDES, __LINK_POLICY, __LINK_POLICY_DESTROY_ENTITY)
 
 __evolved_set(__EXCLUDES, __DEFAULT, __list_fns.new())
 __evolved_set(__EXCLUDES, __DUPLICATE, __list_fns.dup)
 __evolved_set(__EXCLUDES, __LINK)
+__evolved_set(__EXCLUDES, __INDEX_POLICY, __INDEX_POLICY_LIST)
 __evolved_set(__EXCLUDES, __LINK_POLICY, __LINK_POLICY_DESTROY_ENTITY)
 
 __evolved_set(__VARIANTS, __DEFAULT, __list_fns.new())
 __evolved_set(__VARIANTS, __DUPLICATE, __list_fns.dup)
 __evolved_set(__VARIANTS, __LINK)
+__evolved_set(__VARIANTS, __INDEX_POLICY, __INDEX_POLICY_LIST)
 __evolved_set(__VARIANTS, __LINK_POLICY, __LINK_POLICY_DESTROY_ENTITY)
 
 __evolved_set(__REQUIRES, __DEFAULT, __list_fns.new())
 __evolved_set(__REQUIRES, __DUPLICATE, __list_fns.dup)
 __evolved_set(__REQUIRES, __LINK)
+__evolved_set(__REQUIRES, __INDEX_POLICY, __INDEX_POLICY_LIST)
 __evolved_set(__REQUIRES, __LINK_POLICY, __LINK_POLICY_DESTROY_ENTITY)
 
 __evolved_set(__ON_SET, __UNIQUE)
@@ -8946,6 +8965,12 @@ __evolved_set(__EXECUTE, __NAME, '__EXECUTE')
 __evolved_set(__PROLOGUE, __NAME, '__PROLOGUE')
 __evolved_set(__EPILOGUE, __NAME, '__EPILOGUE')
 
+__evolved_set(__INDEX_POLICY, __NAME, '__INDEX_POLICY')
+__evolved_set(__INDEX_POLICY_SELF, __NAME, '__INDEX_POLICY_SELF')
+__evolved_set(__INDEX_POLICY_LIST, __NAME, '__INDEX_POLICY_LIST')
+__evolved_set(__INDEX_POLICY_KEYS, __NAME, '__INDEX_POLICY_KEYS')
+__evolved_set(__INDEX_POLICY_VALUES, __NAME, '__INDEX_POLICY_VALUES')
+
 __evolved_set(__LINK_POLICY, __NAME, '__LINK_POLICY')
 __evolved_set(__LINK_POLICY_UNLINK_TARGET, __NAME, '__LINK_POLICY_UNLINK_TARGET')
 __evolved_set(__LINK_POLICY_DESTROY_ENTITY, __NAME, '__LINK_POLICY_DESTROY_ENTITY')
@@ -8997,6 +9022,12 @@ __evolved_set(__EXECUTE, __INTERNAL)
 __evolved_set(__PROLOGUE, __INTERNAL)
 __evolved_set(__EPILOGUE, __INTERNAL)
 
+__evolved_set(__INDEX_POLICY, __INTERNAL)
+__evolved_set(__INDEX_POLICY_SELF, __INTERNAL)
+__evolved_set(__INDEX_POLICY_LIST, __INTERNAL)
+__evolved_set(__INDEX_POLICY_KEYS, __INTERNAL)
+__evolved_set(__INDEX_POLICY_VALUES, __INTERNAL)
+
 __evolved_set(__LINK_POLICY, __INTERNAL)
 __evolved_set(__LINK_POLICY_UNLINK_TARGET, __INTERNAL)
 __evolved_set(__LINK_POLICY_DESTROY_ENTITY, __INTERNAL)
@@ -9047,6 +9078,12 @@ evolved.EXECUTE = __EXECUTE
 
 evolved.PROLOGUE = __PROLOGUE
 evolved.EPILOGUE = __EPILOGUE
+
+evolved.INDEX_POLICY = __INDEX_POLICY
+evolved.INDEX_POLICY_SELF = __INDEX_POLICY_SELF
+evolved.INDEX_POLICY_LIST = __INDEX_POLICY_LIST
+evolved.INDEX_POLICY_KEYS = __INDEX_POLICY_KEYS
+evolved.INDEX_POLICY_VALUES = __INDEX_POLICY_VALUES
 
 evolved.LINK_POLICY = __LINK_POLICY
 evolved.LINK_POLICY_UNLINK_TARGET = __LINK_POLICY_UNLINK_TARGET
