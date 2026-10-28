@@ -155,7 +155,7 @@ An identifier is a packed 40-bit integer. The first 20 bits represent the index,
 function evolved.id(count) end
 ```
 
-The `count` parameter is optional and defaults to `1`. The function returns one or more identifiers depending on the `count` parameter. The maximum number of alive identifiers is `2^20-1` (1048575). After that, the function will throw an error: `| evolved.lua | id index overflow`.
+The `count` parameter is optional and defaults to `1`. The function returns one or more identifiers depending on the `count` parameter. The maximum number of alive identifiers is `2^20-1` (1048575). After that, the function will throw an error: `| evolved.lua (e) | id index overflow`.
 
 Identifiers can be recycled. When an identifier is no longer needed, use the [`evolved.destroy`](#evolveddestroy) function to destroy it. This will free the identifier for reuse.
 
@@ -691,7 +691,7 @@ evolved.destroy(fragment)
 -- try to use the destroyed fragment
 evolved.set(entity, fragment, 42)
 
--- [error] | evolved.lua | the fragment ($1048599#23:1) is not alive and cannot be used
+-- [error] | evolved.lua (e) | the fragment ($1048599#23:1) is not alive and cannot be set
 ```
 
 ### Queries
