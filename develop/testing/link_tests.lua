@@ -708,7 +708,7 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
     local g = evo.id()
 
     local t1, t2, t3 = evo.id(3)
@@ -716,7 +716,7 @@ do
     local e1 = evo.builder():set(f, { t1, t2 }):set(g, 42):build()
     local e2 = evo.builder():set(f, { t2, t3 }):build()
     local e3 = evo.builder():set(f, { t3 }):build()
-    local e4 = evo.builder():set(f, t2):build()
+    local e4 = evo.builder():set(f, { t2 }):build()
     local e5 = evo.builder():set(f, {}):build()
 
     evo.destroy(t2)
@@ -740,14 +740,14 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_DESTROY_ENTITY):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_DESTROY_ENTITY):build()
 
     local t1, t2 = evo.id(2)
 
     local e1 = evo.builder():set(f, { t1, t2 }):build()
     local e2 = evo.builder():set(f, { t2 }):build()
     local e3 = evo.builder():set(f, { t2, e1 }):build()
-    local e4 = evo.builder():set(f, e3):build()
+    local e4 = evo.builder():set(f, { e3 }):build()
     local e5 = evo.builder():set(f, {}):build()
 
     evo.destroy(t1)
@@ -760,7 +760,7 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_DESTROY_ENTITY):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_DESTROY_ENTITY):build()
 
     local e1, e2, e3 = evo.id(3)
     evo.set(e1, f, { e2 })
@@ -772,7 +772,7 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t1, t2 = evo.id(2)
 
@@ -807,12 +807,12 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t = evo.id()
 
-    local e1 = evo.builder():set(f, t):build()
-    local e2 = evo.builder():set(f, { t }):build()
+    local e1 = evo.builder():set(f, { t }):build()
+    local e2 = evo.builder():set(f, { t, t }):build()
 
     do
         local l, c = evo.multi_search(f, t)
@@ -826,20 +826,20 @@ do
     assert(evo.search(f, t) == nil)
 
     evo.set(e1, f, { t })
-    evo.set(e2, f, t)
+    evo.set(e2, f, { t })
 
     evo.destroy(t)
     assert(evo.alive_all(e1, e2) and not evo.has_any(e1, f) and not evo.has_any(e2, f))
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t1, t2 = evo.id(2)
 
-    local e1 = evo.builder():set(f, t1):build()
-    local e2 = evo.builder():set(f, t2):build()
-    local e3 = evo.builder():set(f, t1):build()
+    local e1 = evo.builder():set(f, { t1 }):build()
+    local e2 = evo.builder():set(f, { t2 }):build()
+    local e3 = evo.builder():set(f, { t1 }):build()
 
     local e4 = evo.builder():set(f, { t2, t1 }):build()
 
@@ -854,7 +854,7 @@ do
     end
 
     evo.remove(e1, f)
-    evo.set(e2, f, t1)
+    evo.set(e2, f, { t1 })
 
     do
         local l, c = evo.multi_search(f, t1)
@@ -868,7 +868,7 @@ do
 
     evo.destroy(t2)
     assert(evo.alive_all(e2, e3, e4) and not evo.has(e4, f))
-    assert(evo.get(e2, f) == t1 and evo.get(e3, f) == t1)
+    assert(evo.get(e2, f)[1] == t1 and evo.get(e3, f)[1] == t1)
 
     do
         local l, c = evo.multi_search(f, t1)
@@ -880,7 +880,7 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t = evo.id()
     local e = evo.builder():set(f, { t, t, t }):build()
@@ -901,11 +901,11 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t = evo.id()
 
-    local e1 = evo.builder():set(f, t):build()
+    local e1 = evo.builder():set(f, { t }):build()
     local e2 = evo.builder():set(f, { t, t }):build()
     local e3 = evo.builder():set(f, { t }):build()
 
@@ -942,7 +942,7 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t1, t2, t3 = evo.id(3)
     local e = evo.builder():set(f, { t1, t2 }):build()
@@ -960,33 +960,33 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t1, t2 = evo.id(2)
-    local e = evo.builder():set(f, t1):build()
+    local e = evo.builder():set(f, { t1 }):build()
 
     evo.set(e, f, { t2 })
     assert(evo.search(f, t1) == nil)
     assert(evo.search(f, t2) == e)
 
-    evo.set(e, f, t1)
+    evo.set(e, f, { t1 })
     assert(evo.search(f, t1) == e)
     assert(evo.search(f, t2) == nil)
 
     evo.destroy(t2)
-    assert(evo.get(e, f) == t1)
+    assert(evo.get(e, f)[1] == t1)
 
     evo.destroy(t1)
     assert(evo.alive(e) and not evo.has(e, f))
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t = evo.id()
 
     local e1 = evo.builder():set(f, { t }):build()
-    local e2 = evo.builder():set(f, t):build()
+    local e2 = evo.builder():set(f, { t, t, t }):build()
     local e3 = evo.builder():set(f, { t, t }):build()
 
     do
@@ -1013,12 +1013,12 @@ do
 
     do
         local l, c = evo.multi_search(f, t)
-        assert(c == 3 and l[1] == e1 and l[2] == e3 and l[3] == e2)
+        assert(c == 3 and l[1] == e1 and l[2] == e2 and l[3] == e3)
     end
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t1, t2, t3 = evo.id(3)
 
@@ -1041,7 +1041,7 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
     local g = evo.id()
 
     local t1, t2 = evo.id(2)
@@ -1080,7 +1080,7 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t1, t2, t3 = evo.id(3)
     local e = evo.builder():set(f, { t1, t2 }):build()
@@ -1103,7 +1103,7 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t1, t2 = evo.id(2)
 
@@ -1131,12 +1131,22 @@ do
     assert(evo.search(f, l) == e)
     assert(evo.search(f, t) == nil)
 
+    evo.set(f, evo.INDEX_POLICY, evo.INDEX_POLICY_LIST)
+
+    assert(evo.search(f, l) == nil)
+    assert(evo.search(f, t) == e)
+
     evo.set(f, evo.LINK)
 
     assert(evo.search(f, l) == nil)
     assert(evo.search(f, t) == e)
 
     evo.remove(f, evo.LINK)
+
+    assert(evo.search(f, l) == nil)
+    assert(evo.search(f, t) == e)
+
+    evo.remove(f, evo.INDEX_POLICY)
 
     assert(evo.search(f, l) == e)
     assert(evo.search(f, t) == nil)
@@ -1146,7 +1156,7 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t1, t2 = evo.id(2)
     local e = evo.builder():set(f, { t1, t2 }):build()
@@ -1165,7 +1175,7 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t1, t2 = evo.id(2)
     local e = evo.builder():set(f, { t1 }):build()
@@ -1184,7 +1194,7 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
     local p = evo.builder():prefab():build()
 
     local t = evo.id()
@@ -1203,7 +1213,7 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_DESTROY_ENTITY):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_DESTROY_ENTITY):build()
 
     local t1, t2 = evo.id(2)
 
@@ -1220,13 +1230,13 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
     local g = evo.builder():tag():build()
 
     local t1, t2 = evo.id(2)
 
     local e1 = evo.builder():set(g):build()
-    local e2 = evo.builder():set(g):set(f, t1):build()
+    local e2 = evo.builder():set(g):set(f, { t1 }):build()
 
     local q = evo.builder():include(g):build()
 
@@ -1382,9 +1392,11 @@ do
 end
 
 do
-    evo.debug_mode(false)
+    -- links to dead targets are reported with warnings, they are counted here
+    local warning_count, original_print = 0, print
+    print = function() warning_count = warning_count + 1 end
 
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local dead = evo.id()
     evo.destroy(dead)
@@ -1393,7 +1405,7 @@ do
     assert(alive % 2 ^ 20 == dead % 2 ^ 20)
 
     local e1 = evo.builder():set(f, { dead, alive }):build()
-    local e2 = evo.builder():set(f, alive):build()
+    local e2 = evo.builder():set(f, { alive }):build()
 
     assert(evo.search(f, dead) == nil)
 
@@ -1418,16 +1430,58 @@ do
     evo.destroy(e3)
     assert(evo.search(f, alive) == nil)
 
-    local e4 = evo.builder():set(f, alive):build()
+    local e4 = evo.builder():set(f, { alive }):build()
 
     evo.destroy(alive)
     assert(evo.alive(e4) and not evo.has(e4, f))
 
-    evo.debug_mode(true)
+    print = original_print
+    assert(warning_count == 2)
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    -- links to dead targets are reported with warnings, they are counted here
+    local warning_count, original_print = 0, print
+    print = function() warning_count = warning_count + 1 end
+
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
+
+    local d1, d2 = evo.id(2)
+    evo.destroy(d1, d2)
+
+    local ts = { evo.id(8) }
+
+    local e1 = evo.builder():set(f, { ts[1], ts[2], d1, ts[3], ts[4], ts[5], ts[6], ts[8] }):build()
+    local e2 = evo.builder():set(f, { ts[6], ts[5], ts[4], ts[3], ts[2] }):build()
+
+    -- dead targets in long middles are skipped, and other targets keep their order
+    evo.set(e1, f, { ts[1], d2, ts[6], ts[7], d1, ts[4], ts[2], ts[8] })
+
+    assert(evo.search(f, d1) == nil and evo.search(f, d2) == nil)
+    assert(evo.search(f, ts[1]) == e1 and evo.search(f, ts[3]) == e2 and evo.search(f, ts[7]) == e1)
+
+    for _, t in ipairs { ts[2], ts[4], ts[6] } do
+        local l, c = evo.multi_search(f, t)
+        assert(c == 2 and l[1] == e1 and l[2] == e2)
+    end
+
+    do
+        local l, c = evo.multi_search(f, ts[5])
+        assert(c == 1 and l[1] == e2)
+    end
+
+    evo.set(e1, f, { d1, d2 })
+    assert(evo.search(f, ts[1]) == nil and evo.search(f, ts[7]) == nil and evo.search(f, ts[2]) == e2)
+
+    evo.destroy(ts[2])
+    assert(evo.alive(e1) and evo.has(e1, f) and evo.alive(e2) and not evo.has(e2, f))
+
+    print = original_print
+    assert(warning_count == 5)
+end
+
+do
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
     assert(evo.get(f, evo.LINK_POLICY) == evo.LINK_POLICY_UNLINK_TARGET)
 
     local t1, t2, t3 = evo.id(3)
@@ -1461,12 +1515,12 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
     local g = evo.id()
 
     local t1, t2 = evo.id(2)
 
-    local e1 = evo.builder():set(f, t1):set(g, 42):build()
+    local e1 = evo.builder():set(f, { t1, t1 }):set(g, 42):build()
     local e2 = evo.builder():set(f, { t1, t2 }):build()
     local e3 = evo.builder():set(f, { t1 }):build()
     local e4 = evo.builder():set(f, {}):build()
@@ -1490,7 +1544,7 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
 
     local t1, t2, t3, t4 = evo.id(4)
     local e = evo.builder():set(f, { t1, t2, t3, t4 }):build()
@@ -1507,7 +1561,7 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
 
     local t1, t2 = evo.id(2)
     local e = evo.builder():set(f, { t1, t2, t1, t2, t1 }):build()
@@ -1526,7 +1580,7 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
 
     local t1, t2 = evo.id(2)
 
@@ -1550,7 +1604,7 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
 
     local t1, t2 = evo.id(2)
     local e1 = evo.builder():set(f, { t1, t2 }):build()
@@ -1569,7 +1623,7 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
 
     local t1, t2 = evo.id(2)
     local e = evo.builder():set(f, { t1, t2 }):build()
@@ -1586,6 +1640,7 @@ do
 
     local f = evo.builder()
         :link()
+        :index_policy(evo.INDEX_POLICY_LIST)
         :link_policy(evo.LINK_POLICY_UNLINK_TARGET)
         :on_set(function(e, _, nl, ol)
             assert(evo.alive(e))
@@ -1620,7 +1675,7 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
 
     local t1, t2, t3 = evo.id(3)
     local e = evo.builder():set(f, { t1, t2, t3 }):build()
@@ -1642,7 +1697,7 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
 
     local t1, t2, t3 = evo.id(3)
     local e = evo.builder():set(f, { t1, t2 }):build()
@@ -1661,7 +1716,7 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
     local g = evo.builder():tag():build()
 
     local t1 = evo.builder():set(g):build()
@@ -1682,7 +1737,7 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t1, t2, t3 = evo.id(3)
     local e = evo.builder():set(f, { t1, t2, t3 }):build()
@@ -1710,6 +1765,7 @@ do
 
     local children = evo.builder()
         :link()
+        :index_policy(evo.INDEX_POLICY_LIST)
         :link_policy(evo.LINK_POLICY_UNLINK_TARGET)
         :build()
 
@@ -1746,7 +1802,7 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
 
     local e1, e2, e3 = evo.id(3)
     evo.set(e1, f, { e2, e3 })
@@ -1777,6 +1833,7 @@ do
 
     local f2 = evo.builder()
         :link()
+        :index_policy(evo.INDEX_POLICY_LIST)
         :link_policy(evo.LINK_POLICY_UNLINK_TARGET)
         :on_assign(function(e) assigned_list[#assigned_list + 1] = e end)
         :build()
@@ -1802,7 +1859,7 @@ do
 end
 
 do
-    local f = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
 
     local t1, t2, t3 = evo.id(3)
 
@@ -1840,7 +1897,8 @@ end
 do
     local f1 = evo.builder():link():build()
     local f2 = evo.builder():link():link_policy(evo.LINK_POLICY_DESTROY_ENTITY):build()
-    local f3 = evo.builder():link():link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
+    local f3 = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST)
+        :link_policy(evo.LINK_POLICY_UNLINK_TARGET):build()
 
     do
         local t1, t2 = evo.id(2)
@@ -1895,7 +1953,7 @@ do
 end
 
 do
-    local f = evo.builder():link():build()
+    local f = evo.builder():link():index_policy(evo.INDEX_POLICY_LIST):build()
 
     local t1, t2, t3, t4, t5, t6, t7 = evo.id(7)
     local targets = { t1, t2, t3, t4, t5, t6, t7 }
@@ -1964,7 +2022,7 @@ do
 
     evo.set(e1, f, { t7, t6, t5, t4, t3, t2, t1 })
     check()
-    assert(evo.search(f, t1) == e2 and evo.search(f, t3) == e2)
+    assert(evo.search(f, t1) == e2 and evo.search(f, t3) == e1)
 
     evo.set(e1, f, { t6, t6, t6, t6, t6, t6 })
     check()

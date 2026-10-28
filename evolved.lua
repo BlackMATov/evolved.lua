@@ -984,6 +984,82 @@ end
 ---
 ---
 
+local __table_fns = {}
+
+---@generic K, V
+---@param table table<K, V>
+---@return table<K, V>
+---@nodiscard
+function __table_fns.dup(table)
+    local dup_table = {}
+
+    for key, value in __lua_next, table do
+        dup_table[key] = value
+    end
+
+    return dup_table
+end
+
+---@generic K
+---@param table table<K, any>
+---@return K[] key_list
+---@return integer key_count
+---@nodiscard
+function __table_fns.keys(table)
+    local key_list = {}
+    local key_count = __table_fns.keys_to(key_list, 1, table)
+    return key_list, key_count
+end
+
+---@generic K
+---@param out_key_list K[]
+---@param out_key_first integer
+---@param table table<K, any>
+---@return integer key_count
+function __table_fns.keys_to(out_key_list, out_key_first, table)
+    local out_key_last = out_key_first - 1
+
+    for key in __lua_next, table do
+        out_key_last = out_key_last + 1
+        out_key_list[out_key_last] = key
+    end
+
+    return out_key_last - out_key_first + 1
+end
+
+---@generic V
+---@param table table<any, V>
+---@return V[] value_list
+---@return integer value_count
+---@nodiscard
+function __table_fns.values(table)
+    local value_list = {}
+    local value_count = __table_fns.values_to(value_list, 1, table)
+    return value_list, value_count
+end
+
+---@generic V
+---@param out_value_list V[]
+---@param out_value_first integer
+---@param table table<any, V>
+---@return integer value_count
+function __table_fns.values_to(out_value_list, out_value_first, table)
+    local out_value_last = out_value_first - 1
+
+    for _, value in __lua_next, table do
+        out_value_last = out_value_last + 1
+        out_value_list[out_value_last] = value
+    end
+
+    return out_value_last - out_value_first + 1
+end
+
+---
+---
+---
+---
+---
+
 ---@class (exact) evolved.assoc_list<K>: {
 ---  __item_set: { [K]: integer },
 ---  __item_list: K[],
@@ -1464,11 +1540,20 @@ local __safe_tbls = {
 ---
 
 ---@class (exact) evolved.search_index
----@field package __combined_keys boolean
+---@field package __fragment evolved.fragment
+---@field package __index_policy evolved.id
+---@field package __multi_components boolean
 ---@field package __head_entities table<evolved.component, evolved.entity>
 ---@field package __prev_entities table<integer, evolved.entity>
 ---@field package __next_entities table<integer, evolved.entity>
 ---@field package __entity_components table<integer, evolved.component>
+---@field package __collected_components? evolved.component[]
+---@field package __component_keys? table<evolved.component, integer>
+---@field package __component_key_count integer
+---@field package __free_component_keys? integer[]
+---@field package __free_component_key_count integer
+---@field package __component_epochs? table<evolved.component, integer>
+---@field package __component_epoch integer
 ---@field package __link_policy? evolved.id
 ---@field package __target_fragment? evolved.fragment
 
@@ -1478,46 +1563,90 @@ local __search_index_fns = {}
 ---@return evolved.search_index
 ---@nodiscard
 function __search_index_fns.new(fragment)
+    ---@type evolved.id
+    local index_policy = __evolved_get(fragment, __INDEX_POLICY)
+        or __INDEX_POLICY_SELF
+
+    if index_policy ~= __INDEX_POLICY_SELF
+        and index_policy ~= __INDEX_POLICY_LIST
+        and index_policy ~= __INDEX_POLICY_KEYS
+        and index_policy ~= __INDEX_POLICY_VALUES
+    then
+        __debug_fns.warning_fmt('unknown INDEX_POLICY (%s) on (%s), %s is used instead',
+            __id_name(index_policy), __id_name(fragment),
+            __id_name(__INDEX_POLICY_SELF))
+        index_policy = __INDEX_POLICY_SELF
+    end
+
+    local multi_components = index_policy ~= __INDEX_POLICY_SELF
+    local collect_components = multi_components and index_policy ~= __INDEX_POLICY_LIST
+    local target_fragment = __evolved_has(fragment, __LINK) and fragment or nil
+    local intern_components = multi_components and not target_fragment
+
     ---@type evolved.search_index
     return {
-        __combined_keys = false,
+        __fragment = fragment,
+        __index_policy = index_policy,
+        __multi_components = multi_components,
         __head_entities = {},
         __prev_entities = {},
         __next_entities = {},
         __entity_components = {},
+        __collected_components = collect_components and {} or nil,
+        __component_keys = intern_components and {} or nil,
+        __component_key_count = 0,
+        __free_component_keys = intern_components and {} or nil,
+        __free_component_key_count = 0,
+        __component_epochs = multi_components and {} or nil,
+        __component_epoch = 0,
         __link_policy = __evolved_get(fragment, __LINK_POLICY),
-        __target_fragment = __evolved_has(fragment, __LINK) and fragment or nil,
+        __target_fragment = target_fragment,
     }
 end
 
 ---@param index evolved.search_index
-function __search_index_fns.combine_keys(index)
-    if index.__combined_keys then
-        return
+---@param component evolved.component
+---@return integer
+---@nodiscard
+function __search_index_fns.acquire_component_key(index, component)
+    local component_keys = index.__component_keys
+    local free_component_keys = index.__free_component_keys
+    ---@cast component_keys -?
+    ---@cast free_component_keys -?
+
+    local free_component_key_count = index.__free_component_key_count
+
+    local component_key ---@type integer
+
+    if free_component_key_count > 0 then
+        component_key = free_component_keys[free_component_key_count]
+
+        free_component_keys[free_component_key_count] = nil
+        index.__free_component_key_count = free_component_key_count - 1
+    else
+        component_key = index.__component_key_count + 1
+        index.__component_key_count = component_key
     end
 
-    local entity_components = index.__entity_components
+    component_keys[component] = component_key
 
-    local old_prev_entities = index.__prev_entities
-    local old_next_entities = index.__next_entities
+    return component_key
+end
 
-    local new_prev_entities = {} ---@type table<integer, evolved.entity>
-    local new_next_entities = {} ---@type table<integer, evolved.entity>
+---@param index evolved.search_index
+---@param component evolved.component
+function __search_index_fns.release_component_key(index, component)
+    local component_keys = index.__component_keys
+    local free_component_keys = index.__free_component_keys
+    ---@cast component_keys -?
+    ---@cast free_component_keys -?
 
-    for entity_primary, prev_entity in __lua_next, old_prev_entities do
-        local component = entity_components[entity_primary]
+    local free_component_key_count = index.__free_component_key_count + 1
 
-        local key_offset = component % 1048576 * 1048576
-        local entity_key = key_offset + entity_primary
+    free_component_keys[free_component_key_count] = component_keys[component]
+    index.__free_component_key_count = free_component_key_count
 
-        new_prev_entities[entity_key] = prev_entity
-        new_next_entities[entity_key] = old_next_entities[entity_primary]
-    end
-
-    index.__prev_entities = new_prev_entities
-    index.__next_entities = new_next_entities
-
-    index.__combined_keys = true
+    component_keys[component] = nil
 end
 
 ---@param target evolved.entity
@@ -1584,22 +1713,20 @@ end
 ---@param entity evolved.entity
 ---@param component evolved.component
 function __search_index_fns.assign(index, entity, component)
-    local target_fragment = index.__target_fragment
+    local entity_primary = entity % 1048576
     local entity_components = index.__entity_components
 
     local new_component = component
-    local old_component = entity_components[entity % 1048576]
+    local old_component = entity_components[entity_primary]
 
-    if new_component == old_component then
-        -- nothing to reassign
-    elseif target_fragment
-        and __lua_type(new_component) == 'table'
-        and __lua_type(old_component) == 'table'
-    then
-        __search_index_fns.assign_targets(index, entity, new_component)
-    else
-        __search_index_fns.remove(index, entity)
+    if old_component == nil then
         __search_index_fns.insert(index, entity, new_component)
+    elseif index.__multi_components then
+        __search_index_fns.assign_components(index, entity, new_component)
+    elseif old_component ~= new_component then
+        __search_index_fns.remove_node(index, entity, old_component)
+        __search_index_fns.insert_node(index, entity, new_component)
+        entity_components[entity_primary] = new_component
     end
 end
 
@@ -1609,112 +1736,147 @@ end
 ---@param first integer
 ---@param last integer
 function __search_index_fns.multi_assign(index, entity_list, component_list, first, last)
-    local target_fragment = index.__target_fragment
+    local multi_components = index.__multi_components
     local entity_components = index.__entity_components
 
     for place = first, last do
         local entity = entity_list[place]
+        local entity_primary = entity % 1048576
 
         local new_component = component_list[place]
-        local old_component = entity_components[entity % 1048576]
+        local old_component = entity_components[entity_primary]
 
-        if new_component == old_component then
-            -- nothing to reassign
-        elseif target_fragment
-            and __lua_type(new_component) == 'table'
-            and __lua_type(old_component) == 'table'
-        then
-            __search_index_fns.assign_targets(index, entity, new_component)
-        else
-            __search_index_fns.remove(index, entity)
+        if old_component == nil then
             __search_index_fns.insert(index, entity, new_component)
+        elseif multi_components then
+            __search_index_fns.assign_components(index, entity, new_component)
+        elseif old_component ~= new_component then
+            __search_index_fns.remove_node(index, entity, old_component)
+            __search_index_fns.insert_node(index, entity, new_component)
+            entity_components[entity_primary] = new_component
         end
     end
 end
 
 ---@param index evolved.search_index
 ---@param entity evolved.entity
----@param new_target_list evolved.entity[]
-function __search_index_fns.assign_targets(index, entity, new_target_list)
+---@param component evolved.component
+function __search_index_fns.assign_components(index, entity, component)
     local entity_primary = entity % 1048576
+    local entity_components = index.__entity_components
 
-    ---@type evolved.entity[]
-    local old_target_list = index.__entity_components[entity_primary]
+    ---@type evolved.component[]
+    local old_component_list = entity_components[entity_primary]
+    local old_component_count = #old_component_list
 
-    local old_target_count = #old_target_list
-    local new_target_count = #new_target_list
+    ---@type evolved.component[], integer
+    local new_component_list, new_component_count
+    local index_policy = index.__index_policy
 
-    local min_target_count = old_target_count < new_target_count
-        and old_target_count
-        or new_target_count
+    if index_policy == __INDEX_POLICY_LIST then
+        new_component_list = component
+        new_component_count = #component
+    elseif index_policy == __INDEX_POLICY_KEYS then
+        new_component_list = index.__collected_components ---@cast new_component_list -?
+        new_component_count = __table_fns.keys_to(new_component_list, 1, component)
+    elseif index_policy == __INDEX_POLICY_VALUES then
+        new_component_list = index.__collected_components ---@cast new_component_list -?
+        new_component_count = __table_fns.values_to(new_component_list, 1, component)
+    else
+        __debug_fns.error_fmt('unknown INDEX_POLICY (%s) on (%s)',
+            __id_name(index_policy), __id_name(index.__fragment))
+    end
+
+    local min_component_count = old_component_count < new_component_count
+        and old_component_count or new_component_count
 
     local prefix_count = 0
 
-    while prefix_count < min_target_count
-        and old_target_list[prefix_count + 1] == new_target_list[prefix_count + 1]
+    while prefix_count < min_component_count
+        and old_component_list[prefix_count + 1] == new_component_list[prefix_count + 1]
     do
         prefix_count = prefix_count + 1
     end
 
-    if prefix_count == old_target_count and prefix_count == new_target_count then
-        return
-    end
-
     local suffix_count = 0
 
-    while prefix_count + suffix_count < min_target_count
-        and old_target_list[old_target_count - suffix_count] == new_target_list[new_target_count - suffix_count]
+    while prefix_count + suffix_count < min_component_count
+        and old_component_list[old_component_count - suffix_count] == new_component_list[new_component_count - suffix_count]
     do
         suffix_count = suffix_count + 1
     end
 
-    local old_middle_last = old_target_count - suffix_count
-    local new_middle_last = new_target_count - suffix_count
+    if prefix_count == old_component_count and prefix_count == new_component_count then
+        return
+    end
+
+    local old_middle_last = old_component_count - suffix_count
+    local new_middle_last = new_component_count - suffix_count
 
     if old_middle_last - prefix_count <= 4 then
-        for old_target_index = prefix_count + 1, old_middle_last do
-            local old_target = old_target_list[old_target_index]
+        for old_component_index = prefix_count + 1, old_middle_last do
+            local old_component = old_component_list[old_component_index]
 
-            local new_target_index = 1
+            local new_component_index = 1
 
-            while new_target_index <= new_target_count
-                and new_target_list[new_target_index] ~= old_target
+            while new_component_index <= new_component_count
+                and new_component_list[new_component_index] ~= old_component
             do
-                new_target_index = new_target_index + 1
+                new_component_index = new_component_index + 1
             end
 
-            if new_target_index > new_target_count then
-                __search_index_fns.remove_node(index, entity, old_target)
+            if new_component_index > new_component_count then
+                __search_index_fns.remove_node(index, entity, old_component)
             end
-        end
-
-        for new_target_index = prefix_count + 1, new_middle_last do
-            __search_index_fns.insert_node(index, entity, new_target_list[new_target_index])
         end
     else
-        for old_target_index = prefix_count + 1, old_middle_last do
-            __search_index_fns.remove_node(index, entity, old_target_list[old_target_index])
+        local component_epochs = index.__component_epochs
+        ---@cast component_epochs -?
+
+        local component_epoch = index.__component_epoch + 1
+        index.__component_epoch = component_epoch
+
+        if index.__target_fragment then
+            for new_component_index = 1, new_component_count do
+                local new_component = new_component_list[new_component_index]
+
+                if __freelist_ids[new_component % 1048576] ~= new_component then
+                    -- dead targets are not linked, so they are not marked
+                else
+                    component_epochs[new_component] = component_epoch
+                end
+            end
+        else
+            for new_component_index = 1, new_component_count do
+                local new_component = new_component_list[new_component_index]
+
+                if new_component ~= new_component then
+                    -- NaN components cannot be indexed, so they are not marked
+                else
+                    component_epochs[new_component] = component_epoch
+                end
+            end
         end
 
-        for new_target_index = prefix_count + 1, new_middle_last do
-            __search_index_fns.insert_node(index, entity, new_target_list[new_target_index])
-        end
+        for old_component_index = prefix_count + 1, old_middle_last do
+            local old_component = old_component_list[old_component_index]
 
-        for new_target_index = 1, prefix_count do
-            __search_index_fns.insert_node(index, entity, new_target_list[new_target_index])
-        end
-
-        for new_target_index = new_middle_last + 1, new_target_count do
-            __search_index_fns.insert_node(index, entity, new_target_list[new_target_index])
+            if component_epochs[old_component] ~= component_epoch then
+                __search_index_fns.remove_node(index, entity, old_component)
+            end
         end
     end
 
-    __lua_table_move(
-        new_target_list, prefix_count + 1, new_target_count,
-        prefix_count + 1, old_target_list)
+    for new_component_index = prefix_count + 1, new_middle_last do
+        __search_index_fns.insert_node(index, entity, new_component_list[new_component_index])
+    end
 
-    for old_target_index = new_target_count + 1, old_target_count do
-        old_target_list[old_target_index] = nil
+    __lua_table_move(
+        new_component_list, prefix_count + 1, new_component_count,
+        prefix_count + 1, old_component_list)
+
+    for old_component_index = new_component_count + 1, old_component_count do
+        old_component_list[old_component_index] = nil
     end
 end
 
@@ -1722,24 +1884,27 @@ end
 ---@param entity evolved.entity
 ---@param component evolved.component
 function __search_index_fns.insert(index, entity, component)
-    if component ~= component then
-        -- NaN components cannot be indexed
-        return
-    end
+    if index.__multi_components then
+        ---@type evolved.component[], integer
+        local component_list, component_count
+        local index_policy = index.__index_policy
 
-    if index.__target_fragment and __lua_type(component) == 'table' then
-        if not index.__combined_keys then
-            __search_index_fns.combine_keys(index)
+        if index_policy == __INDEX_POLICY_LIST then
+            component_list, component_count = __list_fns.dup(component)
+        elseif index_policy == __INDEX_POLICY_KEYS then
+            component_list, component_count = __table_fns.keys(component)
+        elseif index_policy == __INDEX_POLICY_VALUES then
+            component_list, component_count = __table_fns.values(component)
+        else
+            __debug_fns.error_fmt('unknown INDEX_POLICY (%s) on (%s)',
+                __id_name(index_policy), __id_name(index.__fragment))
         end
 
-        ---@type evolved.entity[], integer
-        local target_list, target_count = __list_fns.dup(component)
-
-        for target_index = 1, target_count do
-            __search_index_fns.insert_node(index, entity, target_list[target_index])
+        for component_index = 1, component_count do
+            __search_index_fns.insert_node(index, entity, component_list[component_index])
         end
 
-        index.__entity_components[entity % 1048576] = target_list
+        index.__entity_components[entity % 1048576] = component_list
     else
         __search_index_fns.insert_node(index, entity, component)
         index.__entity_components[entity % 1048576] = component
@@ -1761,10 +1926,12 @@ end
 ---@param entity evolved.entity
 ---@param component evolved.component
 function __search_index_fns.insert_node(index, entity, component)
-    local target_fragment = index.__target_fragment
+    if component ~= component then
+        -- NaN components cannot be indexed
+        return
+    end
 
-    local key_offset = index.__combined_keys and component % 1048576 * 1048576 or 0
-    local entity_key = key_offset + entity % 1048576
+    local target_fragment = index.__target_fragment
 
     local head_entities = index.__head_entities
     local prev_entities = index.__prev_entities
@@ -1774,22 +1941,38 @@ function __search_index_fns.insert_node(index, entity, component)
     local head_entity = head_entities[component]
 
     if head_entity then
+        local component_keys = index.__component_keys
+
+        local component_offset = not index.__multi_components and 0
+            or component_keys and component_keys[component] * 1048576
+            or component % 1048576 * 1048576
+
+        local entity_key = component_offset + entity % 1048576
+
         if prev_entities[entity_key] then
-            -- this target is duplicated in the list and has already been linked
             return
         end
 
-        local head_entity_key = key_offset + head_entity % 1048576
+        local head_entity_key = component_offset + head_entity % 1048576
 
         local tail_entity = prev_entities[head_entity_key]
-        local tail_entity_key = key_offset + tail_entity % 1048576
+        local tail_entity_key = component_offset + tail_entity % 1048576
 
         prev_entities[entity_key] = tail_entity
         next_entities[entity_key] = head_entity
 
         prev_entities[head_entity_key] = entity
         next_entities[tail_entity_key] = entity
-    elseif not target_fragment or __freelist_ids[component % 1048576] == component then
+    elseif target_fragment and __freelist_ids[component % 1048576] ~= component then
+        __debug_fns.warning_fmt('the target (%s) of the linked fragment (%s) is not alive and cannot be linked',
+            __id_name(component), __id_name(target_fragment))
+    else
+        local component_offset = not index.__multi_components and 0
+            or target_fragment and component % 1048576 * 1048576
+            or __search_index_fns.acquire_component_key(index, component) * 1048576
+
+        local entity_key = component_offset + entity % 1048576
+
         head_entities[component] = entity
 
         prev_entities[entity_key] = entity
@@ -1798,9 +1981,6 @@ function __search_index_fns.insert_node(index, entity, component)
         if target_fragment then
             __search_index_fns.link(component, target_fragment)
         end
-    elseif __debug_mode and target_fragment then
-        __debug_fns.error_fmt('the target (%s) of the linked fragment (%s) is not alive',
-            __id_name(component), __id_name(target_fragment))
     end
 end
 
@@ -1808,27 +1988,27 @@ end
 ---@param entity evolved.entity
 function __search_index_fns.remove(index, entity)
     local entity_primary = entity % 1048576
+    local entity_components = index.__entity_components
 
     ---@type evolved.component?
-    local component = index.__entity_components[entity_primary]
+    local component = entity_components[entity_primary]
 
     if component == nil then
         return
     end
 
-    if index.__target_fragment and __lua_type(component) == 'table' then
-        ---@type evolved.entity[], integer
-        local target_list, target_count = component, #component
+    if index.__multi_components then
+        ---@type evolved.component[], integer
+        local component_list, component_count = component, #component
 
-        for target_index = 1, target_count do
-            __search_index_fns.remove_node(index, entity, target_list[target_index])
+        for component_index = 1, component_count do
+            __search_index_fns.remove_node(index, entity, component_list[component_index])
         end
-
-        index.__entity_components[entity_primary] = nil
     else
         __search_index_fns.remove_node(index, entity, component)
-        index.__entity_components[entity_primary] = nil
     end
+
+    entity_components[entity_primary] = nil
 end
 
 ---@param index evolved.search_index
@@ -1845,11 +2025,6 @@ end
 ---@param entity evolved.entity
 ---@param component evolved.component
 function __search_index_fns.remove_node(index, entity, component)
-    local target_fragment = index.__target_fragment
-
-    local key_offset = index.__combined_keys and component % 1048576 * 1048576 or 0
-    local entity_key = key_offset + entity % 1048576
-
     local head_entities = index.__head_entities
     local prev_entities = index.__prev_entities
     local next_entities = index.__next_entities
@@ -1858,29 +2033,45 @@ function __search_index_fns.remove_node(index, entity, component)
     local head_entity = head_entities[component]
 
     if not head_entity then
-        -- this target is dead or has no links anymore
         return
     end
+
+    local component_keys = index.__component_keys
+
+    local component_offset = not index.__multi_components and 0
+        or component_keys and component_keys[component] * 1048576
+        or component % 1048576 * 1048576
+
+    local entity_key = component_offset + entity % 1048576
 
     ---@type evolved.entity?
     local next_entity = next_entities[entity_key]
 
     if not next_entity then
-        -- this target is duplicated in the list and has already been unlinked
         return
     end
 
     if next_entity == entity then
         head_entities[component] = nil
 
+        local component_epochs = index.__component_epochs
+
+        if component_epochs then
+            component_epochs[component] = nil
+        end
+
+        local target_fragment = index.__target_fragment
+
         if target_fragment then
             __search_index_fns.unlink(component, target_fragment)
+        elseif component_keys then
+            __search_index_fns.release_component_key(index, component)
         end
     else
         local prev_entity = prev_entities[entity_key]
 
-        local prev_entity_key = key_offset + prev_entity % 1048576
-        local next_entity_key = key_offset + next_entity % 1048576
+        local prev_entity_key = component_offset + prev_entity % 1048576
+        local next_entity_key = component_offset + next_entity % 1048576
 
         prev_entities[next_entity_key] = prev_entity
         next_entities[prev_entity_key] = next_entity
@@ -4759,25 +4950,59 @@ function __unlink_entity_targets(entity, fragment, destroying_entity_set)
     local component_storages = chunk.__component_storages
     local component_storage = component_storages[component_index]
 
-    ---@type evolved.entity[]
-    local old_target_list = component_storage[place]
-    local old_target_count = __lua_type(old_target_list) == 'table' and #old_target_list or 0
+    local fragment_search_index = chunk.__has_index_fragments
+        and __search_indices[fragment]
+        or nil
 
-    if old_target_count == 0 then
+    local index_policy = fragment_search_index
+        and fragment_search_index.__index_policy
+        or __INDEX_POLICY_SELF
+
+    if index_policy == __INDEX_POLICY_SELF then
         __remove_entity_fragments(entity, fragment)
         return
     end
 
-    ---@type evolved.entity[]
-    local new_target_list = __lua_table_new(old_target_count)
+    local new_component ---@type evolved.component?
+    local old_component = component_storage[place]
+
     local new_target_count = 0
 
-    for old_target_index = 1, old_target_count do
-        local old_target = old_target_list[old_target_index]
+    if index_policy == __INDEX_POLICY_LIST then
+        ---@type evolved.component[]
+        local old_target_list = old_component
+        local old_target_count = #old_target_list
 
-        if not destroying_entity_set[old_target] then
-            new_target_count = new_target_count + 1
-            new_target_list[new_target_count] = old_target
+        ---@type evolved.component[]
+        new_component = __lua_table_new(old_target_count)
+
+        for old_target_index = 1, old_target_count do
+            local old_target = old_target_list[old_target_index]
+
+            if not destroying_entity_set[old_target] then
+                new_target_count = new_target_count + 1
+                new_component[new_target_count] = old_target
+            end
+        end
+    elseif index_policy == __INDEX_POLICY_KEYS then
+        ---@type table<evolved.component, any>
+        new_component = {}
+
+        for old_target, old_value in __lua_next, old_component do
+            if not destroying_entity_set[old_target] then
+                new_target_count = new_target_count + 1
+                new_component[old_target] = old_value
+            end
+        end
+    elseif index_policy == __INDEX_POLICY_VALUES then
+        ---@type table<any, evolved.component>
+        new_component = {}
+
+        for old_key, old_target in __lua_next, old_component do
+            if not destroying_entity_set[old_target] then
+                new_target_count = new_target_count + 1
+                new_component[old_key] = old_target
+            end
         end
     end
 
@@ -4786,11 +5011,7 @@ function __unlink_entity_targets(entity, fragment, destroying_entity_set)
         return
     end
 
-    component_storage[place] = new_target_list
-
-    local fragment_search_index = chunk.__has_index_fragments
-        and __search_indices[fragment]
-        or nil
+    component_storage[place] = new_component
 
     if fragment_search_index then
         __search_index_fns.filter(fragment_search_index, entity, destroying_entity_set)
@@ -4801,11 +5022,11 @@ function __unlink_entity_targets(entity, fragment, destroying_entity_set)
         local fragment_assign = chunk.__component_assigns[component_index]
 
         if fragment_set then
-            fragment_set(entity, fragment, new_target_list, old_target_list)
+            fragment_set(entity, fragment, new_component, old_component)
         end
 
         if fragment_assign then
-            fragment_assign(entity, fragment, new_target_list, old_target_list)
+            fragment_assign(entity, fragment, new_component, old_component)
         end
     end
 end
@@ -7610,15 +7831,17 @@ function __evolved_multi_search_to(out_entity_list, out_entity_first, fragment, 
     local head_entity = head_entities[component]
 
     if head_entity then
-        local key_offset = fragment_search_index.__combined_keys
-            and component % 1048576 * 1048576
-            or 0
+        local component_keys = fragment_search_index.__component_keys
+
+        local component_offset = not fragment_search_index.__multi_components and 0
+            or component_keys and component_keys[component] * 1048576
+            or component % 1048576 * 1048576
 
         local entity = head_entity
 
         repeat
             out_entity_list[out_entity_first + entity_count] = entity
-            entity = next_entities[key_offset + entity % 1048576]
+            entity = next_entities[component_offset + entity % 1048576]
             entity_count = entity_count + 1
         until entity == head_entity
     end
@@ -7784,6 +8007,43 @@ function __evolved_collect_garbage(no_shrink)
 
         if postorder_chunk_stack then
             __release_table(__table_pool_tag.chunk_list, postorder_chunk_stack, true, true)
+        end
+    end
+
+    for _, search_index in __lua_next, __search_indices do
+        if not no_shrink then
+            search_index.__head_entities = __table_fns.dup(search_index.__head_entities)
+            search_index.__prev_entities = __table_fns.dup(search_index.__prev_entities)
+            search_index.__next_entities = __table_fns.dup(search_index.__next_entities)
+            search_index.__entity_components = __table_fns.dup(search_index.__entity_components)
+        end
+
+        if search_index.__collected_components then
+            if not no_shrink then
+                search_index.__collected_components = {}
+            else
+                __lua_table_clear(search_index.__collected_components, false, true)
+            end
+        end
+
+        if search_index.__component_keys and not no_shrink then
+            if __lua_next(search_index.__component_keys) then
+                search_index.__component_keys = __table_fns.dup(
+                    search_index.__component_keys)
+                search_index.__free_component_keys = __list_fns.dup(
+                    search_index.__free_component_keys,
+                    search_index.__free_component_key_count)
+            else
+                search_index.__component_keys = {}
+                search_index.__component_key_count = 0
+                search_index.__free_component_keys = {}
+                search_index.__free_component_key_count = 0
+            end
+        end
+
+        if search_index.__component_epochs and not no_shrink then
+            search_index.__component_epochs = {}
+            search_index.__component_epoch = 0
         end
     end
 

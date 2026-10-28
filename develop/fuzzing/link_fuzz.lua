@@ -85,6 +85,18 @@ for i = 1, math.random(1, 4) do
         builder:index()
     end
 
+    r = math.random(1, 5)
+
+    if r == 1 then
+        builder:index_policy(evo.INDEX_POLICY_SELF)
+    elseif r == 2 then
+        builder:index_policy(evo.INDEX_POLICY_LIST)
+    elseif r == 3 then
+        builder:index_policy(evo.INDEX_POLICY_KEYS)
+    elseif r == 4 then
+        builder:index_policy(evo.INDEX_POLICY_VALUES)
+    end
+
     all_link_fragment_list[i] = builder:build()
 
     if evo.has(all_link_fragment_list[i], evo.ON_REMOVE) then
@@ -113,35 +125,113 @@ local function random_entity()
     return all_entity_list[math.random(1, #all_entity_list)]
 end
 
----@return evolved.entity | evolved.entity[]
-local function random_link_component()
-    if math.random(1, 2) == 1 then
+local all_map_key_list = { 1, 2, 3, 'a', 'b', 'c' }
+
+local function random_map_key()
+    return all_map_key_list[math.random(1, #all_map_key_list)]
+end
+
+---@param link_fragment evolved.fragment
+---@return evolved.id
+local function link_index_policy(link_fragment)
+    return evo.get(link_fragment, evo.INDEX_POLICY) or evo.INDEX_POLICY_SELF
+end
+
+---@param link_fragment evolved.fragment
+---@return evolved.entity | table
+local function random_link_component(link_fragment)
+    local index_policy = link_index_policy(link_fragment)
+
+    if index_policy == evo.INDEX_POLICY_SELF then
         return random_entity()
+    end
+
+    local link_component = {}
+
+    for i = 1, math.random(0, 8) do
+        if index_policy == evo.INDEX_POLICY_LIST then
+            link_component[i] = random_entity()
+        elseif index_policy == evo.INDEX_POLICY_KEYS then
+            link_component[random_entity()] = true
+        else
+            link_component[random_map_key()] = random_entity()
+        end
+    end
+
+    return link_component
+end
+
+---@param link_fragment evolved.fragment
+---@param link_component table
+local function mutate_link_component(link_fragment, link_component)
+    local index_policy = link_index_policy(link_fragment)
+
+    if index_policy == evo.INDEX_POLICY_LIST then
+        if math.random(1, 2) == 1 then
+            link_component[#link_component + 1] = random_entity()
+        else
+            link_component[#link_component] = nil
+        end
+    elseif index_policy == evo.INDEX_POLICY_KEYS then
+        if math.random(1, 2) == 1 then
+            link_component[random_entity()] = true
+        else
+            link_component[random_entity()] = nil
+        end
+    else
+        if math.random(1, 2) == 1 then
+            link_component[random_map_key()] = random_entity()
+        else
+            link_component[random_map_key()] = nil
+        end
+    end
+end
+
+---@param link_fragment evolved.fragment
+---@param link_component evolved.entity | table
+---@return evolved.entity[]
+local function link_component_targets(link_fragment, link_component)
+    local index_policy = link_index_policy(link_fragment)
+
+    if index_policy == evo.INDEX_POLICY_SELF then
+        return { link_component }
+    end
+
+    if index_policy == evo.INDEX_POLICY_LIST then
+        return link_component
     end
 
     local link_target_list = {}
 
-    for i = 1, math.random(0, 3) do
-        link_target_list[i] = random_entity()
+    for key, value in pairs(link_component) do
+        link_target_list[#link_target_list + 1] =
+            index_policy == evo.INDEX_POLICY_KEYS and key or value
     end
 
     return link_target_list
 end
 
----@param link_component evolved.entity | evolved.entity[]
----@return evolved.entity[]
-local function link_component_targets(link_component)
-    if type(link_component) == 'table' then
+---@param link_fragment evolved.fragment
+---@param link_component evolved.entity | table
+---@return evolved.entity | table
+local function copy_link_component(link_fragment, link_component)
+    if link_index_policy(link_fragment) == evo.INDEX_POLICY_SELF then
         return link_component
     end
 
-    return { link_component }
+    local link_component_copy = {}
+
+    for key, value in pairs(link_component) do
+        link_component_copy[key] = value
+    end
+
+    return link_component_copy
 end
 
 for _, entity in ipairs(all_entity_list) do
     for _, link_fragment in ipairs(all_link_fragment_list) do
         if math.random(1, 2) == 1 then
-            evo.set(entity, link_fragment, random_link_component())
+            evo.set(entity, link_fragment, random_link_component(link_fragment))
         end
     end
 end
@@ -153,22 +243,23 @@ for _ = 1, math.random(0, #all_entity_list) do
     local r = math.random(1, 4)
 
     if r == 1 then
-        evo.set(entity, link_fragment, random_link_component())
+        evo.set(entity, link_fragment, random_link_component(link_fragment))
     elseif r == 2 then
         evo.remove(entity, link_fragment)
     elseif r == 3 then
-        evo.remove(link_fragment, evo.LINK)
-        evo.set(link_fragment, evo.LINK)
+        local index_policy = evo.get(link_fragment, evo.INDEX_POLICY)
+
+        if index_policy and math.random(1, 2) == 1 then
+            evo.set(link_fragment, evo.INDEX_POLICY, index_policy)
+        else
+            evo.remove(link_fragment, evo.LINK)
+            evo.set(link_fragment, evo.LINK)
+        end
     else
         local link_component = evo.get(entity, link_fragment)
 
-        if type(link_component) == 'table' then
-            if math.random(1, 2) == 1 then
-                link_component[#link_component + 1] = random_entity()
-            else
-                link_component[#link_component] = nil
-            end
-
+        if link_component and link_index_policy(link_fragment) ~= evo.INDEX_POLICY_SELF then
+            mutate_link_component(link_fragment, link_component)
             evo.reindex(link_fragment)
         end
     end
@@ -213,7 +304,7 @@ repeat
                     local link_component = evo.get(entity, link_fragment)
 
                     if link_component then
-                        for _, link_target in ipairs(link_component_targets(link_component)) do
+                        for _, link_target in ipairs(link_component_targets(link_fragment, link_component)) do
                             if should_be_destroyed_entity_set[link_target] then
                                 should_be_destroyed_entity_set[entity] = true
                                 has_new_destroyed_entities = true
@@ -232,11 +323,13 @@ repeat
 until not has_new_destroyed_entities
 
 local entity_link_target_lists = {} ---@type table<evolved.entity, table<evolved.fragment, evolved.entity[]>>
-local entity_link_components = {} ---@type table<evolved.entity, table<evolved.fragment, evolved.entity | evolved.entity[]>>
+local entity_link_components = {} ---@type table<evolved.entity, table<evolved.fragment, evolved.entity | table>>
+local entity_link_component_copies = {} ---@type table<evolved.entity, table<evolved.fragment, evolved.entity | table>>
 
 for _, entity in ipairs(all_entity_list) do
     local entity_link_target_list = {}
     local entity_link_component_list = {}
+    local entity_link_component_copy_list = {}
 
     for _, link_fragment in ipairs(all_link_fragment_list) do
         local link_component = evo.get(entity, link_fragment)
@@ -244,17 +337,19 @@ for _, entity in ipairs(all_entity_list) do
         if link_component then
             local link_target_list = {}
 
-            for i, link_target in ipairs(link_component_targets(link_component)) do
+            for i, link_target in ipairs(link_component_targets(link_fragment, link_component)) do
                 link_target_list[i] = link_target
             end
 
             entity_link_target_list[link_fragment] = link_target_list
             entity_link_component_list[link_fragment] = link_component
+            entity_link_component_copy_list[link_fragment] = copy_link_component(link_fragment, link_component)
         end
     end
 
     entity_link_target_lists[entity] = entity_link_target_list
     entity_link_components[entity] = entity_link_component_list
+    entity_link_component_copies[entity] = entity_link_component_copy_list
 end
 
 remove_hook_calls = {}
@@ -318,7 +413,7 @@ for _, entity in ipairs(all_entity_list) do
             local link_component = evo.get(entity, link_fragment)
 
             if link_component then
-                for _, link_target in ipairs(link_component_targets(link_component)) do
+                for _, link_target in ipairs(link_component_targets(link_fragment, link_component)) do
                     assert(evo.alive(link_target))
                 end
             end
@@ -340,7 +435,7 @@ for _, link_fragment in ipairs(all_link_fragment_list) do
             local link_component = evo.get(entity, link_fragment)
 
             if link_component then
-                for _, link_target in ipairs(link_component_targets(link_component)) do
+                for _, link_target in ipairs(link_component_targets(link_fragment, link_component)) do
                     local referrer_list, referrer_count = evo.multi_search(link_fragment, link_target)
 
                     local referrer_found_count = 0
@@ -370,7 +465,7 @@ for _, link_fragment in ipairs(all_link_fragment_list) do
                 local is_target_found = false
 
                 if referrer_component then
-                    for _, referrer_target in ipairs(link_component_targets(referrer_component)) do
+                    for _, referrer_target in ipairs(link_component_targets(link_fragment, referrer_component)) do
                         if referrer_target == link_target then
                             is_target_found = true
                             break
@@ -389,7 +484,6 @@ end
 ---@return evolved.entity[] alive_target_list, boolean is_unlinked_list
 local function expected_link_targets(entity, link_fragment)
     local link_target_list = entity_link_target_lists[entity][link_fragment]
-    local link_component = entity_link_components[entity][link_fragment]
 
     local alive_target_list = {}
 
@@ -399,7 +493,7 @@ local function expected_link_targets(entity, link_fragment)
         end
     end
 
-    local is_unlinked_list = type(link_component) == 'table'
+    local is_unlinked_list = link_index_policy(link_fragment) ~= evo.INDEX_POLICY_SELF
         and evo.get(link_fragment, evo.LINK_POLICY) == evo.LINK_POLICY_UNLINK_TARGET
         and #alive_target_list < #link_target_list
 
@@ -415,10 +509,32 @@ for _, entity in ipairs(all_entity_list) do
                 assert(evo.get(entity, link_fragment) == entity_link_components[entity][link_fragment])
             elseif is_unlinked_list and #alive_target_list > 0 then
                 local link_component = evo.get(entity, link_fragment)
-                assert(type(link_component) == 'table' and #link_component == #alive_target_list)
+                assert(type(link_component) == 'table')
 
-                for i, link_target in ipairs(alive_target_list) do
-                    assert(link_component[i] == link_target)
+                local index_policy = link_index_policy(link_fragment)
+
+                if index_policy == evo.INDEX_POLICY_LIST then
+                    assert(#link_component == #alive_target_list)
+
+                    for i, link_target in ipairs(alive_target_list) do
+                        assert(link_component[i] == link_target)
+                    end
+                else
+                    local old_link_component = entity_link_component_copies[entity][link_fragment]
+
+                    for key, value in pairs(old_link_component) do
+                        local link_target = index_policy == evo.INDEX_POLICY_KEYS and key or value
+
+                        if should_be_destroyed_entity_set[link_target] then
+                            assert(link_component[key] == nil)
+                        else
+                            assert(link_component[key] == value)
+                        end
+                    end
+
+                    for key in pairs(link_component) do
+                        assert(old_link_component[key] ~= nil)
+                    end
                 end
             else
                 assert(not evo.has(entity, link_fragment))
