@@ -623,3 +623,20 @@ do
     local e4 = evo.spawn { [fk] = { shared = true } }
     check_search(fk, 'shared', e4)
 end
+
+do
+    local f = evo.builder():index():index_policy(evo.INDEX_POLICY_LIST):build()
+
+    local e = evo.spawn { [f] = { false } }
+
+    -- false is the only interned value here, so interned values must not look empty
+    evo.collect_garbage()
+    check_search(f, false, e)
+
+    evo.set(e, f, { true })
+    check_search(f, false)
+    check_search(f, true, e)
+
+    evo.destroy(e)
+    check_search(f, true)
+end

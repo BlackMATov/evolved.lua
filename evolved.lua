@@ -8027,7 +8027,7 @@ function __evolved_collect_garbage(no_shrink)
         end
 
         if search_index.__component_keys and not no_shrink then
-            if __lua_next(search_index.__component_keys) then
+            if __lua_next(search_index.__component_keys) ~= nil then
                 search_index.__component_keys = __table_fns.dup(
                     search_index.__component_keys)
                 search_index.__free_component_keys = __list_fns.dup(
