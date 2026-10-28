@@ -78,7 +78,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
-  - [vX.Y.Z](#vxyz)
+  - [v1.13.0](#v1130)
   - [v1.12.0](#v1120)
   - [v1.11.1](#v1111)
   - [v1.11.0](#v1110)
@@ -2082,7 +2082,7 @@ builder_mt:destruction_policy :: id -> builder
 
 ## Changelog
 
-### vX.Y.Z
+### v1.13.0
 
 - Added the new [`LINK`](#evolvedlink) and [`LINK_POLICY`](#evolvedlink_policy) fragment traits that resolve links to destroyed entities, see the [Linked Fragments](#linked-fragments) section
 - Added the new [`INDEX_POLICY`](#evolvedindex_policy) fragment trait that allows indexing and linking every value of lists, sets, and maps, see the [Indexed Fragments](#indexed-fragments) section
