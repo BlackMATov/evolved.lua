@@ -295,6 +295,36 @@ end
 ---
 ---
 
+local cleared_entity_list = {}
+local cleared_entity_count = 0
+
+for _ = 1, math.random(1, 5) do
+    local entity = all_entity_list[math.random(1, all_entity_count)]
+
+    evo.clear(entity)
+
+    cleared_entity_count = cleared_entity_count + 1
+    cleared_entity_list[cleared_entity_count] = entity
+end
+
+if math.random(1, 2) == 1 then
+    evo.collect_garbage(math.random(1, 2) == 1)
+end
+
+for i = 1, cleared_entity_count do
+    generate_entity(cleared_entity_list[i])
+end
+
+for i = 1, all_query_count do
+    execute_query(all_query_list[i])
+end
+
+---
+---
+---
+---
+---
+
 if math.random(1, 2) == 1 then
     evo.collect_garbage(math.random(1, 2) == 1)
 end

@@ -65,6 +65,7 @@
     - [Internal Fragments](#internal-fragments)
     - [Shared Components](#shared-components)
     - [Fragment Requirements](#fragment-requirements)
+    - [Linked Fragments](#linked-fragments)
     - [Destruction Policies](#destruction-policies)
     - [Custom Component Storages](#custom-component-storages)
   - [Error Handling](#error-handling)
@@ -77,6 +78,7 @@
     - [Chunk](#chunk)
     - [Builder](#builder)
 - [Changelog](#changelog)
+  - [v1.13.0](#v1130)
   - [v1.12.0](#v1120)
   - [v1.11.1](#v1111)
   - [v1.11.0](#v1110)
@@ -153,7 +155,7 @@ An identifier is a packed 40-bit integer. The first 20 bits represent the index,
 function evolved.id(count) end
 ```
 
-The `count` parameter is optional and defaults to `1`. The function returns one or more identifiers depending on the `count` parameter. The maximum number of alive identifiers is `2^20-1` (1048575). After that, the function will throw an error: `| evolved.lua | id index overflow`.
+The `count` parameter is optional and defaults to `1`. The function returns one or more identifiers depending on the `count` parameter. The maximum number of alive identifiers is `2^20-1` (1048575). After that, the function will throw an error: `| evolved.lua (e) | id index overflow`.
 
 Identifiers can be recycled. When an identifier is no longer needed, use the [`evolved.destroy`](#evolveddestroy) function to destroy it. This will free the identifier for reuse.
 
@@ -689,7 +691,7 @@ evolved.destroy(fragment)
 -- try to use the destroyed fragment
 evolved.set(entity, fragment, 42)
 
--- [error] | evolved.lua | the fragment ($1048599#23:1) is not alive and cannot be used
+-- [error] | evolved.lua (e) | the fragment ($1048599#23:1) is not alive and cannot be set
 ```
 
 ### Queries
@@ -725,6 +727,8 @@ local query = evolved.builder()
 ```
 
 We don't have to set all of [`evolved.INCLUDES`](#evolvedincludes), [`evolved.EXCLUDES`](#evolvedexcludes), and [`evolved.VARIANTS`](#evolvedvariants) fragments, we can even do it without filters at all, then the query will match all chunks in the world.
+
+These fragments are [linked](#linked-fragments) to the fragments they list. So when a fragment used by a query is destroyed, the query is destroyed too, and so are all [systems](#systems) that use it.
 
 After the query is created, we are ready to process our filtered by this query entities. You can do this by using the [`evolved.execute`](#evolvedexecute) function. This function takes a query as an argument and returns an iterator that can be used to iterate over all matching with the query chunks.
 
@@ -975,6 +979,8 @@ evolved.builder()
 evolved.process(physics_group)
 ```
 
+The [`evolved.GROUP`](#evolvedgroup) and [`evolved.QUERY`](#evolvedquery) fragments are [linked](#linked-fragments) to the entities they refer to. So when a group is destroyed, all its systems are destroyed too, including nested groups and their systems. And when a query is destroyed, all systems that use it are destroyed as well.
+
 Systems and groups also can have the [`evolved.PROLOGUE`](#evolvedprologue) and [`evolved.EPILOGUE`](#evolvedepilogue) fragments. These fragments are used to specify callbacks that will be executed before and after the system or group is processed. This is useful for setting up and tearing down systems or groups, or for performing some additional processing before or after the main processing.
 
 ```lua
@@ -1050,7 +1056,25 @@ local player = evolved.builder()
 assert(evolved.name(player) == 'Player')
 ```
 
-Names are not unique, so multiple entities can have the same name. Also, the name of an entity can be changed at any time by setting a new name using the [`evolved.NAME`](#evolvedname) fragment as a usual component.
+The same name can be used by multiple entities at once, nothing prevents two entities from being called `'Player'`. Also, the name of an entity can be changed at any time by setting a new name using the [`evolved.NAME`](#evolvedname) fragment as a usual component.
+
+However, names are not copied when cloning entities, because the [`evolved.NAME`](#evolvedname) fragment is marked with the [`evolved.UNIQUE`](#evolvedunique) fragment trait. Note that this trait only affects cloning, it doesn't mean that the name value must be unique among entities. So clones of a named prefab are unnamed, unless you pass a name in the component table. See the [Unique Fragments](#unique-fragments) section for more details.
+
+```lua
+local evolved = require 'evolved'
+
+local enemy_prefab = evolved.builder()
+    :name('Enemy')
+    :prefab()
+    :build()
+
+local enemy1 = evolved.clone(enemy_prefab)
+local enemy2 = evolved.clone(enemy_prefab, { [evolved.NAME] = 'Boss' })
+
+assert(evolved.name(enemy_prefab) == 'Enemy')
+assert(not evolved.has(enemy1, evolved.NAME))
+assert(evolved.name(enemy2) == 'Boss')
+```
 
 You can find entities by their names using the [`evolved.lookup`](#evolvedlookup) and [`evolved.multi_lookup`](#evolvedmulti_lookup) functions. The [`evolved.lookup`](#evolvedlookup) function returns the first entity with the specified name, while the [`evolved.multi_lookup`](#evolvedmulti_lookup) function returns a list of all entities with the specified name.
 
@@ -1179,7 +1203,7 @@ red_list, red_count = evolved.multi_search(team, 'red')
 assert(red_count == 2 and red_list[1] == unit3 and red_list[2] == unit2)
 ```
 
-The index is updated automatically by all operations that change components of the indexed fragment, including spawning, cloning, and setting. The trait can be added or removed at any time. When it is added to a fragment that is already used by some entities, the index is built from these entities in the order they are stored in chunks. The [`evolved.NAME`](#evolvedname) and [`evolved.GROUP`](#evolvedgroup) fragments are indexed too, so you can search for entities by names or for systems by groups, and the order of [systems](#systems) in a group is preserved.
+The index is updated automatically by all operations that change components of the indexed fragment, including spawning, cloning, and setting. The trait can be added or removed at any time. When it is added to a fragment that is already used by some entities, the index is built from these entities in the order they are stored in chunks. The [`evolved.NAME`](#evolvedname) and [`evolved.GROUP`](#evolvedgroup) fragments are indexed too, so you can search for entities by names or for systems by groups, and the order of [systems](#systems) in a group is preserved. [Linked fragments](#linked-fragments) are always indexed, even without the [`evolved.INDEX`](#evolvedindex) trait.
 
 Components changed directly in chunk storages during iteration bypass the index, so after such changes you should update it manually using the [`evolved.reindex`](#evolvedreindex) function. It only updates entities whose components have changed, so it is much cheaper than rebuilding the whole index.
 
@@ -1209,11 +1233,48 @@ evolved.reindex(team)
 assert(evolved.search(team, 'blue') == unit)
 ```
 
-> [!NOTE]
-> Searching by a fragment without the [`evolved.INDEX`](#evolvedindex) trait is an error.
+By default, the whole component is used as a single value in the index. But a component can also hold several values, for example, a list of tags or a set of grid cells that a unit occupies. To index every value of such a component, use the [`evolved.INDEX_POLICY`](#evolvedindex_policy) fragment trait. This trait expects one of the following predefined identifiers:
+
+- [`evolved.INDEX_POLICY_SELF`](#evolvedindex_policy_self) will index the component itself as a single value. This is the default behavior, so you don't have to set it explicitly, but you can if you want.
+
+- [`evolved.INDEX_POLICY_LIST`](#evolvedindex_policy_list) will index every item of a list, like `{ 'red', 'big' }`.
+
+- [`evolved.INDEX_POLICY_KEYS`](#evolvedindex_policy_keys) will index every key of a table, like `{ red = true, big = true }`. The values of such tables are not indexed.
+
+- [`evolved.INDEX_POLICY_VALUES`](#evolvedindex_policy_values) will index every value of a table, like `{ left_hand = 'sword', right_hand = 'shield' }`. The keys of such tables are not indexed.
+
+```lua
+local evolved = require 'evolved'
+
+local tags = evolved.builder()
+    :index()
+    :index_policy(evolved.INDEX_POLICY_KEYS)
+    :build()
+
+local unit1 = evolved.builder()
+    :set(tags, { flying = true, enemy = true })
+    :build()
+
+local unit2 = evolved.builder()
+    :set(tags, { enemy = true })
+    :build()
+
+assert(evolved.search(tags, 'flying') == unit1)
+
+local enemy_list, enemy_count = evolved.multi_search(tags, 'enemy')
+assert(enemy_count == 2 and enemy_list[1] == unit1 and enemy_list[2] == unit2)
+```
+
+With these policies, components of the indexed fragment must be tables of the corresponding shape. An entity is found once by every value of its component, even if this value occurs in the component several times. When such a component changes, the entity keeps its place among the entities with the values that are still in the component, and it is moved to the end only for the new values. The index policy can be changed at any time, and the index is rebuilt from the current components when it happens.
 
 > [!NOTE]
-> Components are used as keys in the index, so table components are indexed by reference, and searching by another table with the same content will not find anything. Also, [Fragment Tags](#fragment-tags) and `NaN` components are not indexed at all.
+> Searching by a fragment without the [`evolved.INDEX`](#evolvedindex) or [`evolved.LINK`](#evolvedlink) trait finds nothing and prints a warning. The [`evolved.reindex`](#evolvedreindex) function prints a warning for such fragments too and skips them.
+
+> [!NOTE]
+> Components and their values are used as keys in the index, so tables are indexed by reference, and searching by another table with the same content will not find anything. Also, [Fragment Tags](#fragment-tags) and `NaN` values are not indexed at all.
+
+> [!NOTE]
+> Tables of multi-valued components changed in place bypass the index just like components changed in chunk storages. After such changes, set the components again or update the index using the [`evolved.reindex`](#evolvedreindex) function.
 
 > [!NOTE]
 > The index is not free. Every indexed entity takes some additional memory, and all operations that change indexed components, such as spawning, cloning, setting, removing, or destroying, become slower because they have to update the index too. So mark only the fragments you are actually going to search by.
@@ -1241,6 +1302,8 @@ assert(evolved.has(enemy_prefab, evolved.PREFAB))
 -- but the enemy_clone doesn't have it, because it is marked as unique
 assert(not evolved.has(enemy_clone, evolved.PREFAB))
 ```
+
+The [`evolved.NAME`](#evolvedname) fragment is marked as unique too, so clones don't inherit the names of their prefabs. Otherwise, every clone of a named prefab would also be added to the name index, which is costly when spawning many entities.
 
 #### Explicit Fragments
 
@@ -1353,6 +1416,191 @@ local enemy = evolved.builder()
 
 assert(evolved.has_all(enemy, position, velocity))
 ```
+
+The [`evolved.REQUIRES`](#evolvedrequires) fragment is [linked](#linked-fragments) to the fragments it lists. So when a required fragment is destroyed, all fragments that require it are destroyed too, and their [destruction policies](#destruction-policies) are applied to the entities that have them.
+
+#### Linked Fragments
+
+Components often refer to other entities. For example, an item can store its owner, or a node can store its parent. When such an entity is destroyed, these components would keep referring to a dead entity. To avoid this, mark the fragment with the [`evolved.LINK`](#evolvedlink) fragment trait. Components of such fragments are treated as links to other entities, and when an entity is destroyed, the library resolves all links to it. By default, the linked fragment is removed from all entities that link to the destroyed entity.
+
+```lua
+local evolved = require 'evolved'
+
+local owner = evolved.builder()
+    :link()
+    :build()
+
+local player = evolved.builder()
+    :build()
+
+local sword = evolved.builder()
+    :set(owner, player)
+    :build()
+
+-- destroy the player that the sword links to
+evolved.destroy(player)
+
+-- the sword is still alive, but it no longer has the owner fragment
+assert(evolved.alive(sword) and not evolved.has(sword, owner))
+```
+
+You can change this behavior by using the [`evolved.LINK_POLICY`](#evolvedlink_policy) fragment trait. This trait expects one of the following predefined identifiers:
+
+- [`evolved.LINK_POLICY_UNLINK_TARGET`](#evolvedlink_policy_unlink_target) will remove only the destroyed entity from lists, sets, and maps of entities that link to it, see the example with children below. Single links are removed together with the linked fragment, as with the default policy.
+
+- [`evolved.LINK_POLICY_DESTROY_ENTITY`](#evolvedlink_policy_destroy_entity) will destroy any entity that links to the destroyed entity. Links of destroyed entities are resolved too, so this is useful for hierarchies, where all descendants should be destroyed together with their root.
+
+- [`evolved.LINK_POLICY_REMOVE_FRAGMENT`](#evolvedlink_policy_remove_fragment) will remove the linked fragment from all entities that link to the destroyed entity. This is the default behavior, so you don't have to set it explicitly, but you can if you want.
+
+```lua
+local evolved = require 'evolved'
+
+local parent = evolved.builder()
+    :link()
+    :link_policy(evolved.LINK_POLICY_DESTROY_ENTITY)
+    :build()
+
+local root = evolved.builder()
+    :build()
+
+local child = evolved.builder()
+    :set(parent, root)
+    :build()
+
+local grandchild = evolved.builder()
+    :set(parent, child)
+    :build()
+
+-- destroy the root that the child links to
+evolved.destroy(root)
+
+-- the child and the grandchild are destroyed together with the root
+assert(not evolved.alive(child) and not evolved.alive(grandchild))
+```
+
+Linked fragments are always [indexed](#indexed-fragments), even without the [`evolved.INDEX`](#evolvedindex) trait, because the library uses the index to find the links to destroyed entities. So you can also use the [`evolved.search`](#evolvedsearch) functions to find all entities that link to some entity, for example, all children of a parent.
+
+```lua
+local evolved = require 'evolved'
+
+local parent = evolved.builder()
+    :link()
+    :build()
+
+local root = evolved.builder()
+    :build()
+
+local child1 = evolved.builder()
+    :set(parent, root)
+    :build()
+
+local child2 = evolved.builder()
+    :set(parent, root)
+    :build()
+
+local child_list, child_count = evolved.multi_search(parent, root)
+assert(child_count == 2 and child_list[1] == child1 and child_list[2] == child2)
+```
+
+A component of a linked fragment can also hold several entities. Just like with [indexed fragments](#indexed-fragments), use the [`evolved.INDEX_POLICY`](#evolvedindex_policy) fragment trait for that, and the component will link to every entity in its list, set, or map. So you can find the entity that holds such a component by any entity in it, and the link policy is applied as soon as any of these entities is destroyed. With the default policy, the whole component is removed, and with the [`evolved.LINK_POLICY_DESTROY_ENTITY`](#evolvedlink_policy_destroy_entity) policy, the entity that holds it is destroyed.
+
+```lua
+local evolved = require 'evolved'
+
+local attached_to = evolved.builder()
+    :link()
+    :index_policy(evolved.INDEX_POLICY_LIST)
+    :build()
+
+local pillar1 = evolved.builder()
+    :build()
+
+local pillar2 = evolved.builder()
+    :build()
+
+local rope = evolved.builder()
+    :set(attached_to, { pillar1, pillar2 })
+    :build()
+
+-- the rope can be found by any of its pillars
+assert(evolved.search(attached_to, pillar1) == rope)
+assert(evolved.search(attached_to, pillar2) == rope)
+
+-- destroy one of the pillars that the rope is attached to
+evolved.destroy(pillar1)
+
+-- the rope is still alive, but it is no longer attached to anything
+assert(evolved.alive(rope) and not evolved.has(rope, attached_to))
+```
+
+Removing the whole list is not always what you want. For example, a parent can store the list of its children, and destroying one child should not take the other children away from it. In such cases, use the [`evolved.LINK_POLICY_UNLINK_TARGET`](#evolvedlink_policy_unlink_target) policy. With this policy, the destroyed entity is removed from the list, and the other entities stay there in the same order. Sets and maps lose only their entries with the destroyed entity. The component is not changed in place, a new table is assigned instead, so the [`evolved.ON_SET`](#evolvedon_set) and [`evolved.ON_ASSIGN`](#evolvedon_assign) hooks of the fragment receive both tables. If the component becomes empty, the linked fragment is removed, as if it were a single link.
+
+```lua
+local evolved = require 'evolved'
+
+local parent = evolved.builder()
+    :link()
+    :link_policy(evolved.LINK_POLICY_DESTROY_ENTITY)
+    :build()
+
+local children = evolved.builder()
+    :link()
+    :index_policy(evolved.INDEX_POLICY_LIST)
+    :link_policy(evolved.LINK_POLICY_UNLINK_TARGET)
+    :build()
+
+local root = evolved.builder()
+    :build()
+
+local child1 = evolved.builder()
+    :set(parent, root)
+    :build()
+
+local child2 = evolved.builder()
+    :set(parent, root)
+    :build()
+
+evolved.set(root, children, { child1, child2 })
+
+-- destroy one of the children of the root
+evolved.destroy(child1)
+
+-- the root is still alive and still has the other child
+local child_list = evolved.get(root, children)
+assert(#child_list == 1 and child_list[1] == child2)
+
+-- destroy the last child of the root
+evolved.destroy(child2)
+
+-- the empty list is removed together with the children fragment
+assert(evolved.alive(root) and not evolved.has(root, children))
+```
+
+The [`evolved.INCLUDES`](#evolvedincludes), [`evolved.EXCLUDES`](#evolvedexcludes), [`evolved.VARIANTS`](#evolvedvariants), and [`evolved.REQUIRES`](#evolvedrequires) fragments are linked this way with the [`evolved.INDEX_POLICY_LIST`](#evolvedindex_policy_list) and [`evolved.LINK_POLICY_DESTROY_ENTITY`](#evolvedlink_policy_destroy_entity) policies. So you can also find all queries that use some fragment, or all fragments that require it.
+
+```lua
+local evolved = require 'evolved'
+
+local position, velocity = evolved.id(2)
+
+local query = evolved.builder()
+    :include(position, velocity)
+    :build()
+
+assert(evolved.search(evolved.INCLUDES, velocity) == query)
+
+-- destroy one of the fragments that the query includes
+evolved.destroy(velocity)
+
+-- the query is destroyed together with the fragment
+assert(not evolved.alive(query))
+```
+
+> [!NOTE]
+> Links must refer to alive entities. Links to entities that are not alive are not indexed, so they cannot be found by the search functions and are never resolved. Such links are reported with a warning.
+
+> [!NOTE]
+> Components changed directly in chunk storages bypass the index, and so the links too. The same applies to lists, sets, and maps changed in place. After such changes, set the components again or update the index using the [`evolved.reindex`](#evolvedreindex) function, otherwise these links will not be resolved when their entities are destroyed.
 
 #### Destruction Policies
 
@@ -1567,7 +1815,7 @@ While using the library, some internal data structures can become obsolete and s
 function evolved.collect_garbage(no_shrink) end
 ```
 
-By default, [`evolved.collect_garbage`](#evolvedcollect_garbage) cleans up obsolete data structures and shrinks component storages to fit their current size. If you pass `true`, it only cleans up obsolete data structures and skips shrinking. This avoids the overhead of resizing storages, which can be expensive.
+By default, [`evolved.collect_garbage`](#evolvedcollect_garbage) cleans up obsolete data structures and shrinks component storages and [indices](#indexed-fragments) to fit their current size. If you pass `true`, it only cleans up obsolete data structures and skips shrinking. This avoids the overhead of resizing storages and rebuilding indices, which can be expensive.
 
 Call this function periodically to keep memory usage under control. It is best to call it between levels or during loading screens when performance is not critical. Also, call Lua's built-in garbage collector afterward to ensure all unused memory is freed.
 
@@ -1623,6 +1871,7 @@ TAG :: fragment
 NAME :: fragment
 
 INDEX :: fragment
+LINK :: fragment
 UNIQUE :: fragment
 EXPLICIT :: fragment
 INTERNAL :: fragment
@@ -1653,6 +1902,17 @@ EXECUTE :: fragment
 
 PROLOGUE :: fragment
 EPILOGUE :: fragment
+
+INDEX_POLICY :: fragment
+INDEX_POLICY_SELF :: id
+INDEX_POLICY_LIST :: id
+INDEX_POLICY_KEYS :: id
+INDEX_POLICY_VALUES :: id
+
+LINK_POLICY :: fragment
+LINK_POLICY_UNLINK_TARGET :: id
+LINK_POLICY_DESTROY_ENTITY :: id
+LINK_POLICY_REMOVE_FRAGMENT :: id
 
 DESTRUCTION_POLICY :: fragment
 DESTRUCTION_POLICY_DESTROY_ENTITY :: id
@@ -1783,6 +2043,7 @@ builder_mt:tag :: builder
 builder_mt:name :: string -> builder
 
 builder_mt:index :: builder
+builder_mt:link :: builder
 builder_mt:unique :: builder
 builder_mt:explicit :: builder
 builder_mt:internal :: builder
@@ -1814,10 +2075,26 @@ builder_mt:execute :: {chunk, entity[], integer, any...} -> builder
 builder_mt:prologue :: {any...} -> builder
 builder_mt:epilogue :: {any...} -> builder
 
+builder_mt:index_policy :: id -> builder
+builder_mt:link_policy :: id -> builder
 builder_mt:destruction_policy :: id -> builder
 ```
 
 ## Changelog
+
+### v1.13.0
+
+- Added the new [`LINK`](#evolvedlink) and [`LINK_POLICY`](#evolvedlink_policy) fragment traits that resolve links to destroyed entities, see the [Linked Fragments](#linked-fragments) section
+- Added the new [`INDEX_POLICY`](#evolvedindex_policy) fragment trait that allows indexing and linking every value of lists, sets, and maps, see the [Indexed Fragments](#indexed-fragments) section
+- The [`GROUP`](#evolvedgroup), [`QUERY`](#evolvedquery), [`INCLUDES`](#evolvedincludes), [`EXCLUDES`](#evolvedexcludes), [`VARIANTS`](#evolvedvariants), and [`REQUIRES`](#evolvedrequires) fragments are now linked
+- Query iteration order no longer depends on the order in which chunks were created
+- The [`NAME`](#evolvedname) fragment is now marked as [UNIQUE](#unique-fragments), so clones no longer inherit the names of their prefabs
+- The [`search`](#evolvedsearch) and [`reindex`](#evolvedreindex) functions now print a warning instead of throwing an error for non-indexed fragments
+- Improved performance of modifying operations for fragments with [`ON_SET`](#evolvedon_set), [`ON_ASSIGN`](#evolvedon_assign), [`ON_INSERT`](#evolvedon_insert), and [`ON_REMOVE`](#evolvedon_remove) hooks
+- Fixed [`batch_set`](#evolvedbatch_set) invoking hooks twice: [#54](https://github.com/BlackMATov/evolved.lua/issues/54)
+- Fixed query caches keeping collected chunks: [#55](https://github.com/BlackMATov/evolved.lua/issues/55)
+- Fixed skipped remove hooks of fragments destroyed in a cascade: [#56](https://github.com/BlackMATov/evolved.lua/issues/56)
+- Fixed stale [`DEFAULT`](#evolveddefault) and [`DUPLICATE`](#evolvedduplicate) values after their reassignment: [#57](https://github.com/BlackMATov/evolved.lua/issues/57)
 
 ### v1.12.0
 
@@ -1912,6 +2189,8 @@ builder_mt:destruction_policy :: id -> builder
 
 ### `evolved.INDEX`
 
+### `evolved.LINK`
+
 ### `evolved.UNIQUE`
 
 ### `evolved.EXPLICIT`
@@ -1955,6 +2234,24 @@ builder_mt:destruction_policy :: id -> builder
 ### `evolved.PROLOGUE`
 
 ### `evolved.EPILOGUE`
+
+### `evolved.INDEX_POLICY`
+
+### `evolved.INDEX_POLICY_SELF`
+
+### `evolved.INDEX_POLICY_LIST`
+
+### `evolved.INDEX_POLICY_KEYS`
+
+### `evolved.INDEX_POLICY_VALUES`
+
+### `evolved.LINK_POLICY`
+
+### `evolved.LINK_POLICY_UNLINK_TARGET`
+
+### `evolved.LINK_POLICY_DESTROY_ENTITY`
+
+### `evolved.LINK_POLICY_REMOVE_FRAGMENT`
 
 ### `evolved.DESTRUCTION_POLICY`
 
@@ -2709,6 +3006,13 @@ function evolved.builder_mt:name(name) end
 function evolved.builder_mt:index() end
 ```
 
+#### `evolved.builder_mt:link`
+
+```lua
+---@return evolved.builder builder
+function evolved.builder_mt:link() end
+```
+
 #### `evolved.builder_mt:unique`
 
 ```lua
@@ -2878,6 +3182,22 @@ function evolved.builder_mt:prologue(prologue) end
 ---@param epilogue evolved.epilogue
 ---@return evolved.builder builder
 function evolved.builder_mt:epilogue(epilogue) end
+```
+
+#### `evolved.builder_mt:index_policy`
+
+```lua
+---@param index_policy evolved.id
+---@return evolved.builder builder
+function evolved.builder_mt:index_policy(index_policy) end
+```
+
+#### `evolved.builder_mt:link_policy`
+
+```lua
+---@param link_policy evolved.id
+---@return evolved.builder builder
+function evolved.builder_mt:link_policy(link_policy) end
 ```
 
 #### `evolved.builder_mt:destruction_policy`

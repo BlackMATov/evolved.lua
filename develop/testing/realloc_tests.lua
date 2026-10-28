@@ -594,3 +594,23 @@ do
         end
     end
 end
+
+do
+    local f1 = evo.builder():realloc(double_realloc)
+        :on_assign(function(_, _, nc, oc) assert(nc == 42 and oc == 21) end):build()
+    local f2 = evo.builder():realloc(double_realloc):compmove(double_compmove)
+        :on_assign(function(_, _, nc, oc) assert(nc == 42 and oc == 21) end):build()
+
+    local q1 = evo.builder():include(f1):build()
+    local q2 = evo.builder():include(f2):build()
+
+    local es, ec = evo.multi_spawn(10, { [f1] = 21, [f2] = 21 })
+
+    evo.batch_set(q1, f1, 42)
+    evo.batch_set(q2, f2, 42)
+
+    for i = 1, ec do
+        assert(evo.get(es[i], f1) == 42 and evo.get(es[i], f2) == 42)
+    end
+end
+

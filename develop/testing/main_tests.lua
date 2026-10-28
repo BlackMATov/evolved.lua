@@ -7134,3 +7134,443 @@ do
         assert(tostring(b) == '<f1, f2>')
     end
 end
+
+do
+    local o = ''
+
+    local g = evo.builder():build()
+    local f = evo.builder()
+        :on_insert(function(_, _, nc) o = o .. 'i' .. nc end)
+        :on_assign(function(_, _, nc, oc) o = o .. 'a' .. oc .. nc end)
+        :build()
+
+    local q = evo.builder():include(g):build()
+
+    local e1 = evo.spawn({ [g] = true })
+    local e2 = evo.spawn({ [g] = true, [f] = 1 })
+
+    o = ''
+    evo.batch_set(q, f, 2)
+    assert(o == 'a12i2')
+    assert(evo.get(e1, f) == 2 and evo.get(e2, f) == 2)
+end
+
+do
+    ---@param query evolved.query
+    ---@return table<evolved.entity, integer> entity_set
+    ---@return integer entity_count
+    local function execute_entities(query)
+        local entity_set, entity_count = {}, 0
+
+        for _, chunk_entity_list, chunk_entity_count in evo.execute(query) do
+            for i = 1, chunk_entity_count do
+                local entity = chunk_entity_list[i]
+                entity_set[entity] = (entity_set[entity] or 0) + 1
+                entity_count = entity_count + 1
+            end
+        end
+
+        return entity_set, entity_count
+    end
+
+    do
+        local fs = { evo.id(3) }
+        table.sort(fs)
+        local f0, f1, f2 = fs[1], fs[2], fs[3]
+
+        local q = evo.builder():include(f1, f2):spawn()
+
+        local e1 = evo.builder():set(f1, 1):set(f2, 2):spawn()
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 1 and es[e1] == 1)
+        end
+
+        local e2 = evo.builder():set(f0, 0):set(f1, 1):set(f2, 2):spawn()
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 2 and es[e1] == 1 and es[e2] == 1)
+        end
+    end
+
+    do
+        local fs = { evo.id(3) }
+        table.sort(fs)
+        local f0, f1, f2 = fs[1], fs[2], fs[3]
+
+        local q1 = evo.builder():include(f2):spawn()
+        local q2 = evo.builder():include(f1, f2):spawn()
+        local q3 = evo.builder():include(f0, f2):spawn()
+
+        local e1 = evo.builder():set(f1, 1):set(f2, 2):spawn()
+
+        do
+            local es1, ec1 = execute_entities(q1)
+            assert(ec1 == 1 and es1[e1] == 1)
+
+            local es2, ec2 = execute_entities(q2)
+            assert(ec2 == 1 and es2[e1] == 1)
+
+            local _, ec3 = execute_entities(q3)
+            assert(ec3 == 0)
+        end
+
+        local e2 = evo.builder():set(f0, 0):set(f1, 1):set(f2, 2):spawn()
+
+        do
+            local es1, ec1 = execute_entities(q1)
+            assert(ec1 == 2 and es1[e1] == 1 and es1[e2] == 1)
+
+            local es2, ec2 = execute_entities(q2)
+            assert(ec2 == 2 and es2[e1] == 1 and es2[e2] == 1)
+
+            local es3, ec3 = execute_entities(q3)
+            assert(ec3 == 1 and es3[e2] == 1)
+        end
+
+        local e3 = evo.builder():set(f0, 0):set(f2, 2):spawn()
+
+        do
+            local es1, ec1 = execute_entities(q1)
+            assert(ec1 == 3 and es1[e1] == 1 and es1[e2] == 1 and es1[e3] == 1)
+
+            local es2, ec2 = execute_entities(q2)
+            assert(ec2 == 2 and es2[e1] == 1 and es2[e2] == 1)
+
+            local es3, ec3 = execute_entities(q3)
+            assert(ec3 == 2 and es3[e2] == 1 and es3[e3] == 1)
+        end
+    end
+
+    do
+        local fs = { evo.id(3) }
+        table.sort(fs)
+        local f0, f1, f2 = fs[1], fs[2], fs[3]
+
+        local q = evo.builder():variant(f1, f2):spawn()
+
+        local e1 = evo.builder():set(f1, 1):set(f2, 2):spawn()
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 1 and es[e1] == 1)
+        end
+
+        local e2 = evo.builder():set(f0, 0):set(f1, 1):spawn()
+        local e3 = evo.builder():set(f0, 0):set(f2, 2):spawn()
+        local e4 = evo.builder():set(f0, 0):set(f1, 1):set(f2, 2):spawn()
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 4 and es[e1] == 1 and es[e2] == 1 and es[e3] == 1 and es[e4] == 1)
+        end
+    end
+
+    do
+        local fs = { evo.id(2) }
+        table.sort(fs)
+        local f1, f2 = fs[1], fs[2]
+
+        local q = evo.builder():include(f2):spawn()
+
+        local e1 = evo.builder():set(f1, 1):set(f2, 2):spawn()
+        local e2 = evo.builder():set(f2, 2):spawn()
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 2 and es[e1] == 1 and es[e2] == 1)
+        end
+
+        evo.set(f1, evo.EXPLICIT)
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 1 and es[e2] == 1)
+        end
+
+        evo.remove(f1, evo.EXPLICIT)
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 2 and es[e1] == 1 and es[e2] == 1)
+        end
+    end
+
+    do
+        local fs = { evo.id(3) }
+        table.sort(fs)
+        local f0, f1, f2 = fs[1], fs[2], fs[3]
+
+        local q = evo.builder():include(f1):spawn()
+
+        local e1 = evo.builder():set(f1, 1):spawn()
+        local e2 = evo.builder():set(f2, 2):spawn()
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 1 and es[e1] == 1)
+        end
+
+        evo.set(q, evo.INCLUDES, { f2 })
+
+        local e3 = evo.builder():set(f0, 0):set(f1, 1):spawn()
+        local e4 = evo.builder():set(f0, 0):set(f2, 2):spawn()
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 2 and es[e2] == 1 and es[e4] == 1)
+        end
+
+        evo.remove(q, evo.INCLUDES)
+        evo.set(q, evo.VARIANTS, { f1 })
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 2 and es[e1] == 1 and es[e3] == 1)
+        end
+
+        evo.set(q, evo.EXCLUDES, { f0 })
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 1 and es[e1] == 1)
+        end
+
+        evo.set(q, evo.VARIANTS, { f2 })
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 1 and es[e2] == 1)
+        end
+    end
+
+    do
+        local fs = { evo.id(2) }
+        table.sort(fs)
+        local f1, f2 = fs[1], fs[2]
+
+        local q = evo.builder():include(f2):spawn()
+
+        local e = evo.builder():set(f1, 1):set(f2, 2):spawn()
+        local c = evo.chunk(f1, f2)
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 1 and es[e] == 1)
+        end
+
+        evo.clear(e)
+        evo.collect_garbage()
+
+        do
+            local _, ec = execute_entities(q)
+            assert(ec == 0)
+        end
+
+        evo.set(e, f1, 1)
+        evo.set(e, f2, 2)
+        assert(evo.chunk(f1, f2) ~= c)
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 1 and es[e] == 1)
+        end
+
+        evo.clear(e)
+        evo.collect_garbage()
+
+        evo.set(e, f1, 1)
+        evo.set(e, f2, 2)
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 1 and es[e] == 1)
+        end
+    end
+
+    do
+        local fs = { evo.id(3) }
+        table.sort(fs)
+        local f0, f1, f2 = fs[1], fs[2], fs[3]
+
+        local q = evo.builder():include(f2):variant(f1):spawn()
+
+        local e1 = evo.builder():set(f1, 1):set(f2, 2):spawn()
+        local e2 = evo.builder():set(f2, 2):spawn()
+        local e3 = evo.builder():set(f1, 1):spawn()
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 1 and es[e1] == 1)
+        end
+
+        local e4 = evo.builder():set(f0, 0):set(f2, 2):spawn()
+        local e5 = evo.builder():set(f0, 0):set(f1, 1):set(f2, 2):spawn()
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 2 and es[e1] == 1 and es[e5] == 1)
+        end
+
+        evo.remove(q, evo.VARIANTS)
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 4 and es[e1] == 1 and es[e2] == 1 and es[e4] == 1 and es[e5] == 1)
+        end
+
+        evo.set(q, evo.VARIANTS, { f1 })
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 2 and es[e1] == 1 and es[e5] == 1)
+        end
+
+        evo.remove(q, evo.INCLUDES)
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 3 and es[e1] == 1 and es[e3] == 1 and es[e5] == 1)
+        end
+    end
+
+    do
+        local fs = { evo.id(2) }
+        table.sort(fs)
+        local f0, f1 = fs[1], fs[2]
+
+        local q = evo.builder():include(f1):spawn()
+
+        local e1 = evo.builder():set(f1, 1):spawn()
+
+        do
+            local es, ec = execute_entities(q)
+            assert(ec == 1 and es[e1] == 1)
+        end
+
+        evo.destroy(q)
+
+        local e2 = evo.builder():set(f0, 0):set(f1, 1):spawn()
+        assert(evo.has_all(e2, f0, f1))
+    end
+
+    ---@param query evolved.query
+    ---@return evolved.chunk[] chunk_list
+    ---@return integer chunk_count
+    local function execute_chunks(query)
+        local chunk_list, chunk_count = {}, 0
+
+        for chunk in evo.execute(query) do
+            chunk_count = chunk_count + 1
+            chunk_list[chunk_count] = chunk
+        end
+
+        return chunk_list, chunk_count
+    end
+
+    do
+        local fs = { evo.id(3) }
+        table.sort(fs)
+        local f0, f1, f2 = fs[1], fs[2], fs[3]
+
+        local q = evo.builder():variant(f1, f2):spawn()
+
+        evo.builder():set(f1, 1):spawn()
+        evo.builder():set(f2, 2):spawn()
+
+        do
+            local _, cc = execute_chunks(q)
+            assert(cc == 2)
+        end
+
+        evo.builder():set(f0, 0):set(f1, 1):spawn()
+
+        do
+            local cs, cc = execute_chunks(q)
+            assert(cc == 3)
+            assert(cs[1] == evo.chunk(f2) and cs[2] == evo.chunk(f1) and cs[3] == evo.chunk(f0, f1))
+        end
+
+        evo.set(q, evo.VARIANTS, { f1, f2 })
+
+        do
+            local cs, cc = execute_chunks(q)
+            assert(cc == 3)
+            assert(cs[1] == evo.chunk(f2) and cs[2] == evo.chunk(f1) and cs[3] == evo.chunk(f0, f1))
+        end
+    end
+
+    do
+        local fs = { evo.id(4) }
+        table.sort(fs)
+        local f0, f1, f2, f3 = fs[1], fs[2], fs[3], fs[4]
+
+        local q = evo.builder():include(f3):spawn()
+
+        evo.builder():set(f1, 1):set(f3, 3):spawn()
+
+        do
+            local _, cc = execute_chunks(q)
+            assert(cc == 1)
+        end
+
+        evo.builder():set(f2, 2):set(f3, 3):spawn()
+        evo.builder():set(f0, 0):set(f3, 3):spawn()
+
+        do
+            local cs, cc = execute_chunks(q)
+            assert(cc == 3)
+            assert(cs[1] == evo.chunk(f2, f3) and cs[2] == evo.chunk(f1, f3) and cs[3] == evo.chunk(f0, f3))
+        end
+
+        evo.set(f1, evo.EXPLICIT)
+
+        do
+            local cs, cc = execute_chunks(q)
+            assert(cc == 2)
+            assert(cs[1] == evo.chunk(f2, f3) and cs[2] == evo.chunk(f0, f3))
+        end
+
+        evo.remove(f1, evo.EXPLICIT)
+
+        do
+            local cs, cc = execute_chunks(q)
+            assert(cc == 3)
+            assert(cs[1] == evo.chunk(f2, f3) and cs[2] == evo.chunk(f1, f3) and cs[3] == evo.chunk(f0, f3))
+        end
+
+        evo.set(f3, evo.DEFAULT, 3)
+
+        do
+            local cs, cc = execute_chunks(q)
+            assert(cc == 3)
+            assert(cs[1] == evo.chunk(f2, f3) and cs[2] == evo.chunk(f1, f3) and cs[3] == evo.chunk(f0, f3))
+        end
+    end
+
+    do
+        local fs = { evo.id(3) }
+        table.sort(fs)
+        local f0, f1, f2 = fs[1], fs[2], fs[3]
+
+        local q = evo.builder():exclude(f0):spawn()
+
+        evo.builder():set(f2, 2):spawn()
+        evo.builder():set(f1, 1):spawn()
+
+        local c1_index, c2_index
+
+        do
+            local cs, cc = execute_chunks(q)
+
+            for i = 1, cc do
+                if cs[i] == evo.chunk(f1) then c1_index = i end
+                if cs[i] == evo.chunk(f2) then c2_index = i end
+            end
+        end
+
+        assert(c1_index and c2_index and c2_index < c1_index)
+    end
+end

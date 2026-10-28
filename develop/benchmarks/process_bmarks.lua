@@ -100,3 +100,97 @@ basics.describe_bench(string.format('Process Benchmarks: Evolved SoA Processing 
     function(w)
         evo.destroy(w)
     end)
+
+basics.describe_bench(string.format('Process Benchmarks: Evolved Narrow Processing | %d archetypes', N / 10),
+    function(w)
+        evo.process(w)
+    end,
+
+    function()
+        local wf = evo.builder()
+            :set(evo.DESTRUCTION_POLICY, evo.DESTRUCTION_POLICY_DESTROY_ENTITY)
+            :spawn()
+
+        local tfs = {}
+
+        for i = 1, N / 10 do
+            tfs[i] = evo.builder():set(wf):tag():spawn()
+        end
+
+        local pf = evo.builder():set(wf):spawn()
+
+        for i = 1, N / 10 do
+            evo.multi_spawn_nr(10, {
+                [wf] = true,
+                [tfs[i]] = true,
+                [pf] = 0,
+            })
+        end
+
+        for i = 1, N / 100 do
+            evo.builder()
+                :set(wf)
+                :set(evo.GROUP, wf)
+                :set(evo.QUERY, evo.builder():set(wf):include(tfs[i], pf):spawn())
+                :set(evo.EXECUTE, function(chunk, _, entity_count)
+                    local ps = chunk:components(pf)
+
+                    for j = 1, entity_count do
+                        ps[j] = ps[j] + 1
+                    end
+                end)
+                :spawn()
+        end
+
+        return wf
+    end,
+
+    function(w)
+        evo.destroy(w)
+    end)
+
+basics.describe_bench(string.format('Process Benchmarks: Evolved Wide Processing | %d archetypes', N / 10),
+    function(w)
+        evo.process(w)
+    end,
+
+    function()
+        local wf = evo.builder()
+            :set(evo.DESTRUCTION_POLICY, evo.DESTRUCTION_POLICY_DESTROY_ENTITY)
+            :spawn()
+
+        local tfs = {}
+
+        for i = 1, N / 10 do
+            tfs[i] = evo.builder():set(wf):tag():spawn()
+        end
+
+        local pf = evo.builder():set(wf):spawn()
+
+        for i = 1, N / 10 do
+            evo.multi_spawn_nr(10, {
+                [wf] = true,
+                [tfs[i]] = true,
+                [pf] = 0,
+            })
+        end
+
+        evo.builder()
+            :set(wf)
+            :set(evo.GROUP, wf)
+            :set(evo.QUERY, evo.builder():set(wf):include(pf):spawn())
+            :set(evo.EXECUTE, function(chunk, _, entity_count)
+                local ps = chunk:components(pf)
+
+                for j = 1, entity_count do
+                    ps[j] = ps[j] + 1
+                end
+            end)
+            :spawn()
+
+        return wf
+    end,
+
+    function(w)
+        evo.destroy(w)
+    end)

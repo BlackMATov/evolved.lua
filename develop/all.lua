@@ -1,4 +1,8 @@
 require 'develop.issues.issue_52'
+require 'develop.issues.issue_54'
+require 'develop.issues.issue_55'
+require 'develop.issues.issue_56'
+require 'develop.issues.issue_57'
 
 require 'develop.testing.build_tests'
 require 'develop.testing.cached_hooks_tests'
@@ -6,10 +10,12 @@ require 'develop.testing.cancel_tests'
 require 'develop.testing.clone_tests'
 require 'develop.testing.depth_tests'
 require 'develop.testing.destroy_tests'
+require 'develop.testing.link_tests'
 require 'develop.testing.locate_tests'
 require 'develop.testing.lookup_tests'
 require 'develop.testing.main_tests'
 require 'develop.testing.mappers_tests'
+require 'develop.testing.multi_index_tests'
 require 'develop.testing.multi_spawn_tests'
 require 'develop.testing.name_tests'
 require 'develop.testing.process_with_tests'
@@ -38,10 +44,20 @@ basics.describe_fuzz 'develop.fuzzing.batch_destroy_fuzz'
 print '----------------------------------------'
 basics.describe_fuzz 'develop.fuzzing.explicit_fuzz'
 print '----------------------------------------'
+basics.describe_fuzz 'develop.fuzzing.index_fuzz'
+print '----------------------------------------'
+basics.describe_fuzz 'develop.fuzzing.link_fuzz'
+print '----------------------------------------'
 basics.describe_fuzz 'develop.fuzzing.pack_unpack_fuzz'
 print '----------------------------------------'
 basics.describe_fuzz 'develop.fuzzing.requires_fuzz'
 print '----------------------------------------'
 basics.describe_fuzz 'develop.fuzzing.unique_fuzz'
+print '----------------------------------------'
 
-print 'All tests passed.'
+if basics.failure_count() == 0 then
+    print 'All tests passed.'
+else
+    print(string.format('%d test(s) failed.', basics.failure_count()))
+    os.exit(1)
+end
